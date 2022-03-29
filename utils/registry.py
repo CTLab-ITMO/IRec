@@ -23,11 +23,14 @@ class MetaParent(type):
 
         @classmethod
         def parent_create_from_config(cls, config):
-            return cls._subclasses[config.pop('type')].create_from_config(config)
+            if 'type' in config:
+                return cls._subclasses[config.pop('type')].create_from_config(config)
+            else:
+                raise ValueError('There is no `type` provided for the `{}` class'.format(name))
 
         # Take kwargs for the last initialized baseclass
         init_kwargs = {}
-        for bcls in cls.mro()[:-1]:  # All base classes except object
+        for bcls in cls.mro()[:-1]:  # Look into all base classes except object
             if '__init__' not in bcls.__dict__:
                 continue
             init_kwargs = inspect.signature(bcls.__init__).parameters

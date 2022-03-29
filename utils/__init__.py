@@ -1,2 +1,2 @@
-def parse_params():
-    pass
+from .registry import MetaParent
+
