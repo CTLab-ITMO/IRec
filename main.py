@@ -1,7 +1,10 @@
+from modeling import BaseModel, BaseDataset
+
 import json
 import argparse
 
-from modeling import BaseModel
+import logging
+logger = logging.getLogger(__name__)
 
 
 def parse_params():
@@ -16,3 +19,4 @@ def parse_params():
 if __name__ == '__main__':
     params = parse_params()
     model = BaseModel.create_from_config(params['model'])
+    dataset = BaseDataset.create_from_config(params['dataset'])

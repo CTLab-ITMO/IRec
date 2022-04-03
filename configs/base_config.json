@@ -1,6 +1,28 @@
 {
+  "dataset": {
+    "type": "cola",
+    "dataset_dir_path": "/home/deadinside/ThesisProject/datasets"
+  },
   "model": {
-    "type": "basic",
-    "msg": "Hello"
-  }
+    "type": "bert",
+    "projector": {
+      "type": "identity"
+    },
+    "task_type": "classification",
+    "bert_kwargs": {
+      "pretrained_model_name_or_path": "bert-base-uncased"
+    },
+    "head": {
+      "type": "identity"
+    }
+  },
+  "loss": {
+    "type": "tuple",
+    "idx": 0
+  },
+  "metrics": {
+    "type": "static",
+    "value": 0
+  },
+  "train_epochs_num": 1
 }
