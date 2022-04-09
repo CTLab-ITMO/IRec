@@ -6,8 +6,11 @@ class BaseMetric(metaclass=MetaParent):
 
 
 class StaticMetric(BaseMetric, config_name='static'):
-    def __init__(self, value):
+    def __init__(self, name, value):
+        self._name = name
         self._value = value
 
-    def __call__(self, predict, ground_truth):
-        return self._value
+    def __call__(self, inputs):
+        inputs[self._name] = self._value
+
+        return inputs

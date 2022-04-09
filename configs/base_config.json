@@ -14,15 +14,16 @@
     },
     "head": {
       "type": "identity"
+    },
+    "loss": {
+      "type": "identity"
+    },
+    "metrics": {
+      "type": "static",
+      "name": "dummy",
+      "value": 0
     }
   },
-  "loss": {
-    "type": "tuple",
-    "idx": 0
-  },
-  "metrics": {
-    "type": "static",
-    "value": 0
-  },
-  "train_epochs_num": 1
+  "train_epochs_num": 2,
+  "validation_steps_num": 100
 }
