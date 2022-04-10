@@ -3,20 +3,50 @@
     "type": "cola",
     "dataset_dir_path": "/home/deadinside/ThesisProject/datasets"
   },
+  "dataloader": {
+    "type": "split",
+    "dataloaders": {
+      "train": {
+        "batch_size": 256,
+        "drop_last": true,
+        "shuffle": true
+      },
+      "validation": {
+        "batch_size": 256,
+        "drop_last": true,
+        "shuffle": true
+      }
+    },
+    "split_size": [0.9, 0.1],
+    "bootstrap": false,
+    "shuffle": true
+  },
   "model": {
-    "type": "bert",
+    "type": "feed_forward",
     "projector": {
       "type": "identity"
     },
-    "task_type": "classification",
-    "bert_kwargs": {
-      "pretrained_model_name_or_path": "bert-base-uncased"
+    "encoder": {
+      "type": "bert",
+      "task_type": "classification",
+      "bert_kwargs": {
+        "num_labels": 2,
+        "pretrained_model_name_or_path": "bert-base-uncased",
+        "output_attentions": false,
+        "output_hidden_states": false
+      },
+      "input_ids_prefix": "input_ids",
+      "attention_mask_prefix": "attention_mask",
+      "labels_prefix": "label",
+      "loss_prefix": "loss",
+      "logits_prefix": "logits"
     },
     "head": {
       "type": "identity"
     },
     "loss": {
-      "type": "identity"
+      "type": "identity",
+      "loss_prefix": "loss"
     },
     "metrics": {
       "type": "static",
@@ -24,6 +54,37 @@
       "value": 0
     }
   },
-  "train_epochs_num": 2,
-  "validation_steps_num": 100
+  "optimizer": {
+    "type": "basic",
+    "optimizer": {
+      "type": "adamw",
+      "lr": 2e-5,
+      "eps": 1e-8
+    },
+    "clip_grad_threshold": 1.0
+  },
+  "callback": {
+    "type": "composite",
+    "callbacks": [
+      {
+        "type": "quality",
+        "dataloader_name": "train",
+        "params": [
+          "loss",
+          "dummy_metric"
+        ],
+        "on_step": 1
+      },
+      {
+        "type": "quality",
+        "dataloader_name": "validation",
+        "params": [
+          "loss",
+          "dummy_metric"
+        ],
+        "on_step": 1000
+      }
+    ]
+  },
+  "train_epochs_num": 4
 }

@@ -1,5 +1,8 @@
-# TODO from .encoder import
-from .head import BaseHead, IdentityHead
 from .projector import BaseProjector, IdentityProjector
+from .encoder import BaseEncoder, BertEncoder
+from .head import BaseHead, IdentityHead
+from .loss import BaseLoss, IdentityLoss
+from .metric import BaseMetric, StaticMetric
+
 from .base import BaseModel, TorchModel
-from .bert import BertModel
+from .feedforward_model import FeedForwardModel

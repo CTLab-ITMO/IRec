@@ -2,11 +2,20 @@ import inspect
 
 
 class MetaParent(type):
+
     def __init__(cls, name, base, params, **kwargs):
         super().__init__(name, base, params)
-
         is_base_class = cls.mro()[1] is object
-        base_class = cls if is_base_class else cls.mro()[1]
+        if is_base_class:
+            base_class = cls
+        else:
+            base_class_found = False
+            for key in cls.mro():
+                if isinstance(key, MetaParent) and key.mro()[1] is object:
+                    assert base_class_found is False, 'multiple base classes(bug)'
+                    base_class = key
+                    base_class_found = True
+            assert base_class_found is True, f'no base class for {name}'
 
         if is_base_class:
             cls._subclasses = {}
@@ -16,15 +25,15 @@ class MetaParent(type):
             super().__init_subclass__()
             if config_name is not None:
                 if config_name in base_class._subclasses:
-                    raise ValueError('Class with name `{}` is already registered'.format(config_name))
+                    raise ValueError("Class with name `{}` is already registered".format(config_name))
                 base_class._subclasses[config_name] = scls
 
         cls.__init_subclass__ = __init_subclass__
 
         @classmethod
-        def parent_create_from_config(cls, config):
+        def parent_create_from_config(cls, config, **kwargs):
             if 'type' in config:
-                return cls._subclasses[config.pop('type')].create_from_config(config)
+                return cls._subclasses[config['type']].create_from_config(config, **kwargs)
             else:
                 raise ValueError('There is no `type` provided for the `{}` class'.format(name))
 
