@@ -7,12 +7,12 @@
     "type": "split",
     "dataloaders": {
       "train": {
-        "batch_size": 256,
+        "batch_size": 10,
         "drop_last": true,
-        "shuffle": true
+        "shuffle": false
       },
       "validation": {
-        "batch_size": 256,
+        "batch_size": 10,
         "drop_last": false,
         "shuffle": false
       }
@@ -48,12 +48,11 @@
       "type": "identity"
     },
     "loss": {
-      "type": "identity",
-      "loss_prefix": "loss"
+      "type": "identity"
     },
     "metrics": {
       "type": "static",
-      "name": "dummy",
+      "name": "dummy_metric",
       "value": 0
     }
   },
@@ -64,14 +63,15 @@
       "lr": 2e-5,
       "eps": 1e-8
     },
-    "clip_grad_threshold": 1.0
+    "clip_grad_threshold": 1.0,
+    "loss_prefix": "loss"
   },
   "callback": {
     "type": "composite",
     "callbacks": [
       {
         "type": "checkpoint",
-        "save_path": "/home/deadiniside",
+        "save_path": "/home/deadinside",
         "model_name": "collab_experiment",
         "on_step": 1000
       },
@@ -95,5 +95,5 @@
       }
     ]
   },
-  "train_epochs_num": 4
+  "train_epochs_num": 10
 }

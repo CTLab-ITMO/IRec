@@ -1,9 +1,11 @@
-from utils import MetaParent
+from utils import MetaParent, create_logger
 from utils import GLOBAL_TENSORBOARD_WRITER
 
 import os
 import torch
 from collections import Counter
+
+logger = create_logger(name=__name__)
 
 
 class BaseCallback(metaclass=MetaParent):
@@ -16,7 +18,7 @@ class BaseCallback(metaclass=MetaParent):
         raise NotImplementedError
 
 
-# TODO add normal metrics, timer tensorboard, params counter,
+# TODO add normal metrics, timer tensorboard, params counter
 
 class CheckpointCallback(BaseCallback, config_name='checkpoint'):
     def __init__(self, model, dataloader, optimizer, on_step, save_path, model_name):
@@ -83,10 +85,10 @@ class QualityCheckCallbackCheck(BaseCallback, config_name='quality'):
             with torch.no_grad():
                 for inputs in self._dataloader[self._dataloader_name]:
                     for key, values in inputs.items():
-                        inputs[key] = torch.squeeze(inputs[key]).to('cuda')  # TODO fix
+                        inputs[key] = torch.squeeze(inputs[key]).to('cpu')  # TODO fix
                     result = self._model(inputs)
                     for param in self._params:
-                        running_params += result[param]
+                        running_params[param] += result[param]
 
             for param in self._params:
                 running_params[param] /= len(self._dataloader[self._dataloader_name])

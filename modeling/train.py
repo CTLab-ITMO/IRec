@@ -18,17 +18,24 @@ def train(model, dataloader, optimizer, callback, epoch_cnt):
     step_num = 0
 
     for epoch in range(epoch_cnt):
+        logger.debug(f'Start epoch {epoch}')
         model.train()
 
         for step, inputs in enumerate(dataloader):
             for key, values in inputs.items():
-                inputs[key] = torch.squeeze(inputs[key]).to(device)
+                if len(inputs[key].shape) > 1:
+                    inputs[key] = torch.squeeze(inputs[key])
+                inputs[key] = inputs[key].to(device)
 
             result = model(inputs)
-            optimizer.step()
+            optimizer.step(inputs)
             callback(result, step_num)
 
+            logger.debug(f'Step loss: {result["loss"]}')
+
             step_num += 1
+
+    logger.debug('Training procedure has been finished!')
 
 
 def main():
@@ -48,8 +55,10 @@ def main():
         optimizer=optimizer
     )
 
+    # TODO add verbose option for all callbacks, multiple optimizer options (???), create strong baseline
+    # TODO create pre/post callbacks
     logger.debug('Everything is ready for training process!')
-
+    logger.debug('Start training...')
     # Train process
     train(
         dataloader=dataloader['train'],
