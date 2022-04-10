@@ -13,11 +13,14 @@
       },
       "validation": {
         "batch_size": 256,
-        "drop_last": true,
-        "shuffle": true
+        "drop_last": false,
+        "shuffle": false
       }
     },
-    "split_size": [0.9, 0.1],
+    "split_size": [
+      0.9,
+      0.1
+    ],
     "bootstrap": false,
     "shuffle": true
   },
@@ -66,6 +69,12 @@
   "callback": {
     "type": "composite",
     "callbacks": [
+      {
+        "type": "checkpoint",
+        "save_path": "/home/deadiniside",
+        "model_name": "collab_experiment",
+        "on_step": 1000
+      },
       {
         "type": "quality",
         "dataloader_name": "train",
