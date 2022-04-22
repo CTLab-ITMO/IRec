@@ -1,4 +1,5 @@
 from utils import MetaParent
+from .batch_processors import BaseBatchProcessor
 
 import numpy as np
 from torch.utils.data import DataLoader, random_split
@@ -6,6 +7,28 @@ from torch.utils.data import DataLoader, random_split
 
 class BaseDataloader(metaclass=MetaParent):
     pass
+
+
+class TorchDataloader(BaseDataloader, config_name='torch'):
+
+    def __init__(self, dataloader):
+        self._dataloader = dataloader
+
+    def __iter__(self):
+        return iter(self._dataloader)
+
+    def __len__(self):
+        return len(self._dataloader)
+
+    @classmethod
+    def create_from_config(cls, config, dataset=None):
+        assert dataset is not None, '`dataset` should be provided'
+        config.pop('type')
+
+        batch_processor = BaseBatchProcessor.create_from_config(
+            config.pop('batch_processor') if 'batch_processor' in config else {'type': 'identity'}
+        )
+        return cls(dataloader=DataLoader(dataset, collate_fn=batch_processor, **config))
 
 
 class SplitDataloader(BaseDataloader, config_name='split'):
@@ -32,7 +55,7 @@ class SplitDataloader(BaseDataloader, config_name='split'):
 
         dataloaders = {}
         for dataset, (dataloader_name, dataloader_cfg) in zip(datasets, dataloaders_cfg.items()):
-            dataloaders[dataloader_name] = DataLoader(dataset, **dataloader_cfg)
+            dataloaders[dataloader_name] = BaseDataloader.create_from_config(dataloader_cfg, dataset=dataset)
 
         return cls(dataloaders=dataloaders)
 

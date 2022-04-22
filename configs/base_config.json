@@ -1,28 +1,58 @@
 {
   "dataset": {
     "type": "cola",
-    "dataset_dir_path": "/home/deadinside/ThesisProject/datasets"
+    "dataset_dir_path": "/home/baikalov/ThesisProject/datasets"
   },
   "dataloader": {
     "type": "split",
-    "dataloaders": {
-      "train": {
-        "batch_size": 10,
-        "drop_last": true,
-        "shuffle": false
-      },
-      "validation": {
-        "batch_size": 10,
-        "drop_last": false,
-        "shuffle": false
-      }
-    },
     "split_size": [
       0.9,
       0.1
     ],
     "bootstrap": false,
-    "shuffle": true
+    "shuffle": true,
+    "dataloaders": {
+      "train": {
+        "type": "torch",
+        "batch_size": 128,
+        "drop_last": true,
+        "shuffle": true,
+        "batch_processor": {
+          "type": "bert",
+          "sample_name": "sample",
+          "tokenizer_kwargs": {
+            "pretrained_model_name_or_path": "bert-base-uncased",
+            "do_lower_case": true
+          },
+          "encode_kwargs": {
+            "max_length": 64,
+            "padding": "max_length",
+            "return_attention_mask": true,
+            "return_tensors": "pt"
+          }
+        }
+      },
+      "validation": {
+        "type": "torch",
+        "batch_size": 128,
+        "drop_last": false,
+        "shuffle": false,
+        "batch_processor": {
+          "type": "bert",
+          "sample_name": "sample",
+          "tokenizer_kwargs": {
+            "pretrained_model_name_or_path": "bert-base-uncased",
+            "do_lower_case": true
+          },
+          "encode_kwargs": {
+            "max_length": 64,
+            "padding": "max_length",
+            "return_attention_mask": true,
+            "return_tensors": "pt"
+          }
+        }
+      }
+    }
   },
   "model": {
     "type": "feed_forward",
@@ -37,12 +67,7 @@
         "pretrained_model_name_or_path": "bert-base-uncased",
         "output_attentions": false,
         "output_hidden_states": false
-      },
-      "input_ids_prefix": "input_ids",
-      "attention_mask_prefix": "attention_mask",
-      "labels_prefix": "label",
-      "loss_prefix": "loss",
-      "logits_prefix": "logits"
+      }
     },
     "head": {
       "type": "identity"
@@ -50,10 +75,12 @@
     "loss": {
       "type": "identity"
     },
-    "metrics": {
-      "type": "static",
-      "name": "dummy_metric",
-      "value": 0
+    "schema": {
+      "inputs_prefix": "input_ids",
+      "ground_truth_prefix": "label",
+      "attention_mask_prefix": "attention_mask",
+      "predictions_prefix": "logits",
+      "loss_prefix": "loss"
     }
   },
   "optimizer": {
@@ -70,28 +97,21 @@
     "type": "composite",
     "callbacks": [
       {
+        "type": "metric",
+        "on_step": 1,
+        "metrics": ["flat_accuracy", "dummy"]
+      },
+      {
         "type": "checkpoint",
-        "save_path": "/home/deadinside",
-        "model_name": "collab_experiment",
-        "on_step": 1000
+        "on_step": 100,
+        "save_path": "/home/baikalov/cola",
+        "model_name": "baseline"
       },
       {
-        "type": "quality",
-        "dataloader_name": "train",
-        "params": [
-          "loss",
-          "dummy_metric"
-        ],
-        "on_step": 1
-      },
-      {
-        "type": "quality",
+        "type": "validation",
+        "on_step": 100,
         "dataloader_name": "validation",
-        "params": [
-          "loss",
-          "dummy_metric"
-        ],
-        "on_step": 1000
+        "metrics": ["flat_accuracy", "dummy"]
       }
     ]
   },

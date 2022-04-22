@@ -30,9 +30,6 @@ def train(model, dataloader, optimizer, callback, epoch_cnt):
             result = model(inputs)
             optimizer.step(inputs)
             callback(result, step_num)
-
-            logger.debug(f'Step loss: {result["loss"]}')
-
             step_num += 1
 
     logger.debug('Training procedure has been finished!')

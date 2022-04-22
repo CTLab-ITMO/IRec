@@ -9,6 +9,8 @@ import numpy as np
 
 import torch
 
+DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -35,3 +37,9 @@ def fix_random_seed(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+
+def maybe_to_list(values):
+    if not isinstance(values, list):
+        values = [values]
+    return values
