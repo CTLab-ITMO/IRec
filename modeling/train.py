@@ -57,9 +57,6 @@ def main():
         dataset=validation_dataset
     )
 
-    print(next(iter(train_dataloader)))
-    print(next(iter(validation_dataloader)))
-
     model = BaseModel.create_from_config(
         config['model'],
         num_users=dataset.num_users,

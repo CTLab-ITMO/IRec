@@ -25,11 +25,11 @@ class AmazonBatchProcessor(BaseBatchProcessor, config_name='amazon'):
         processed_batch['user_id'] = [sample['user_id'] for sample in batch]
         processed_batch['timestamps'] = [sample['timestamp'] for sample in batch]
 
-        for prefix in ['sample', 'labels', 'candidates']:
-            processed_batch[f'{prefix}.ids'] = []
-            processed_batch[f'{prefix}.positions'] = []
-
+        for prefix in ['sample', 'labels', 'candidates', 'positive', 'negative']:
             if f'{prefix}.length' in batch[0]:
+                processed_batch[f'{prefix}.ids'] = []
+                processed_batch[f'{prefix}.positions'] = []
+
                 processed_batch[f'{prefix}.length'] = [sample[f'{prefix}.length'] for sample in batch]
                 for sample in batch:
                     processed_batch[f'{prefix}.ids'].extend(sample[f'{prefix}.ids'])

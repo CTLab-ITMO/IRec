@@ -65,6 +65,7 @@ class SasRecProjector(Projector, config_name='sasrec'):
             sample_prefix,
             positive_prefix,
             negative_prefix,
+            candidates_prefix,
             num_users,
             num_items,
             max_sequence_len,
@@ -76,6 +77,7 @@ class SasRecProjector(Projector, config_name='sasrec'):
         self._sample_prefix = sample_prefix
         self._positive_prefix = positive_prefix
         self._negative_prefix = negative_prefix
+        self._candidates_prefix = candidates_prefix
 
         self._max_sequence_len = max_sequence_len
         self._num_users = num_users
@@ -101,6 +103,7 @@ class SasRecProjector(Projector, config_name='sasrec'):
             sample_prefix=config['sample_prefix'],
             positive_prefix=config['positive_prefix'],
             negative_prefix=config['negative_prefix'],
+            candidates_prefix=config['candidates_prefix'],
             num_users=num_users,
             num_items=num_items,
             max_sequence_len=max_sequence_len,
@@ -110,27 +113,43 @@ class SasRecProjector(Projector, config_name='sasrec'):
         )
 
     def forward(self, inputs):  # TODO re-implement
-        sample_embeddings = inputs[self._sample_prefix]  # (all_items)
-        sample_embeddings = self._item_embeddings(sample_embeddings)  # (all_items, emb_dim)
-        sample_embeddings *= self._item_embeddings.embedding_dim ** 0.5
+        current_embeddings = []
+        current_prefixes = []
 
-        if '{}.positions'.format(self._sample_prefix) in inputs:  # positional embedding
-            sample_positions = inputs['{}.positions'.format(self._sample_prefix)]  # (all_batch_items)
-            sample_positions = self._position_embeddings(sample_positions)  # (all_batch_items, emb_dim)
-            sample_embeddings += sample_positions  # (all_batch_items, emb_dim)
+        if '{}.ids'.format(self._sample_prefix) in inputs:
+            sample_embeddings = inputs['{}.ids'.format(self._sample_prefix)]  # (all_items)
+            sample_embeddings = self._item_embeddings(sample_embeddings)  # (all_items, emb_dim)
+            sample_embeddings *= self._item_embeddings.embedding_dim ** 0.5
 
-        sample_embeddings = self._dropout(sample_embeddings)
+            if '{}.positions'.format(self._sample_prefix) in inputs:  # positional embedding
+                sample_positions = inputs['{}.positions'.format(self._sample_prefix)]  # (all_batch_items)
+                sample_positions = self._position_embeddings(sample_positions)  # (all_batch_items, emb_dim)
+                sample_embeddings += sample_positions  # (all_batch_items, emb_dim)
 
-        positive_embeddings = inputs[self._positive_prefix]  # (all_items)
-        positive_embeddings = self._item_embeddings(positive_embeddings)  # (all_items, emb_dim)
+            sample_embeddings = self._dropout(sample_embeddings)
 
-        negative_embeddings = inputs[self._negative_prefix]  # (all_items)
-        negative_embeddings = self._item_embeddings(negative_embeddings)  # (all_items, emb_dim)
+            current_embeddings.append(sample_embeddings)
+            current_prefixes.append(self._sample_prefix)
 
-        for embeddings, prefix in zip(
-                [sample_embeddings, positive_embeddings, negative_embeddings],
-                [self._sample_prefix, self._positive_prefix, self._negative_prefix]
-        ):
+        if '{}.ids'.format(self._positive_prefix) in inputs:
+            positive_embeddings = inputs['{}.ids'.format(self._positive_prefix)]  # (all_items)
+            positive_embeddings = self._item_embeddings(positive_embeddings)  # (all_items, emb_dim)
+            current_embeddings.append(positive_embeddings)
+            current_prefixes.append(self._positive_prefix)
+
+        if '{}.ids'.format(self._candidates_prefix) in inputs:
+            candidate_embeddings = inputs['{}.ids'.format(self._candidates_prefix)]  # (all_items)
+            candidate_embeddings = self._item_embeddings(candidate_embeddings)  # (all_items, emb_dim)
+            current_embeddings.append(candidate_embeddings)
+            current_prefixes.append(self._candidates_prefix)
+
+        if '{}.ids'.format(self._negative_prefix) in inputs:
+            negative_embeddings = inputs['{}.ids'.format(self._negative_prefix)]  # (all_items)
+            negative_embeddings = self._item_embeddings(negative_embeddings)  # (all_items, emb_dim)
+            current_embeddings.append(negative_embeddings)
+            current_prefixes.append(self._negative_prefix)
+
+        for embeddings, prefix in zip(current_embeddings, current_prefixes):
             lengths = inputs['{}.length'.format(prefix)]  # (batch_size)
             batch_size = lengths.shape[0]
             max_sequence_length = lengths.max().item()
@@ -201,7 +220,7 @@ class SasRecEncoder(Encoder, config_name='sasrec'):
             torch.ones((seq_len, seq_len), dtype=torch.bool, device=DEVICE)
         )  # (seq_len, seq_len)
 
-        for i in range(len(self._num_layers)):
+        for i in range(self._num_layers):
             sample_embeddings = torch.transpose(sample_embeddings, dim0=0, dim1=1)  # (seq_len, batch_size, emb_dim)
             Q = self.attention_layernorms[i](sample_embeddings)  # (seq_len, batch_size, emb_dim)
             mha_outputs, _ = self.attention_layers[i](
@@ -228,34 +247,45 @@ class SasRecHead(Head, config_name='sasrec'):
 
     def __init__(
             self,
-            sample_prefix,
+            prefix,
+            labels_prefix,
+            candidates_prefix,
             positive_prefix,
             negative_prefix,
-            output_prefix,
-            labels_prefix
+            output_prefix=None,
     ):
         super().__init__()
-        self._sample_prefix = sample_prefix
+        self._prefix = prefix
+        self._labels_prefix = labels_prefix
+        self._candidates_prefix = candidates_prefix
+        self._output_prefix = output_prefix or prefix
+
         self._positive_prefix = positive_prefix
         self._negative_prefix = negative_prefix
-        self._output_prefix = output_prefix
-        self._labels_prefix = labels_prefix
 
     def forward(self, inputs):
-        sample_embeddings = inputs[self._sample_prefix]  # (batch_size, seq_len, emb_dim)
-        sample_mask = inputs['{}.mask'.format(self._sample_prefix)]  # (batch_size, seq_len, emb_dim)
-        sample_embeddings[sample_mask] = 0
+        if self.training:  # train mode
+            inputs = self._train_processing(inputs)
+        else:  # eval mode
+            inputs = self._eval_processing(inputs)
+
+        return inputs
+
+    def _train_processing(self, inputs):
+        embeddings = inputs[self._prefix]  # (batch_size, seq_len, emb_dim)
+        mask = inputs['{}.mask'.format(self._prefix)]  # (batch_size, seq_len)
+        embeddings[~mask] = 0
 
         positive_embeddings = inputs[self._positive_prefix]  # (batch_size, seq_len, emb_dim)
-        positive_mask = inputs['{}.mask'.format(self._positive_prefix)]  # (batch_size, seq_len, emb_dim)
+        positive_mask = inputs['{}.mask'.format(self._positive_prefix)]  # (batch_size, seq_len)
 
         negative_embeddings = inputs[self._negative_prefix]  # (batch_size, seq_len, emb_dim)
-        negative_mask = inputs['{}.mask'.format(self._negative_prefix)]  # (batch_size, seq_len, emb_dim)
+        negative_mask = inputs['{}.mask'.format(self._negative_prefix)]  # (batch_size, seq_len)
 
-        pos_logits = torch.einsum('bsd,bsd->bs', sample_embeddings, positive_embeddings)
+        pos_logits = torch.einsum('bsd,bsd->bs', embeddings, positive_embeddings)
         positive_labels = torch.ones_like(pos_logits)
-        neg_logits = torch.einsum('bsd,bsd->bs', sample_embeddings, negative_embeddings)
-        negative_labels = torch.ones_like(neg_logits)
+        neg_logits = torch.einsum('bsd,bsd->bs', embeddings, negative_embeddings)
+        negative_labels = torch.zeros_like(neg_logits)
 
         all_positive_logits = pos_logits[positive_mask]
         all_negative_logits = neg_logits[negative_mask]
@@ -266,7 +296,25 @@ class SasRecHead(Head, config_name='sasrec'):
         all_logits = torch.cat([all_positive_logits, all_negative_logits], dim=-1)
         all_labels = torch.cat([all_positive_labels, all_negative_labels], dim=-1)
 
-        inputs[self._logit_prefix] = all_logits
-        inputs[self._label_prefix] = all_labels
+        inputs[self._output_prefix] = all_logits
+        inputs['{}.ids'.format(self._labels_prefix)] = all_labels
+
+        return inputs
+
+    def _eval_processing(self, inputs):
+        embeddings = inputs[self._prefix]  # (batch_size, seq_len, emb_dim)
+
+        lengths = inputs['{}.length'.format(self._prefix)]  # (batch_size)
+        lengths = (lengths - 1).unsqueeze(-1).unsqueeze(-1)  # (batch_size, 1, 1)
+        lengths = torch.tile(lengths, (1, 1, embeddings.shape[-1]))  # (batch_size, 1, emb_dim)
+        last_embeddings = embeddings.gather(dim=1, index=lengths)  # (batch_size, 1, emb_dim)
+
+        candidate_embeddings = inputs[self._candidates_prefix]  # (batch_size, num_candidates, emb_dim)
+        candidate_scores = torch.sum(candidate_embeddings * last_embeddings, dim=-1)  # (batch_size, num_candidates)
+        inputs[self._output_prefix] = candidate_scores  # (batch_size, num_candidates)
+
+        labels_ids = inputs['{}.ids'.format(self._labels_prefix)]  # (all_candidates)
+        labels_ids = torch.reshape(labels_ids, (embeddings.shape[0], -1))  # (batch_size, num_candidates)
+        inputs['{}.ids'.format(self._labels_prefix)] = labels_ids
 
         return inputs

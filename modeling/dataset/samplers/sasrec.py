@@ -46,11 +46,11 @@ class SasRecTrainSampler(TrainSampler, config_name='sasrec'):
             'sample.ids': sequence,
             'sample.length': len(sequence),
 
-            'positives.ids': next_item_sequence,
-            'positives.length': len(next_item_sequence),
+            'positive.ids': next_item_sequence,
+            'positive.length': len(next_item_sequence),
 
-            'negatives.ids': negative_sequence,
-            'negatives.length': len(negative_sequence)
+            'negative.ids': negative_sequence,
+            'negative.length': len(negative_sequence)
         }
 
 

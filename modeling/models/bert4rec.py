@@ -203,17 +203,20 @@ class BertHead(Head, config_name='bert4rec'):
             self,
             prefix,
             labels_prefix,
+            candidates_prefix,
             input_dim,
             output_dim,
-            candidates_prefix,
-            output_prefix=None
+            output_prefix=None,
+            initializer_range=0.02
     ):
         super().__init__()
         self._prefix = prefix
         self._labels_prefix = labels_prefix
         self._candidates_prefix = candidates_prefix
         self._output_prefix = output_prefix or prefix
+
         self._encoder = nn.Linear(input_dim, output_dim)
+        self._init_weights(initializer_range)
 
     @torch.no_grad()
     def _init_weights(self, initializer_range):
