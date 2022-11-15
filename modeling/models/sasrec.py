@@ -36,8 +36,13 @@ class SasRec(Model, config_name='sasrec'):
         self._head = head
 
     @classmethod
-    def create_from_config(cls, config):
-        projector = BaseProjector.create_from_config(config['projector'])
+    def create_from_config(cls, config, num_users=None, num_items=None, max_sequence_len=None):
+        projector = BaseProjector.create_from_config(
+            config['projector'],
+            num_users=num_users,
+            num_items=num_items,
+            max_sequence_len=max_sequence_len
+        )
         encoder = BaseEncoder.create_from_config(config['encoder'])
         head = BaseHead.create_from_config(config['head'])
 
@@ -89,6 +94,20 @@ class SasRecProjector(Projector, config_name='sasrec'):
 
         self._dropout = nn.Dropout(p=self._dropout_rate)
         self._layernorms = nn.LayerNorm(embedding_dim, eps)  # TODO change projector on composite
+
+    @classmethod
+    def create_from_config(cls, config, num_users=None, num_items=None, max_sequence_len=None):
+        return cls(
+            sample_prefix=config['sample_prefix'],
+            positive_prefix=config['positive_prefix'],
+            negative_prefix=config['negative_prefix'],
+            num_users=num_users,
+            num_items=num_items,
+            max_sequence_len=max_sequence_len,
+            embedding_dim=config['embedding_dim'],
+            dropout_rate=config.get('dropout_rate', 0.0),
+            eps=config.get('eps', 1e-5)
+        )
 
     def forward(self, inputs):  # TODO re-implement
         sample_embeddings = inputs[self._sample_prefix]  # (all_items)

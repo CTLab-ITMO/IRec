@@ -35,8 +35,7 @@ class SasRecTrainSampler(TrainSampler, config_name='sasrec'):
 
         for idx in range(len(sequence)):
             negatives = self._negative_sampler.generate_negative_samples(sequence, answer)
-            assert len(negatives) == 1, 'SasRec requires only one negative for training'  # TODO maybe np.random.choice
-            negative_sequence.append(negatives[0])
+            negative_sequence.append(np.random.choice(negatives))
 
         assert len(sequence) == len(next_item_sequence) == len(negative_sequence)
 
