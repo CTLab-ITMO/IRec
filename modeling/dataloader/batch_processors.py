@@ -27,11 +27,15 @@ class AmazonBatchProcessor(BaseBatchProcessor, config_name='amazon'):
 
         for prefix in ['sample', 'labels', 'candidates']:
             processed_batch[f'{prefix}.ids'] = []
+            processed_batch[f'{prefix}.positions'] = []
 
             if f'{prefix}.length' in batch[0]:
                 processed_batch[f'{prefix}.length'] = [sample[f'{prefix}.length'] for sample in batch]
                 for sample in batch:
                     processed_batch[f'{prefix}.ids'].extend(sample[f'{prefix}.ids'])
+                    processed_batch[f'{prefix}.positions'].extend(
+                        list(range(sample[f'{prefix}.length'] - 1, -1, -1))
+                    )
 
         for part, values in processed_batch.items():
             processed_batch[part] = torch.tensor(values, dtype=torch.long)
