@@ -30,7 +30,6 @@ def train(dataloader, model, loss_function, optimizer, callback, epoch_cnt):
 
             result = model(inputs)
             result = loss_function(result)
-            print(result['loss'])
 
             optimizer.step(result)
             callback(result, step_num)

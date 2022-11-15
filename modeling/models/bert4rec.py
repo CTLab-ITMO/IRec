@@ -269,7 +269,7 @@ class BertHead(Head, config_name='bert4rec'):
             prefix=config['prefix'],
             labels_prefix=config['labels_prefix'],
             input_dim=config['input_dim'],
-            output_dim=num_items + 2,
+            output_dim=num_items + 1,
             candidates_prefix=config['candidates_prefix'],
             output_prefix=config.get('prefix', None)
         )
@@ -289,7 +289,15 @@ class BertHead(Head, config_name='bert4rec'):
 
     def _train_postprocessing(self, inputs, logits, logits_mask):
         all_logits = logits[logits_mask]  # (all_events)
-        inputs[self._output_prefix] = all_logits
+
+        all_labels = inputs['{}.ids'.format(self._labels_prefix)].long()  # (all_events)
+        labels_mask = (all_labels != 0).bool()  # (all_events)
+
+        needed_labels = all_labels[labels_mask]  # (non_zero_events)
+        needed_logits = all_logits[labels_mask]  # (non_zero_events)
+
+        inputs[self._output_prefix] = needed_logits  # (batch_size, num_candidates)
+        inputs['{}.ids'.format(self._labels_prefix)] = needed_labels
 
         return inputs
 

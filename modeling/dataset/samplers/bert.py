@@ -118,10 +118,9 @@ class BertEvalSampler(EvalSampler, config_name='bert'):
 
         negatives = self._negative_sampler.generate_negative_samples(sequence, answer)
 
+        sequence = sequence + [self._mask_item_idx]
         candidates = answer + negatives
         labels = [1] * len(answer) + [0] * len(negatives)
-
-        sequence = sequence + [self._mask_item_idx]
 
         return {
             'user_id': sample['user_id'],
