@@ -43,7 +43,7 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
 
     @classmethod
     def create_from_config(cls, config):
-        dataset, num_users, num_items, max_sequence_length= cls._get_dataset(
+        dataset, num_users, num_items, max_sequence_length = cls._get_dataset(
             path_to_data_dir=config['path_to_data_dir'],
             dataset_prefix=config['dataset_prefix'],
             min_sample_len=config.get('min_sample_len', 5),

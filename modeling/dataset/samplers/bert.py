@@ -10,7 +10,7 @@ class BertTrainSampler(TrainSampler, config_name='bert'):
             self,
             num_users,
             num_items,
-            mask_prob=0.25
+            mask_prob=0.0
     ):
         super().__init__()
         self._num_users = num_users
@@ -39,18 +39,13 @@ class BertTrainSampler(TrainSampler, config_name='bert'):
         labels = []
 
         for item in sequence:
+
             prob = np.random.rand()
 
             if prob < self._mask_prob:
                 prob /= self._mask_prob
 
-                if prob < 0.8:
-                    masked_sequence.append(self._mask_item_idx)
-                elif prob < 0.9:
-                    masked_sequence.append(np.random.randint(1, self._num_items))
-                else:
-                    masked_sequence.append(item)
-
+                masked_sequence.append(self._mask_item_idx)
                 labels.append(item)
             else:
                 masked_sequence.append(item)
