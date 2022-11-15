@@ -1,6 +1,7 @@
 from dataset.samplers.base import TrainSampler, EvalSampler
 from dataset.negative_samplers.base import BaseNegativeSampler
 
+import copy
 import numpy as np
 
 
@@ -30,7 +31,7 @@ class BertTrainSampler(TrainSampler, config_name='bert'):
         return len(self._dataset)
 
     def __getitem__(self, index):
-        sample = self._dataset[index]
+        sample = copy.deepcopy(self._dataset[index])
 
         sequence = sample['sample.ids']
         answer = sample['answer.ids']
