@@ -33,7 +33,6 @@ class AmazonBatchProcessor(BaseBatchProcessor, config_name='amazon'):
                 for sample in batch:
                     processed_batch[f'{prefix}.ids'].extend(sample[f'{prefix}.ids'])
 
-
         for part, values in processed_batch.items():
             processed_batch[part] = torch.tensor(values, dtype=torch.long)
 

@@ -26,12 +26,11 @@ def train(dataloader, model, loss_function, optimizer, callback, epoch_cnt):
             model.train()
 
             for key, values in inputs.items():
-                if len(inputs[key].shape) > 1:
-                    inputs[key] = torch.squeeze(inputs[key])
                 inputs[key] = inputs[key].to(device)
 
             result = model(inputs)
             result = loss_function(result)
+            print(result['loss'])
 
             optimizer.step(result)
             callback(result, step_num)

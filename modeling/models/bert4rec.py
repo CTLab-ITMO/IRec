@@ -79,10 +79,7 @@ class BertProjector(Projector, config_name='bert4rec'):
         )
 
         self._dropout = nn.Dropout(p=self._dropout_rate)
-        self._layernorms = {
-            prefix: nn.LayerNorm(embedding_dim, eps)
-            for prefix in self._prefixes
-        }
+        self._layernorms = nn.LayerNorm(embedding_dim, eps)
 
     @classmethod
     def create_from_config(cls, config, num_users=None, num_items=None, max_sequence_len=None):
@@ -126,7 +123,7 @@ class BertProjector(Projector, config_name='bert4rec'):
 
             padded_embeddings[mask] = all_item_embeddings
 
-            inputs[output_prefix] = self._layernorms[prefix](padded_embeddings)
+            inputs[output_prefix] = self._layernorms(padded_embeddings)
             inputs['{}.mask'.format(output_prefix)] = mask
 
         return inputs
