@@ -7,7 +7,7 @@ class BaseMetric(metaclass=MetaParent):
     pass
 
 
-class StaticMetric(BaseMetric, config_name='static'):
+class StaticMetric(BaseMetric, config_name='dummy'):
     def __init__(self, name, value):
         self._name = name
         self._value = value
@@ -78,3 +78,28 @@ class RecallMetric(BaseMetric, config_name='recall'):
         ).mean()  # (1)
 
         return recall.cpu().item()
+
+
+class MRRMetric(BaseMetric, config_name='mrr'):
+
+    def __init__(self, k):
+        self._k = k
+
+    def __call__(self, inputs, pred_prefix, labels_prefix):
+        predictions = inputs[pred_prefix]  # (batch_size, num_candidates)
+        predictions = torch.argsort(predictions, dim=-1, descending=True)  # (batch_size, num_candidates)
+        predictions = predictions[:, :self._k]  # (batch_size, k)
+
+        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (batch_size, num_candidates)
+        hits = labels.gather(dim=1, index=predictions)  # (batch_size, k)
+
+        good_samples = hits[hits.sum(dim=-1) > 0]  # (good_samples_num, k)
+        idx = reversed(torch.Tensor(range(1, self._k + 1)))  # (k)
+        idx = torch.einsum("gk,k->gk", (good_samples, idx))  # (good_samples_num, k)
+        indices = torch.argmax(idx, dim=-1)  # (good_samples_num)
+
+        result = predictions.new_zeros((predictions.shape[0]))
+        result[hits.sum(dim=-1) > 0] = 1.0 / (indices + 1.0)
+        mrr = result.mean()
+
+        return mrr.cpu().item()
