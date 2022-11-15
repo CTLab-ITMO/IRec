@@ -57,6 +57,9 @@ def main():
         dataset=validation_dataset
     )
 
+    print(next(iter(train_dataloader)))
+    print(next(iter(validation_dataloader)))
+
     model = BaseModel.create_from_config(
         config['model'],
         num_users=dataset.num_users,
@@ -79,7 +82,7 @@ def main():
     logger.debug('Everything is ready for training process!')
     logger.debug('Start training...')
 
-    # TODO check the convergence and overall code
+    # TODO check overall code
     # Train process
     train(
         dataloader=train_dataloader,
