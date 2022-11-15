@@ -1,7 +1,7 @@
 from models.base import TorchModel as Model
 
 from blocks.projector import BaseProjector, TorchProjector as Projector
-from blocks.encoder import BaseEncoder, TorchEncoder as Encoder, TransformerEncoder
+from blocks.encoder import BaseEncoder, TorchEncoder as Encoder, Transformer
 from blocks.head import BaseHead, TorchHead as Head
 
 from utils import DEVICE
@@ -118,7 +118,6 @@ class BertProjector(Projector, config_name='bert4rec'):
 
             if '{}.positions'.format(prefix) in inputs:  # positional embedding
                 all_positions = inputs['{}.positions'.format(prefix)]  # (all_batch_items)
-                all_positions = all_positions  # (all_batch_items)
                 all_position_embeddings = self._position_embeddings(all_positions)  # (all_batch_items, emb_dim)
                 all_item_embeddings += all_position_embeddings  # (all_batch_items, emb_dim)
 
@@ -155,7 +154,7 @@ class BertEncoder(Encoder, config_name='bert4rec'):
             num_heads,
             hidden_size,
             output_prefix=None,
-            activation: nn.Module = nn.ReLU(),
+            activation='relu',
             input_dim=None,
             output_dim=None,
             dropout=0.0,
@@ -163,28 +162,20 @@ class BertEncoder(Encoder, config_name='bert4rec'):
             initializer_range=0.02
     ):
         super().__init__()
-        self._prefix = prefix
-        self._output_prefix = output_prefix or prefix
-
-        self._input_projection = nn.Identity()
-        if input_dim is not None:
-            self._input_projection = nn.Linear(input_dim, hidden_size)
-
-        self._encoder = TransformerEncoder(
+        self._encoder = Transformer(
+            prefix=prefix,
             hidden_size=hidden_size,
-            num_layers=num_layers,
             num_heads=num_heads,
+            num_layers=num_layers,
             dim_feedforward=4 * hidden_size,
             dropout=dropout,
             activation=activation,
-            eps=eps
+            layer_norm_eps=eps,
+            input_dim=input_dim,
+            output_dim=output_dim,
+            output_prefix=output_prefix,
+            initializer_range=initializer_range
         )
-
-        self._output_projection = nn.Identity()
-        if output_dim is not None:
-            self._output_projection = nn.Linear(hidden_size, output_dim)
-
-        self._init_weights(initializer_range)
 
     @classmethod
     def create_from_config(cls, config):
@@ -193,6 +184,7 @@ class BertEncoder(Encoder, config_name='bert4rec'):
             num_layers=config['num_layers'],
             num_heads=config.get('num_heads', config['embedding_dim'] // 64),
             hidden_size=config['embedding_dim'],
+            activation=config.get('activation', 'relu'),
             output_prefix=config.get('output_prefix', None),
             input_dim=config.get('input_dim', None),
             output_dim=config.get('output_dim', None),
@@ -201,34 +193,8 @@ class BertEncoder(Encoder, config_name='bert4rec'):
             initializer_range=config.get('initializer_range', 0.02)
         )
 
-    @torch.no_grad()
-    def _init_weights(self, initializer_range):
-        for key, value in self.named_parameters():
-            if 'weight' in key:
-                if 'norm' in key:
-                    nn.init.ones_(value.data)
-                else:
-                    nn.init.trunc_normal_(
-                        value.data,
-                        std=initializer_range,
-                        a=-2 * initializer_range,
-                        b=2 * initializer_range
-                    )
-            elif 'bias' in key:
-                nn.init.zeros_(value.data)
-            else:
-                raise ValueError(f'Unknown transformer weight: {key}')
-
     def forward(self, inputs):
-        embeddings = inputs[self._prefix]  # (batch_size, seq_len, emb_dim)
-        mask = inputs['{}.mask'.format(self._prefix)]  # (batch_size, seq_len)
-
-        embeddings = self._encoder(src=embeddings, attention_mask=mask)
-
-        inputs[self._output_prefix] = embeddings
-        inputs['{}.mask'.format(self._output_prefix)] = mask
-
-        return inputs
+        return self._encoder(inputs)
 
 
 class BertHead(Head, config_name='bert4rec'):

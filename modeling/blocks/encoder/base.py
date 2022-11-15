@@ -1,4 +1,4 @@
-from utils import MetaParent
+from utils import MetaParent, get_activation_function
 
 import torch
 import torch.nn as nn
@@ -18,40 +18,37 @@ class Transformer(TorchEncoder, config_name='transformer'):
 
     def __init__(
             self,
-            layers_num,
+            prefix,
             hidden_size,
-            nhead,
-            num_encoder_layers,
-            num_decoder_layers,
+            num_heads,
+            num_layers,
             dim_feedforward,
-            dropout=0.,
-            activation=nn.ReLU(),
+            dropout=0.0,
+            activation='relu',
             layer_norm_eps=1e-5,
-            batch_first=True,
-            norm_first=False,
             input_dim=None,
             output_dim=None,
+            output_prefix=None,
             initializer_range=0.02
     ):
         super().__init__()
-        self._layer_num = layers_num
+        self._prefix = prefix
+        self._output_prefix = output_prefix or prefix
 
         self._input_projection = nn.Identity()
         if input_dim is not None:
             self._input_projection = nn.Linear(input_dim, hidden_size)
 
-        self._encoder = nn.Transformer(
+        transformer_encoder_layer = nn.TransformerEncoderLayer(
             d_model=hidden_size,
-            nhead=nhead,
-            num_encoder_layers=num_encoder_layers,
-            num_decoder_layers=num_decoder_layers,
+            nhead=num_heads,
             dim_feedforward=dim_feedforward,
             dropout=dropout,
-            activation=activation,
+            activation=get_activation_function(activation),
             layer_norm_eps=layer_norm_eps,
-            batch_first=batch_first,
-            norm_first=norm_first
+            batch_first=True
         )
+        self._encoder = nn.TransformerEncoder(transformer_encoder_layer, num_layers)
 
         self._output_projection = nn.Identity()
         if output_dim is not None:
@@ -79,43 +76,14 @@ class Transformer(TorchEncoder, config_name='transformer'):
 
     def forward(self, inputs):
         embeddings = inputs[self._prefix]
-        mask = inputs[f'{self._prefix}.mask']
+        attention_mask = inputs[f'{self._prefix}.mask']
 
-        inputs[self._output_prefix] = self._encoder(src=embeddings, src_mask=mask)
-        inputs['{}.mask'.format(self._output_prefix)] = mask
-        return inputs
-
-
-# TODO compare with Transformer
-class TransformerEncoder(nn.Module):
-    def __init__(
-            self,
-            hidden_size,
-            num_layers,
-            num_heads,
-            dim_feedforward,
-            activation: nn.Module = nn.ReLU(),
-            dropout=0.0,
-            eps=1e-5
-    ):
-        super().__init__()
-        transformer_encoder_layer = nn.TransformerEncoderLayer(
-            d_model=hidden_size,
-            nhead=num_heads,
-            dim_feedforward=dim_feedforward,
-            dropout=dropout,
-            activation=activation,
-            layer_norm_eps=eps,
-            batch_first=True
-        )
-        self._encoder = nn.TransformerEncoder(transformer_encoder_layer, num_layers)
-
-    def forward(self, src, attention_mask):
-        src = self._encoder(
-            src=src,
+        inputs[self._output_prefix] = self._encoder(
+            src=embeddings,
             src_key_padding_mask=~attention_mask
         )
-        return src
+        inputs['{}.mask'.format(self._output_prefix)] = attention_mask
+        return inputs
 
 
 class Tower(TorchEncoder, config_name='tower'):
@@ -212,7 +180,8 @@ class TowerBlock(nn.Module):
         if isinstance(self._ff2, nn.Linear):
             self._init_weights(self._ff2, initializer_range)
 
-    def _init_weights(self, layer, initializer_range=0.02):
+    @staticmethod
+    def _init_weights(layer, initializer_range=0.02):
         nn.init.trunc_normal_(
             layer.weight,
             std=initializer_range,
