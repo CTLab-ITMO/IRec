@@ -1,2 +1,2 @@
-from .base import BaseDataset, PartialDataset
-from .cola import ColaDataset
+from .amazon import AmazonDataset
+from .base import BaseDataset

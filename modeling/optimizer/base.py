@@ -55,8 +55,10 @@ class BasicOptimizer(BaseOptimizer, config_name='basic'):
     def step(self, inputs):
         self._optimizer.zero_grad()
         inputs[self._loss_prefix].backward()
+
         if self._clip_grad_threshold is not None:
             torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._clip_grad_threshold)
+
         self._optimizer.step()
         if self._scheduler is not None:
             self._scheduler.step()

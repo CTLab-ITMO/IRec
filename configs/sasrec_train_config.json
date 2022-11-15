@@ -1,0 +1,110 @@
+{
+  "dataset": {
+    "type": "amazon",
+    "path_to_data_dir": "../data/Beauty",
+    "dataset_prefix": "Beauty",
+    "sample_negatives": true,
+    "negatives_cnt": 1,
+    "min_sample_len": 5,
+    "augment_samples": true
+  },
+  "dataloader": {
+    "train": {
+      "type": "torch",
+      "batch_size": 2,
+      "batch_processor": {
+        "type": "amazon"
+      },
+      "drop_last": true,
+      "shuffle": true
+    },
+    "validation": {
+      "type": "torch",
+      "batch_size": 2,
+      "batch_processor": {
+        "type": "amazon"
+      },
+      "drop_last": false,
+      "shuffle": false
+    }
+  },
+  "model": {
+    "type": "feed_forward",
+    "projector": {
+      "type": "composite",
+      "shared": {
+        "type": "basic",
+        "embedding_dim": 3,
+        "aggregation_type": "sum"
+      },
+      "shared_encoders": {
+        "ids": {
+          "type": "categorical",
+          "num_embeddings": 13000
+        }
+      },
+      "projectors": [
+        {
+          "prefix": "sample",
+          "attributes": [
+            {
+              "type": "shared",
+              "name": "ids",
+              "field": "ids"
+            },
+            {
+              "type": "categorical",
+              "field": "position",
+              "num_embeddings": 500
+            }
+          ]
+        },
+        {
+          "prefix": "positive",
+          "attributes": [
+            {
+              "type": "shared",
+              "name": "ids",
+              "field": "ids"
+            }
+          ]
+        },
+        {
+          "prefix": "negative",
+          "attributes": [
+            {
+              "type": "shared",
+              "name": "ids",
+              "field": "ids"
+            }
+          ]
+        }
+      ]
+    },
+    "encoders": [
+      {
+        "type": "transformer",
+        "field": "sample"
+      },
+      {
+        "type": "dot_product",
+        "fields": [
+          "sample",
+          "positive"
+        ]
+      },
+      {
+        "type": "dot_product",
+        "fields": [
+          "sample",
+          "negative"
+        ]
+      }
+    ],
+    "head": {
+      "type": "contrastive",
+      "positive_field": "positive",
+      "negative_field": "negative"
+    }
+  }
+}

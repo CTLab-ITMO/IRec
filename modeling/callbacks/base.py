@@ -1,6 +1,7 @@
+from metric import BaseMetric
+
 from utils import MetaParent, create_logger, maybe_to_list
 from utils import GLOBAL_TENSORBOARD_WRITER, DEVICE
-from utils.metrics import METRICS
 
 import os
 import torch
@@ -29,11 +30,13 @@ class MetricCallback(BaseCallback, config_name='metric'):
             dataloader,
             optimizer,
             on_step,
-            metrics
+            metrics,
+            loss_prefix
     ):
         super().__init__(model, dataloader, optimizer)
         self._on_step = on_step
-        self._metrics = maybe_to_list(metrics)
+        self._loss_prefix = loss_prefix
+        self._metrics = metrics if metrics is not None else {}
 
     @classmethod
     def create_from_config(cls, config, model=None, dataloader=None, optimizer=None):
@@ -43,24 +46,26 @@ class MetricCallback(BaseCallback, config_name='metric'):
             dataloader=dataloader,
             optimizer=optimizer,
             on_step=config['on_step'],
-            metrics=config['metrics']
+            metrics=config.get('metrics', None),
+            loss_prefix=config['loss_prefix']
         )
 
     def __call__(self, inputs, step_num):
         if step_num % self._on_step == 0:
-            for metric in self._metrics:
-                metric_value = METRICS[metric](
+            for metric_name, metric_function in self._metrics.items():
+                metric_value = metric_function(
                     ground_truth=inputs[self._model.schema['ground_truth_prefix']],
                     predictions=inputs[self._model.schema['predictions_prefix']]
                 )
                 GLOBAL_TENSORBOARD_WRITER.add_scalar(
-                    '{}/train'.format(metric),
+                    '{}/train'.format(metric_name),
                     metric_value,
                     step_num
                 )
+
             GLOBAL_TENSORBOARD_WRITER.add_scalar(
-                '{}/train'.format(self._model.schema['loss_prefix']),
-                inputs[self._model.schema['loss_prefix']],
+                '{}/train'.format(self._loss_prefix),
+                inputs[self._loss_prefix],
                 step_num
             )
 
@@ -109,24 +114,34 @@ class QualityCheckCallbackCheck(BaseCallback, config_name='validation'):
             dataloader,
             optimizer,
             on_step,
-            dataloader_name,
-            metrics=None
+            pred_prefix,
+            labels_prefix,
+            metrics=None,
+            loss_prefix=None
     ):
         super().__init__(model, dataloader, optimizer)
         self._on_step = on_step
-        self._dataloader_name = dataloader_name
-        self._metrics = maybe_to_list(metrics) if metrics is not None else []
+        self._metrics = metrics if metrics is not None else {}
+        self._pred_prefix = pred_prefix
+        self._labels_prefix = labels_prefix
+        self._loss_prefix = loss_prefix
 
     @classmethod
     def create_from_config(cls, config, model=None, dataloader=None, optimizer=None):
         assert model is not None, 'Model instance should be provided'
+        metrics = {
+            metric_name: BaseMetric.create_from_config(metric_cfg)
+            for metric_name, metric_cfg in config['metrics'].items()
+        }
+
         return cls(
             model=model,
             dataloader=dataloader,
             optimizer=optimizer,
             on_step=config['on_step'],
-            dataloader_name=config['dataloader_name'],
-            metrics=config.get('metrics', None)
+            metrics=metrics,
+            pred_prefix=config['pred_prefix'],
+            labels_prefix=config['labels_prefix']
         )
 
     def __call__(self, inputs, step_num):
@@ -136,30 +151,33 @@ class QualityCheckCallbackCheck(BaseCallback, config_name='validation'):
 
             self._model.eval()
             with torch.no_grad():
-                for inputs in self._dataloader[self._dataloader_name]:
-                    for key, values in inputs.items():
-                        inputs[key] = torch.squeeze(inputs[key]).to(DEVICE)
-                    result = self._model(inputs)
+                for batch in self._dataloader:
+                    for key, value in batch.items():
+                        batch[key] = value.to(DEVICE)
 
-                    for key, values in result.items():
-                        result[key] = values.cpu()
+                    batch = self._model(batch)
 
-                    for metric in self._metrics:
-                        running_params[metric] += METRICS[metric](
-                            ground_truth=inputs[self._model.schema['ground_truth_prefix']],
-                            predictions=inputs[self._model.schema['predictions_prefix']]
+                    for key, values in batch.items():
+                        batch[key] = values.cpu()
+
+                    for metric_name, metric_function in self._metrics.items():
+                        running_params[metric_name] += metric_function(
+                            inputs=batch,
+                            pred_prefix=self._pred_prefix,
+                            labels_prefix=self._labels_prefix,
                         )
-                    running_params[self._model.schema['loss_prefix']] += inputs[
-                        self._model.schema['loss_prefix']].item()
+
+                    if self._loss_prefix is not None:
+                        running_params[self._loss_prefix] += inputs[self._loss_prefix].item()
 
             for label, value in running_params.items():
                 GLOBAL_TENSORBOARD_WRITER.add_scalar(
-                    '{}/{}'.format(label, self._dataloader_name),
-                    value / len(self._dataloader[self._dataloader_name]),
+                    '{}/validation'.format(label),
+                    value / len(self._dataloader),
                     step_num
                 )
 
-            logger.debug('Validation done!')
+            logger.debug('Validation on step {} is done!'.format(step_num))
 
 
 class CompositeCallback(BaseCallback, config_name='composite'):

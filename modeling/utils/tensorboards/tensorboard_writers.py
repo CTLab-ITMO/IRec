@@ -2,7 +2,7 @@ import time
 
 from torch.utils.tensorboard import SummaryWriter
 
-LOGS_DIR = '/home/baikalov/tensorboard_logs'
+LOGS_DIR = '../tensorboard_logs'
 
 
 class TensorboardWriter(SummaryWriter):

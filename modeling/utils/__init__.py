@@ -43,3 +43,10 @@ def maybe_to_list(values):
     if not isinstance(values, list):
         values = [values]
     return values
+
+
+def sample_random_negative(from_idx, to_idx, in_sample_ids):
+    random_idx = np.random.randint(from_idx, to_idx)
+    while random_idx in in_sample_ids:
+        random_idx = np.random.randint(from_idx, to_idx)
+    return random_idx

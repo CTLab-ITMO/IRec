@@ -1,0 +1,107 @@
+{
+  "dataset": {
+    "type": "amazon",
+    "path_to_data_dir": "../data/Beauty",
+    "dataset_prefix": "Beauty",
+    "min_sample_len": 5,
+    "validation_size": 0.1,
+    "test_size": 0.1,
+    "samplers": {
+      "type": "bert",
+      "mask_prob": 0.25,
+      "negative_sampler": {
+        "type": "random",
+        "sample_size": 99
+      }
+    }
+  },
+  "dataloader": {
+    "train": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "amazon"
+      },
+      "drop_last": true,
+      "shuffle": true
+    },
+    "validation": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "amazon"
+      },
+      "drop_last": false,
+      "shuffle": true
+    }
+  },
+  "model": {
+    "type": "bert4rec",
+    "projector": {
+      "type": "bert4rec",
+      "prefixes": [
+        "sample"
+      ],
+      "embedding_dim": 256
+    },
+    "encoder": {
+      "type": "bert4rec",
+      "prefix": "sample",
+      "num_layers": 4,
+      "num_heads": 4,
+      "embedding_dim": 256,
+      "output_prefix": "sample"
+    },
+    "head": {
+      "type": "bert4rec",
+      "prefix": "sample",
+      "labels_prefix": "labels",
+      "candidates_prefix": "candidates",
+      "input_dim": 256,
+      "output_prefix": "sample"
+    }
+  },
+  "loss": {
+    "type": "ce",
+    "predictions_prefix": "sample",
+    "labels_prefix": "labels",
+    "output_prefix": "loss"
+  },
+  "optimizer": {
+    "type": "basic",
+    "optimizer": {
+      "type": "adamw",
+      "lr": 2e-5,
+      "eps": 1e-8
+    },
+    "clip_grad_threshold": 1.0,
+    "loss_prefix": "loss"
+  },
+  "callback": {
+    "type": "composite",
+    "callbacks": [
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "loss"
+      },
+      {
+        "type": "validation",
+        "on_step": 1000,
+        "pred_prefix": "sample",
+        "labels_prefix": "labels",
+        "metrics": {
+          "ndcg@5": {
+            "type": "ndcg",
+            "k": 5
+          },
+          "recall@5": {
+            "type": "recall",
+            "k": 5
+          }
+        }
+      }
+    ]
+  },
+  "train_epochs_num": 1
+}

@@ -1,8 +1,11 @@
 from utils import MetaParent
 from .batch_processors import BaseBatchProcessor
 
+import logging
 import numpy as np
 from torch.utils.data import DataLoader, random_split
+
+logger = logging.getLogger(__name__)
 
 
 class BaseDataloader(metaclass=MetaParent):
@@ -22,12 +25,11 @@ class TorchDataloader(BaseDataloader, config_name='torch'):
 
     @classmethod
     def create_from_config(cls, config, dataset=None):
-        assert dataset is not None, '`dataset` should be provided'
-        config.pop('type')
-
+        assert dataset is not None, 'Dataset instance should be provided'
         batch_processor = BaseBatchProcessor.create_from_config(
             config.pop('batch_processor') if 'batch_processor' in config else {'type': 'identity'}
         )
+        config.pop('type')  # For passing as **config in torch DataLoader
         return cls(dataloader=DataLoader(dataset, collate_fn=batch_processor, **config))
 
 
@@ -39,22 +41,45 @@ class SplitDataloader(BaseDataloader, config_name='split'):
     @classmethod
     def create_from_config(cls, config, dataset=None):
         assert dataset is not None, 'Dataset instance should be provided'
+
         split_sizes = config['split_size']
         dataloaders_cfg = config['dataloaders']
+
+        random_split = config.get('random_split', False)
+        shared_options = config.get('shared', {})
+
+        for shared_key, shared_value in shared_options.items():
+            for dataloader_cfg in dataloaders_cfg:
+                if shared_key not in dataloader_cfg:
+                    dataloader_cfg[shared_key] = shared_value
+
         assert len(split_sizes) == len(dataloaders_cfg), \
             'Num of splits and num of dataloaders should be the same'
-        assert config.get('shuffle', False) or np.sum(split_sizes) <= 1, \
-            'If split is determined, sum of splits ratios must not exceed 1'
+        assert np.sum(split_sizes) == 1, \
+            'Sum of splits ratios must not exceed 1'
 
         head_parts_sizes = [int(split_size * len(dataset)) for split_size in split_sizes[:-1]]
-        last_part_size = len(dataset) - np.sum(head_parts_sizes)
-
-        datasets = random_split(
-            dataset, head_parts_sizes + [last_part_size]
-        )
+        last_part_size = len(dataset) - sum(head_parts_sizes)
 
         dataloaders = {}
-        for dataset, (dataloader_name, dataloader_cfg) in zip(datasets, dataloaders_cfg.items()):
+        parts_sizes = head_parts_sizes + [last_part_size]
+
+        if random_split:
+            datasets = random_split(dataset, parts_sizes)
+        else:
+            datasets = []
+
+            separation_ids = np.cumsum([0] + parts_sizes)
+            logger.info(f'Separation indices: {separation_ids}')
+
+            for idx in range(1, len(separation_ids)):
+                datasets.append(dataset[
+                                separation_ids[idx - 1]: separation_ids[idx]
+                                ])
+
+        for dataset, dataloader_cfg in zip(datasets, dataloaders_cfg):
+            dataloader_name = dataloader_cfg.pop('name')
+
             dataloaders[dataloader_name] = BaseDataloader.create_from_config(dataloader_cfg, dataset=dataset)
 
         return cls(dataloaders=dataloaders)

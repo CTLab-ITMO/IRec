@@ -10,6 +10,7 @@ class TensorboardWriter(SummaryWriter):
 
 class TensorboardTimer():
     def __init__(self, scope_name):
+        pass
 
 
     def __enter__(self):

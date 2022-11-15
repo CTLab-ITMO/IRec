@@ -2,8 +2,7 @@ from .base import TorchModel
 from .projector import BaseProjector
 from .encoder import BaseEncoder
 from .head import BaseHead
-from .loss import BaseLoss
-from .metric import BaseMetric
+from loss import BaseLoss
 
 
 class FeedForwardModel(TorchModel, config_name='feed_forward'):

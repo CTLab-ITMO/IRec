@@ -17,6 +17,29 @@ class IdentityBatchProcessor(BaseBatchProcessor, config_name='identity'):
         return torch.tensor(batch)
 
 
+class AmazonBatchProcessor(BaseBatchProcessor, config_name='amazon'):
+
+    def __call__(self, batch):
+        processed_batch = {}
+
+        processed_batch['user_id'] = [sample['user_id'] for sample in batch]
+        processed_batch['timestamps'] = [sample['timestamp'] for sample in batch]
+
+        for prefix in ['sample', 'labels', 'candidates']:
+            processed_batch[f'{prefix}.ids'] = []
+
+            if f'{prefix}.length' in batch[0]:
+                processed_batch[f'{prefix}.length'] = [sample[f'{prefix}.length'] for sample in batch]
+                for sample in batch:
+                    processed_batch[f'{prefix}.ids'].extend(sample[f'{prefix}.ids'])
+
+
+        for part, values in processed_batch.items():
+            processed_batch[part] = torch.tensor(values, dtype=torch.long)
+
+        return processed_batch
+
+
 class BertTokenizerBatchProcessor(BaseBatchProcessor, config_name='bert'):
 
     def __init__(self, sample_name, tokenizer_kwargs, encode_kwargs=None):
