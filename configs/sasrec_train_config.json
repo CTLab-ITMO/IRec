@@ -1,17 +1,26 @@
 {
+  "experiment_name": "test_experiment",
+  "train_epochs_num": 100,
   "dataset": {
     "type": "amazon",
     "path_to_data_dir": "../data/Beauty",
     "dataset_prefix": "Beauty",
-    "sample_negatives": true,
-    "negatives_cnt": 1,
     "min_sample_len": 5,
-    "augment_samples": true
+    "max_sample_len": 200,
+    "validation_size": 0.1,
+    "test_size": 0.1,
+    "samplers": {
+      "type": "sasrec",
+      "negative_sampler": {
+        "type": "random",
+        "sample_size": 99
+      }
+    }
   },
   "dataloader": {
     "train": {
       "type": "torch",
-      "batch_size": 2,
+      "batch_size": 256,
       "batch_processor": {
         "type": "amazon"
       },
@@ -20,7 +29,7 @@
     },
     "validation": {
       "type": "torch",
-      "batch_size": 2,
+      "batch_size": 256,
       "batch_processor": {
         "type": "amazon"
       },
@@ -29,82 +38,70 @@
     }
   },
   "model": {
-    "type": "feed_forward",
+    "type": "sasrec",
     "projector": {
-      "type": "composite",
-      "shared": {
-        "type": "basic",
-        "embedding_dim": 3,
-        "aggregation_type": "sum"
-      },
-      "shared_encoders": {
-        "ids": {
-          "type": "categorical",
-          "num_embeddings": 13000
-        }
-      },
-      "projectors": [
-        {
-          "prefix": "sample",
-          "attributes": [
-            {
-              "type": "shared",
-              "name": "ids",
-              "field": "ids"
-            },
-            {
-              "type": "categorical",
-              "field": "position",
-              "num_embeddings": 500
-            }
-          ]
-        },
-        {
-          "prefix": "positive",
-          "attributes": [
-            {
-              "type": "shared",
-              "name": "ids",
-              "field": "ids"
-            }
-          ]
-        },
-        {
-          "prefix": "negative",
-          "attributes": [
-            {
-              "type": "shared",
-              "name": "ids",
-              "field": "ids"
-            }
-          ]
-        }
-      ]
+      "type": "sasrec",
+      "sample_prefix": "sample",
+      "positive_prefix": "positive",
+      "negative_prefix": "negative",
+      "embedding_dim": 256
     },
-    "encoders": [
-      {
-        "type": "transformer",
-        "field": "sample"
-      },
-      {
-        "type": "dot_product",
-        "fields": [
-          "sample",
-          "positive"
-        ]
-      },
-      {
-        "type": "dot_product",
-        "fields": [
-          "sample",
-          "negative"
-        ]
-      }
-    ],
+    "encoder": {
+      "type": "sasrec",
+      "sample_prefix": "sample",
+      "embedding_dim": 256,
+      "num_layers": 2,
+      "num_heads": 2
+    },
     "head": {
-      "type": "contrastive",
-      "positive_field": "positive",
-      "negative_field": "negative"
+      "type": "sasrec",
+      "sample_prefix": "sample",
+      "positive_prefix": "positive",
+      "negative_prefix": "negative",
+      "output_prefix": "logits",
+      "labels_prefix": "labels"
     }
+  },
+  "loss": {
+    "type": "ce",
+    "predictions_prefix": "logits",
+    "labels_prefix": "labels",
+    "output_prefix": "loss"
+  },
+  "optimizer": {
+    "type": "basic",
+    "optimizer": {
+      "type": "adamw",
+      "lr": 1e-4,
+      "eps": 1e-8
+    },
+    "clip_grad_threshold": 5.0,
+    "loss_prefix": "loss"
+  },
+  "callback": {
+    "type": "composite",
+    "callbacks": [
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "loss"
+      },
+      {
+        "type": "validation",
+        "on_step": 1000,
+        "pred_prefix": "sample",
+        "labels_prefix": "labels",
+        "metrics": {
+          "ndcg@5": {
+            "type": "ndcg",
+            "k": 5
+          },
+          "recall@5": {
+            "type": "recall",
+            "k": 5
+          }
+        }
+      }
+    ]
   }
 }
