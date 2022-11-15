@@ -269,7 +269,7 @@ class BertHead(Head, config_name='bert4rec'):
             prefix=config['prefix'],
             labels_prefix=config['labels_prefix'],
             input_dim=config['input_dim'],
-            output_dim=num_items + 1,
+            output_dim=num_items + 2,
             candidates_prefix=config['candidates_prefix'],
             output_prefix=config.get('prefix', None)
         )
