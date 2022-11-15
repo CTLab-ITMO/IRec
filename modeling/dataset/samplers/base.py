@@ -8,7 +8,7 @@ class TrainSampler(metaclass=MetaParent):
         return self
 
     def __len__(self):
-        raise NotImplementedError
+        return len(self._dataset)
 
     def __getitem__(self, index):
         raise NotImplementedError
@@ -21,7 +21,7 @@ class EvalSampler(metaclass=MetaParent):
         return self
 
     def __len__(self):
-        raise NotImplementedError
+        return len(self._dataset)
 
     def __getitem__(self, index):
         raise NotImplementedError

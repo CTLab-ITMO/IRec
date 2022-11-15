@@ -27,9 +27,6 @@ class BertTrainSampler(TrainSampler, config_name='bert'):
             mask_prob=config.get('mask_prob', 0.25)
         )
 
-    def __len__(self):
-        return len(self._dataset)
-
     def __getitem__(self, index):
         sample = copy.deepcopy(self._dataset[index])
 
@@ -103,11 +100,8 @@ class BertEvalSampler(EvalSampler, config_name='bert'):
             negative_sampler=negative_sampler
         )
 
-    def __len__(self):
-        return len(self._dataset)
-
     def __getitem__(self, index):
-        sample = self._dataset[index]
+        sample = copy.deepcopy(self._dataset[index])
 
         sequence = sample['sample.ids']
         answer = sample['answer.ids']
