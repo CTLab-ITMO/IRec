@@ -1,14 +1,17 @@
 {
+  "experiment_name": "test_experiment",
+  "train_epochs_num": 100,
   "dataset": {
     "type": "amazon",
     "path_to_data_dir": "../data/Beauty",
     "dataset_prefix": "Beauty",
     "min_sample_len": 5,
+    "max_sample_len": 200,
     "validation_size": 0.1,
     "test_size": 0.1,
     "samplers": {
       "type": "bert",
-      "mask_prob": 0.25,
+      "mask_prob": 0.4,
       "negative_sampler": {
         "type": "random",
         "sample_size": 99
@@ -32,7 +35,7 @@
         "type": "amazon"
       },
       "drop_last": false,
-      "shuffle": true
+      "shuffle": false
     }
   },
   "model": {
@@ -102,6 +105,5 @@
         }
       }
     ]
-  },
-  "train_epochs_num": 10
+  }
 }
