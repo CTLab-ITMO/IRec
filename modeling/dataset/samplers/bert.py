@@ -32,6 +32,10 @@ class BertTrainSampler(TrainSampler, config_name='bert'):
     def __getitem__(self, index):
         sample = self._dataset[index]
 
+        if 12102 in sample:
+            print(sample)
+            input()
+
         sequence = sample['sample.ids']
         answer = sample['answer.ids']
 
