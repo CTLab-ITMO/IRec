@@ -39,10 +39,6 @@ class BertTrainSampler(TrainSampler, config_name='bert'):
         masked_sequence = []
         labels = []
 
-        if 12102 in sequence or 12102 in answer:
-            print(sample)
-            input()
-
         for item in sequence:
 
             prob = np.random.rand()
