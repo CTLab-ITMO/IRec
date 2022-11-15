@@ -22,7 +22,6 @@ def train(dataloader, model, loss_function, optimizer, callback, epoch_cnt):
     for epoch in range(epoch_cnt):
         logger.debug(f'Start epoch {epoch}')
         for step, inputs in enumerate(dataloader):
-            logger.debug(f'Start step {step}')
             model.train()
 
             for key, values in inputs.items():

@@ -8,7 +8,7 @@
     "test_size": 0.1,
     "samplers": {
       "type": "bert",
-      "mask_prob": 0.4,
+      "mask_prob": 0.25,
       "negative_sampler": {
         "type": "random",
         "sample_size": 99
@@ -18,7 +18,7 @@
   "dataloader": {
     "train": {
       "type": "torch",
-      "batch_size": 2,
+      "batch_size": 256,
       "batch_processor": {
         "type": "amazon"
       },
@@ -27,7 +27,7 @@
     },
     "validation": {
       "type": "torch",
-      "batch_size": 2,
+      "batch_size": 256,
       "batch_processor": {
         "type": "amazon"
       },
