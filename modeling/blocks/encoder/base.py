@@ -86,6 +86,38 @@ class Transformer(TorchEncoder, config_name='transformer'):
         return inputs
 
 
+# TODO compare with Transformer
+class TransformerEncoder(nn.Module):
+    def __init__(
+            self,
+            hidden_size,
+            num_layers,
+            num_heads,
+            dim_feedforward,
+            activation: nn.Module = nn.ReLU(),
+            dropout=0.0,
+            eps=1e-5
+    ):
+        super().__init__()
+        transformer_encoder_layer = nn.TransformerEncoderLayer(
+            d_model=hidden_size,
+            nhead=num_heads,
+            dim_feedforward=dim_feedforward,
+            dropout=dropout,
+            activation=activation,
+            layer_norm_eps=eps,
+            batch_first=True
+        )
+        self._encoder = nn.TransformerEncoder(transformer_encoder_layer, num_layers)
+
+    def forward(self, src, attention_mask):
+        src = self._encoder(
+            src=src,
+            src_key_padding_mask=~attention_mask
+        )
+        return src
+
+
 class Tower(TorchEncoder, config_name='tower'):
 
     def __init__(

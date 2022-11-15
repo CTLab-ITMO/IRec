@@ -1,7 +1,7 @@
 from models.base import TorchModel as Model
 
 from blocks.projector import BaseProjector, TorchProjector as Projector
-from blocks.encoder import BaseEncoder, TorchEncoder as Encoder
+from blocks.encoder import BaseEncoder, TorchEncoder as Encoder, TransformerEncoder
 from blocks.head import BaseHead, TorchHead as Head
 
 from utils import DEVICE
@@ -79,7 +79,24 @@ class BertProjector(Projector, config_name='bert4rec'):
         )
 
         self._dropout = nn.Dropout(p=self._dropout_rate)
-        self._layernorms = nn.LayerNorm(embedding_dim, eps)
+        self._layernorms = nn.LayerNorm(embedding_dim, eps)  # TODO change projector on composite
+
+    @torch.no_grad()
+    def _init_weights(self, initializer_range):
+        nn.init.trunc_normal_(
+            self._position_embeddings.weight.data,
+            std=initializer_range,
+            a=-2 * initializer_range,
+            b=2 * initializer_range
+        )
+        nn.init.trunc_normal_(
+            self._item_embeddings.weight.data,
+            std=initializer_range,
+            a=-2 * initializer_range,
+            b=2 * initializer_range
+        )
+        nn.init.zeros_(self._layernorms.weight.data)
+        nn.init.zeros_(self._layernorms.bias.data)
 
     @classmethod
     def create_from_config(cls, config, num_users=None, num_items=None, max_sequence_len=None):
@@ -127,37 +144,6 @@ class BertProjector(Projector, config_name='bert4rec'):
             inputs['{}.mask'.format(output_prefix)] = mask
 
         return inputs
-
-
-class TransformerEncoder(nn.Module):
-    def __init__(
-            self,
-            hidden_size,
-            num_layers,
-            num_heads,
-            dim_feedforward,
-            activation: nn.Module = nn.ReLU(),
-            dropout=0.0,
-            eps=1e-5
-    ):
-        super().__init__()
-        transformer_encoder_layer = nn.TransformerEncoderLayer(
-            d_model=hidden_size,
-            nhead=num_heads,
-            dim_feedforward=dim_feedforward,
-            dropout=dropout,
-            activation=activation,
-            layer_norm_eps=eps,
-            batch_first=True
-        )
-        self._encoder = nn.TransformerEncoder(transformer_encoder_layer, num_layers)
-
-    def forward(self, src, attention_mask):
-        src = self._encoder(
-            src=src,
-            src_key_padding_mask=~attention_mask
-        )
-        return src
 
 
 class BertEncoder(Encoder, config_name='bert4rec'):
@@ -262,6 +248,11 @@ class BertHead(Head, config_name='bert4rec'):
         self._candidates_prefix = candidates_prefix
         self._output_prefix = output_prefix or prefix
         self._encoder = nn.Linear(input_dim, output_dim)
+
+    @torch.no_grad()
+    def _init_weights(self, initializer_range):
+        nn.init.uniform_(self._encoder.weight.data, a=-initializer_range, b=initializer_range)
+        nn.init.uniform_(self._encoder.bias.data, a=-initializer_range, b=initializer_range)
 
     @classmethod
     def create_from_config(cls, config, num_items=None):
