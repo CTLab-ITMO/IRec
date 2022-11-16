@@ -1,0 +1,137 @@
+{
+  "experiment_name": "test_experiment",
+  "train_epochs_num": 100,
+  "dataset": {
+    "type": "amazon",
+    "path_to_data_dir": "../data/Beauty",
+    "dataset_prefix": "Beauty",
+    "min_sample_len": 5,
+    "max_sample_len": 200,
+    "validation_size": 0.1,
+    "test_size": 0.1,
+    "samplers": {
+      "type": "sasrec",
+      "negative_sampler": {
+        "type": "random",
+        "sample_size": 99
+      }
+    }
+  },
+  "dataloader": {
+    "train": {
+      "type": "torch",
+      "batch_size": 2,
+      "batch_processor": {
+        "type": "amazon"
+      },
+      "drop_last": true,
+      "shuffle": true
+    },
+    "validation": {
+      "type": "torch",
+      "batch_size": 2,
+      "batch_processor": {
+        "type": "amazon"
+      },
+      "drop_last": false,
+      "shuffle": false
+    }
+  },
+  "model": {
+    "type": "feedforward",
+    "projector": {
+      "type": "basic",
+      "embedding_dim": 256,
+      "fields": [
+        {
+          "type": "basic",
+          "prefix": "sample",
+          "use_layernorm": true,
+          "use_position": true
+        },
+        {
+          "type": "basic",
+          "prefix": "positive"
+        },
+        {
+          "type": "basic",
+          "prefix": "negative"
+        },
+        {
+          "type": "basic",
+          "prefix": "candidates"
+        }
+      ]
+    },
+    "encoder": {
+      "type": "sasrec",
+      "sample_prefix": "sample",
+      "embedding_dim": 256,
+      "num_layers": 2,
+      "num_heads": 2
+    },
+    "head": {
+      "type": "sasrec",
+      "prefix": "sample",
+      "candidates_prefix": "candidates",
+      "labels_prefix": "labels",
+      "output_prefix": "logits",
+      "positive_prefix": "positive",
+      "negative_prefix": "negative"
+    }
+  },
+  "loss": {
+    "type": "composite",
+    "losses": [
+      {
+        "type": "bce",
+        "predictions_prefix": "positive.logits",
+        "labels_prefix": "positive.labels"
+      },
+      {
+        "type": "bce",
+        "predictions_prefix": "negative.logits",
+        "labels_prefix": "negative.labels"
+      }
+    ],
+    "output_prefix": "loss"
+  },
+  "optimizer": {
+    "type": "basic",
+    "optimizer": {
+      "type": "adam",
+      "lr": 1e-4,
+      "betas": [
+        0.9,
+        0.98
+      ]
+    },
+    "clip_grad_threshold": 5.0
+  },
+  "callback": {
+    "type": "composite",
+    "callbacks": [
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "loss"
+      },
+      {
+        "type": "validation",
+        "on_step": 1000,
+        "pred_prefix": "logits",
+        "labels_prefix": "labels",
+        "metrics": {
+          "ndcg@5": {
+            "type": "ndcg",
+            "k": 5
+          },
+          "recall@5": {
+            "type": "recall",
+            "k": 5
+          }
+        }
+      }
+    ]
+  }
+}

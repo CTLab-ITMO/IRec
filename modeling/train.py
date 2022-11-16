@@ -2,7 +2,8 @@ from utils import parse_args, create_logger, fix_random_seed, DEVICE
 
 from dataset import BaseDataset
 from dataloader import BaseDataloader
-from models import BaseModel
+from models.sasrec import *
+from blocks import BaseModel
 from loss import BaseLoss
 from optimizer import BaseOptimizer
 from callbacks import BaseCallback
