@@ -48,10 +48,11 @@ class CompositeLoss(TorchLoss, config_name='composite'):
 
 class CrossEntropyLoss(TorchLoss, config_name='ce'):
 
-    def __init__(self, predictions_prefix, labels_prefix):
+    def __init__(self, predictions_prefix, labels_prefix, output_prefix=None):
         super().__init__()
         self._pred_prefix = predictions_prefix
         self._labels_prefix = labels_prefix
+        self._output_prefix = output_prefix
 
         self._loss = nn.CrossEntropyLoss()
 
@@ -59,7 +60,13 @@ class CrossEntropyLoss(TorchLoss, config_name='ce'):
         all_logits = inputs[self._pred_prefix]  # (all_items, num_classes)
         all_labels = inputs['{}.ids'.format(self._labels_prefix)]  # (all_items)
         assert all_logits.shape[0] == all_labels.shape[0]
-        return self._loss(all_logits, all_labels)
+
+        loss = self._loss(all_logits, all_labels)
+
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss
 
 
 class BinaryCrossEntropyLoss(TorchLoss, config_name='bce'):
@@ -68,7 +75,8 @@ class BinaryCrossEntropyLoss(TorchLoss, config_name='bce'):
             self,
             predictions_prefix,
             labels_prefix,
-            with_logits=True
+            with_logits=True,
+            output_prefix=None
     ):
         super().__init__()
         self._pred_prefix = predictions_prefix
@@ -83,6 +91,11 @@ class BinaryCrossEntropyLoss(TorchLoss, config_name='bce'):
         all_logits = inputs[self._pred_prefix]  # (all_items)
         all_labels = inputs[self._labels_prefix]  # (all_items)
         assert all_logits.shape[0] == all_labels.shape[0]
-        return self._loss(all_logits, all_labels)
+        loss = self._loss(all_logits, all_labels)
+
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss
 
 # TODO add parameters penalty for sasrec loss

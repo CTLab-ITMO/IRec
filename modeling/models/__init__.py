@@ -1,3 +1,3 @@
 from .base import BaseModel, TorchModel
-from .bert4rec import Bert4Rec, BertProjector, BertEncoder, BertHead
+from .bert4rec import BertEncoder, BertHead
 from .sasrec import SasRecEncoder, SasRecHead

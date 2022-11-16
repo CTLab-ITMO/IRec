@@ -10,39 +10,40 @@ import torch
 import torch.nn as nn
 
 
-class Bert4Rec(Model, config_name='bert4rec'):
-    def __init__(
-            self,
-            projector,
-            encoder,
-            head,
-    ):
-        super().__init__()
-        self._projector = projector
-        self._encoder = encoder
-        self._head = head
-
-    @classmethod
-    def create_from_config(cls, config, num_users=None, num_items=None, max_sequence_len=None):
-        projector = BaseProjector.create_from_config(
-            config['projector'],
-            num_users=num_users,
-            num_items=num_items,
-            max_sequence_len=max_sequence_len
-        )
-        encoder = BaseEncoder.create_from_config(config['encoder'])
-        head = BaseHead.create_from_config(config['head'], num_items=num_items)
-
-        return cls(
-            projector=projector,
-            encoder=encoder,
-            head=head
-        )
-
-    def forward(self, inputs):
-        inputs = self._projector(inputs)
-        inputs = self._encoder(inputs)
-        return self._head(inputs)
+# class Bert4Rec(Model, config_name='bert4rec'):
+#
+#     def __init__(
+#             self,
+#             projector,
+#             encoder,
+#             head,
+#     ):
+#         super().__init__()
+#         self._projector = projector
+#         self._encoder = encoder
+#         self._head = head
+#
+#     @classmethod
+#     def create_from_config(cls, config, num_users=None, num_items=None, max_sequence_len=None):
+#         projector = BaseProjector.create_from_config(
+#             config['projector'],
+#             num_users=num_users,
+#             num_items=num_items,
+#             max_sequence_len=max_sequence_len
+#         )
+#         encoder = BaseEncoder.create_from_config(config['encoder'])
+#         head = BaseHead.create_from_config(config['head'], num_items=num_items)
+#
+#         return cls(
+#             projector=projector,
+#             encoder=encoder,
+#             head=head
+#         )
+#
+#     def forward(self, inputs):
+#         inputs = self._projector(inputs)
+#         inputs = self._encoder(inputs)
+#         return self._head(inputs)
 
 
 class BertProjector(Projector, config_name='bert4rec'):
@@ -224,7 +225,7 @@ class BertHead(Head, config_name='bert4rec'):
         nn.init.uniform_(self._encoder.bias.data, a=-initializer_range, b=initializer_range)
 
     @classmethod
-    def create_from_config(cls, config, num_items=None):
+    def create_from_config(cls, config, num_users=None, num_items=None):
         return cls(
             prefix=config['prefix'],
             labels_prefix=config['labels_prefix'],
