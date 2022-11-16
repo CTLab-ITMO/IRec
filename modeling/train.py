@@ -28,9 +28,9 @@ def train(dataloader, model, loss_function, optimizer, callback, epoch_cnt):
                 inputs[key] = inputs[key].to(device)
 
             result = model(inputs)
-            result = loss_function(result)
+            loss = loss_function(result)
 
-            optimizer.step(result)
+            optimizer.step(loss)
             callback(result, step_num)
             step_num += 1
 

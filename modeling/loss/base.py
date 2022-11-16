@@ -1,3 +1,5 @@
+import torch.nn
+
 from utils import MetaParent
 
 import torch.nn as nn
@@ -17,13 +19,39 @@ class IdentityLoss(BaseLoss, config_name='identity'):
         return inputs
 
 
+class CompositeLoss(TorchLoss, config_name='composite'):
+
+    def __init__(self, losses, weights=None, output_prefix=None):
+        super().__init__()
+        self._losses = losses
+        self._weights = weights or [1] * len(losses)
+        self._output_prefix = output_prefix
+
+    @classmethod
+    def create_from_config(cls, config):
+        return cls(
+            losses=[BaseLoss.create_from_config(cfg) for cfg in config['losses']],
+            weights=config.get('weights', [1] * len(config['losses'])),
+            output_prefix=config.get('output_prefix', None)
+        )
+
+    def forward(self, inputs):
+        total_loss = 0.0
+        for loss, weight in zip(self._losses, self._weights):
+            total_loss += weight * loss(inputs)
+
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = total_loss.cpu().item()
+
+        return total_loss
+
+
 class CrossEntropyLoss(TorchLoss, config_name='ce'):
 
-    def __init__(self, predictions_prefix, labels_prefix, output_prefix):
+    def __init__(self, predictions_prefix, labels_prefix):
         super().__init__()
         self._pred_prefix = predictions_prefix
         self._labels_prefix = labels_prefix
-        self._output_prefix = output_prefix
 
         self._loss = nn.CrossEntropyLoss()
 
@@ -31,5 +59,30 @@ class CrossEntropyLoss(TorchLoss, config_name='ce'):
         all_logits = inputs[self._pred_prefix]  # (all_items, num_classes)
         all_labels = inputs['{}.ids'.format(self._labels_prefix)]  # (all_items)
         assert all_logits.shape[0] == all_labels.shape[0]
-        inputs[self._output_prefix] = self._loss(all_logits, all_labels)
-        return inputs
+        return self._loss(all_logits, all_labels)
+
+
+class BinaryCrossEntropyLoss(TorchLoss, config_name='bce'):
+
+    def __init__(
+            self,
+            predictions_prefix,
+            labels_prefix,
+            with_logits=True
+    ):
+        super().__init__()
+        self._pred_prefix = predictions_prefix
+        self._labels_prefix = labels_prefix
+
+        if with_logits:
+            self._loss = nn.BCEWithLogitsLoss()
+        else:
+            self._loss = nn.BCELoss()
+
+    def forward(self, inputs):
+        all_logits = inputs[self._pred_prefix]  # (all_items)
+        all_labels = inputs[self._labels_prefix]  # (all_items)
+        assert all_logits.shape[0] == all_labels.shape[0]
+        return self._loss(all_logits, all_labels)
+
+# TODO add parameters penalty for sasrec loss

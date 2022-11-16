@@ -19,12 +19,11 @@ class BaseOptimizer(metaclass=MetaParent):
 
 
 class BasicOptimizer(BaseOptimizer, config_name='basic'):
-    def __init__(self, model, optimizer, loss_prefix, scheduler=None, clip_grad_threshold=None):
+    def __init__(self, model, optimizer, scheduler=None, clip_grad_threshold=None):
         self._model = model
         self._optimizer = optimizer
         self._scheduler = scheduler
         self._clip_grad_threshold = clip_grad_threshold
-        self._loss_prefix = loss_prefix
 
     @classmethod
     def create_from_config(cls, config, model=None):
@@ -48,13 +47,12 @@ class BasicOptimizer(BaseOptimizer, config_name='basic'):
             model=model,
             optimizer=optimizer,
             scheduler=scheduler,
-            loss_prefix=config['loss_prefix'],
             clip_grad_threshold=config.get('clip_grad_threshold', None)
         )
 
-    def step(self, inputs):
+    def step(self, loss):
         self._optimizer.zero_grad()
-        inputs[self._loss_prefix].backward()
+        loss.backward()
 
         if self._clip_grad_threshold is not None:
             torch.nn.utils.clip_grad_norm_(self._model.parameters(), self._clip_grad_threshold)

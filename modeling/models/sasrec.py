@@ -293,11 +293,11 @@ class SasRecHead(Head, config_name='sasrec'):
         all_positive_labels = positive_labels[positive_mask]
         all_negative_labels = negative_labels[negative_mask]
 
-        all_logits = torch.cat([all_positive_logits, all_negative_logits], dim=-1)
-        all_labels = torch.cat([all_positive_labels, all_negative_labels], dim=-1)
+        inputs['positive.logits'] = all_positive_logits
+        inputs['positive.labels'] = all_positive_labels
 
-        inputs[self._output_prefix] = all_logits
-        inputs['{}.ids'.format(self._labels_prefix)] = all_labels
+        inputs['negative.logits'] = all_negative_logits
+        inputs['negative.labels'] = all_negative_labels
 
         return inputs
 
@@ -308,6 +308,7 @@ class SasRecHead(Head, config_name='sasrec'):
         lengths = (lengths - 1).unsqueeze(-1).unsqueeze(-1)  # (batch_size, 1, 1)
         lengths = torch.tile(lengths, (1, 1, embeddings.shape[-1]))  # (batch_size, 1, emb_dim)
         last_embeddings = embeddings.gather(dim=1, index=lengths)  # (batch_size, 1, emb_dim)
+        # TODO check that everything works here (probably yes)
 
         candidate_embeddings = inputs[self._candidates_prefix]  # (batch_size, num_candidates, emb_dim)
         candidate_scores = torch.sum(candidate_embeddings * last_embeddings, dim=-1)  # (batch_size, num_candidates)
