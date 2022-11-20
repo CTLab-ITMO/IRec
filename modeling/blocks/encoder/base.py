@@ -202,11 +202,16 @@ class Transformer(TorchEncoder, config_name='transformer'):
         embeddings = inputs[self._prefix]
         attention_mask = inputs[f'{self._prefix}.mask']
 
-        inputs[self._output_prefix] = self._encoder(
+        embeddings = self._input_projection(embeddings)
+        embeddings = self._encoder(
             src=embeddings,
             src_key_padding_mask=~attention_mask
         )
+        embeddings = self._output_projection(embeddings)
+
+        inputs[self._output_prefix] = embeddings
         inputs['{}.mask'.format(self._output_prefix)] = attention_mask
+
         return inputs
 
 
