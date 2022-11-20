@@ -16,7 +16,7 @@ class TorchEncoder(BaseEncoder, torch.nn.Module):
 
 class TrainTestEncoder(TorchEncoder, config_name='train/test'):
 
-    def __init__(self, shared_encoder, train_encoder, test_encoder):
+    def __init__(self, train_encoder, test_encoder, shared_encoder=None):
         super().__init__()
         self._shared_encoder = shared_encoder
         self._train_encoder = train_encoder
@@ -25,13 +25,14 @@ class TrainTestEncoder(TorchEncoder, config_name='train/test'):
     @classmethod
     def create_from_config(cls, config):
         return cls(
-            shared_encoder=BaseEncoder.create_from_config(config['shared']),
+            shared_encoder=BaseEncoder.create_from_config(config['shared']) if 'shared' in config else None,
             train_encoder=BaseEncoder.create_from_config(config["train"]),
             test_encoder=BaseEncoder.create_from_config(config["test"])
         )
 
     def forward(self, inputs):
-        inputs = self._shared_encoder(inputs)
+        if self._shared_encoder is not None:
+            inputs = self._shared_encoder(inputs)
 
         if self.training:  # train mode
             inputs = self._train_encoder(inputs)
