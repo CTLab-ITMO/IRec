@@ -53,7 +53,7 @@ class CompositeHead(TorchHead, config_name='composite'):
     def create_from_config(cls, config, num_users=None, num_items=None):
         return cls(
             heads=nn.ModuleList([
-                BaseHead.create_from_config(head_cfg, num_users=num_users, num_items=num_items)
+                BaseHead.create_from_config(head_cfg)
                 for head_cfg in config['heads']
             ]),
             output_prefix=config.get('output_prefix', None)

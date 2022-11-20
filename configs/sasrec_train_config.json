@@ -149,7 +149,7 @@
     "type": "basic",
     "optimizer": {
       "type": "adam",
-      "lr": 1e-4,
+      "lr": 3e-3,
       "betas": [
         0.9,
         0.98
@@ -164,22 +164,6 @@
         "type": "metric",
         "on_step": 1,
         "loss_prefix": "loss"
-      },
-      {
-        "type": "validation",
-        "on_step": 32,
-        "pred_prefix": "logits",
-        "labels_prefix": "labels",
-        "metrics": {
-          "ndcg@5": {
-            "type": "ndcg",
-            "k": 5
-          },
-          "recall@5": {
-            "type": "recall",
-            "k": 5
-          }
-        }
       }
     ]
   }

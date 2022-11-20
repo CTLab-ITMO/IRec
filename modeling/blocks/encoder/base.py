@@ -74,11 +74,17 @@ class EinsumEncoder(TorchEncoder, config_name='einsum'):
         self._mask_prefix = mask_prefix
 
     def forward(self, inputs):
-        fst_embeddings = inputs[self._fst_prefix]
+        fst_embeddings = inputs[self._fst_prefix].clone()
+        fst_mask = inputs['{}.mask'.format(self._fst_prefix)]
+        fst_embeddings[~fst_mask] = 0
+
         snd_embeddings = inputs[self._snd_prefix]
+        snd_mask = inputs['{}.mask'.format(self._snd_prefix)].clone()
+        snd_embeddings[~snd_mask] = 0
 
         inputs[self._output_prefix] = torch.einsum(self._operation, fst_embeddings, snd_embeddings)
         inputs['{}.mask'.format(self._output_prefix)] = inputs['{}.mask'.format(self._mask_prefix)]
+        inputs[self._output_prefix][~inputs['{}.mask'.format(self._output_prefix)]] = 0
 
         return inputs
 
@@ -93,9 +99,10 @@ class LastItemEncoder(TorchEncoder, config_name='last_item'):
     def forward(self, inputs):
         embeddings = inputs[self._prefix]  # (batch_size, seq_len, emb_dim)
         mask = inputs['{}.mask'.format(self._prefix)]  # (batch_size, seq_len)
+        embeddings[~mask] = 0
 
-        lengths = torch.sum(mask, dim=-1) - 1  # (batch_size)
-        lengths = lengths.unsqueeze(-1)  # (batch_size, 1)
+        lengths = torch.sum(mask, dim=-1)  # (batch_size)
+        lengths = (lengths - 1).unsqueeze(-1)  # (batch_size, 1)
         last_masks = mask.gather(dim=1, index=lengths)  # (batch_size, 1)
 
         lengths = lengths.unsqueeze(-1)  # (batch_size, 1, 1)
