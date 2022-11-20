@@ -419,7 +419,8 @@ class DotProduct(TorchEncoder, config_name='dot_product'):
         candidate_mask = inputs[f'{self._candidate_prefix}.mask'].bool()  # (batch_size, candidates_num)
 
         # b - batch_size, s - seq_len, d - embedding_dim, c - candidates_num
-        scores = torch.einsum('bsd,bcd->bcs', user_embeddings,candidate_embeddings)  # (batch_size, candidates_num, seq_len)
+        scores = torch.einsum('bsd,bcd->bcs', user_embeddings,
+                              candidate_embeddings)  # (batch_size, candidates_num, seq_len)
         scores = scores.mean(dim=-1)  # (batch_size, candidates_num)
         if self._normalize:
             scores /= math.sqrt(user_embeddings.shape[-1])  # (batch_size, candidates_num)
@@ -427,5 +428,25 @@ class DotProduct(TorchEncoder, config_name='dot_product'):
 
         inputs[self._output_prefix] = scores  # (batch_size, candidates_num)
         inputs['{}.mask'.format(self._output_prefix)] = candidate_mask  # (batch_size, candidates_num)
+
+        return inputs
+
+
+class GatherEncoder(TorchEncoder, config_name='gather'):
+
+    def __init__(self, prefix, candidate_prefix, output_prefix):
+        super().__init__()
+        self._prefix = prefix
+        self._candidate_prefix = candidate_prefix
+        self._output_prefix = output_prefix
+
+    def forward(self, inputs):
+        scores = inputs[self._prefix]  # (batch_size, ..., all_items)
+        scores = torch.reshape(scores, (scores.shape[0], scores.shape[-1]))
+        candidate_ids = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_items)
+        candidate_ids = torch.reshape(candidate_ids, (scores.shape[0], -1))  # (batch_size, num_candidates)c
+
+        inputs[self._output_prefix] = torch.gather(scores, dim=-1, index=candidate_ids)  # (batch_size, num_candidates)
+        inputs['{}.mask'.format(self._output_prefix)] = torch.ones(*candidate_ids.shape).bool()
 
         return inputs

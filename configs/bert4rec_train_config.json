@@ -99,6 +99,12 @@
             "type": "last_item",
             "prefix": "logits",
             "output_prefix": "next_item_prediction"
+          },
+          {
+            "type": "gather",
+            "prefix": "next_item_prediction",
+            "candidate_prefix": "candidates",
+            "output_prefix": "logits"
           }
         ]
       }
@@ -136,7 +142,7 @@
       {
         "type": "validation",
         "on_step": 32,
-        "pred_prefix": "next_item_prediction",
+        "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {
           "ndcg@5": {

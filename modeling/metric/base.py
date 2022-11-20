@@ -42,7 +42,7 @@ class NDCGMetric(BaseMetric, config_name='ndcg'):
 
     def __call__(self, inputs, pred_prefix, labels_prefix):
         predictions = inputs[pred_prefix]  # (batch_size, num_candidates)
-        predictions = (-predictions).argsort(dim=1)  # (batch_size, num_candidates)
+        predictions = (-predictions).argsort(dim=-1)  # (batch_size, num_candidates)
         predictions = predictions[..., :self._k]  # (batch_size, k)
         predictions = torch.reshape(predictions, (predictions.shape[0], self._k))
 
@@ -68,17 +68,17 @@ class RecallMetric(BaseMetric, config_name='recall'):
 
     def __call__(self, inputs, pred_prefix, labels_prefix):
         predictions = inputs[pred_prefix]  # (batch_size, num_candidates)
-        predictions = (-predictions).argsort(dim=1)  # (batch_size, num_candidates)
+        predictions = (-predictions).argsort(dim=-1)  # (batch_size, num_candidates)
         predictions = predictions[..., :self._k]  # (batch_size, k)
         predictions = torch.reshape(predictions, (predictions.shape[0], self._k))
 
         labels = inputs['{}.ids'.format(labels_prefix)].float()  # (all_batch_items)
         labels = torch.reshape(labels, (predictions.shape[0], -1))  # (batch_size, num_candidates)
-        hits = labels.gather(dim=1, index=predictions)  # (batch_size, k)
+        hits = labels.gather(dim=-1, index=predictions)  # (batch_size, k)
 
         recall = (
-                hits.sum(dim=1) /
-                torch.min(torch.Tensor([self._k]).to(labels.device), labels.sum(dim=1).float())
+                hits.sum(dim=-1) /
+                torch.min(torch.Tensor([self._k]).to(labels.device), labels.sum(dim=-1).float())
         ).mean()  # (1)
 
         return recall.cpu().item()
