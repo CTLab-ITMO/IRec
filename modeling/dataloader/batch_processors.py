@@ -22,10 +22,9 @@ class AmazonBatchProcessor(BaseBatchProcessor, config_name='amazon'):
     def __call__(self, batch):
         processed_batch = {}
 
-        processed_batch['user_id'] = [sample['user_id'] for sample in batch]
         processed_batch['timestamps'] = [sample['timestamp'] for sample in batch]
 
-        for prefix in ['sample', 'labels', 'candidates', 'positive', 'negative']:
+        for prefix in ['sample', 'labels', 'candidates', 'positive', 'negative', 'user', 'positive_labels', 'negative_labels']:
             if f'{prefix}.length' in batch[0]:
                 processed_batch[f'{prefix}.ids'] = []
                 processed_batch[f'{prefix}.positions'] = []

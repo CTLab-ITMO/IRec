@@ -60,7 +60,9 @@ def get_activation_function(name, **kwargs):
         return torch.nn.Tanh()
     elif name == 'softmax':
         return torch.nn.Softmax()
+    elif name == 'softplus':
+        return torch.nn.Softplus(beta=int(kwargs.get('beta', 1.0)), threshold=int(kwargs.get('threshold', 20)))
     elif name == 'softmax_logit':
         return torch.nn.LogSoftmax()
     else:
-        raise ValueError('Unknown activation function name')
+        raise ValueError('Unknown activation function name `{}`'.format(name))

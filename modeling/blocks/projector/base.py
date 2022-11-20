@@ -81,6 +81,11 @@ class BasicProjector(TorchProjector, config_name='basic'):
         self._dropout = dropout
         self._eps = eps
 
+        self._user_embeddings = nn.Embedding(
+            num_embeddings=self._num_users + 2,
+            embedding_dim=self._embedding_dim
+        )
+
         self._item_embeddings = nn.Embedding(
             num_embeddings=self._num_items + 2,
             embedding_dim=self._embedding_dim
@@ -139,12 +144,18 @@ class BasicProjector(TorchProjector, config_name='basic'):
             output_prefix = field.get('output_prefix', prefix)
             use_position = field.get('use_position', False)
             use_layernorm = field.get('use_layernorm', False)
+            type = field.get('type', 'item')
 
             if '{}.ids'.format(prefix) in inputs:
                 all_batch_items = inputs['{}.ids'.format(prefix)]  # (all_batch_items)
                 all_batch_lengths = inputs['{}.length'.format(prefix)]  # (batch_size)
 
-                all_batch_embeddings = self._item_embeddings(all_batch_items)  # (all_batch_items, emb_dim)
+                if type == 'item':
+                    all_batch_embeddings = self._item_embeddings(all_batch_items)  # (all_batch_items, emb_dim)
+                elif type == 'user':
+                    all_batch_embeddings = self._user_embeddings(all_batch_items)  # (all_batch_items, emb_dim)
+                else:
+                    raise ValueError('Unknown embedding type')
 
                 if use_position and '{}.positions'.format(prefix) in inputs:
                     all_batch_positions = inputs['{}.positions'.format(prefix)]  # (all_batch_items)

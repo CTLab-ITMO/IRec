@@ -10,7 +10,7 @@
     "validation_size": 0.1,
     "test_size": 0.1,
     "samplers": {
-      "type": "sasrec",
+      "type": "next_item_prediction",
       "negative_sampler": {
         "type": "random",
         "sample_size": 99
@@ -44,57 +44,74 @@
       "embedding_dim": 256,
       "fields": [
         {
-          "type": "basic",
-          "prefix": "sample",
-          "use_layernorm": true,
-          "use_position": true
+          "type": "user",
+          "prefix": "user"
         },
         {
-          "type": "basic",
           "prefix": "positive"
         },
         {
-          "type": "basic",
           "prefix": "negative"
         },
         {
-          "type": "basic",
           "prefix": "candidates"
         }
       ]
     },
     "encoder": {
-      "type": "sasrec",
-      "sample_prefix": "sample",
-      "embedding_dim": 256,
-      "num_layers": 2,
-      "num_heads": 2
+      "type": "train/test",
+      "train": {
+        "type": "composite",
+        "encoders": [
+          {
+            "type": "dot_product",
+            "user_prefix": "user",
+            "candidate_prefix": "positive",
+            "output_prefix": "positive_scores"
+          },
+          {
+            "type": "dot_product",
+            "user_prefix": "user",
+            "candidate_prefix": "negative",
+            "output_prefix": "negative_scores"
+          },
+          {
+            "type": "unmask",
+            "prefix": [
+              "positive_scores",
+              "negative_scores"
+            ]
+          }
+        ]
+      },
+      "test": {
+        "type": "composite",
+        "encoders": [
+          {
+            "type": "dot_product",
+            "user_prefix": "user",
+            "candidate_prefix": "candidates",
+            "output_prefix": "scores"
+          },
+          {
+            "type": "unmask",
+            "prefix": ["scores"]
+          }
+        ]
+      }
     },
     "head": {
-      "type": "sasrec",
-      "prefix": "sample",
-      "candidates_prefix": "candidates",
-      "labels_prefix": "labels",
-      "output_prefix": "logits",
-      "positive_prefix": "positive",
-      "negative_prefix": "negative"
-    }
-  },
-  "loss": {
-    "type": "composite",
-    "losses": [
-      {
-        "type": "bce",
-        "predictions_prefix": "positive.logits",
-        "labels_prefix": "positive.labels"
+      "type": "train/test",
+      "train": {
+        "type": "bpr",
+        "positive_prefix": "positive_scores",
+        "negative_prefix": "negative_scores",
+        "output_prefix": "loss"
       },
-      {
-        "type": "bce",
-        "predictions_prefix": "negative.logits",
-        "labels_prefix": "negative.labels"
+      "test": {
+        "type": "identity"
       }
-    ],
-    "output_prefix": "loss"
+    }
   },
   "optimizer": {
     "type": "basic",
@@ -118,8 +135,8 @@
       },
       {
         "type": "validation",
-        "on_step": 1000,
-        "pred_prefix": "logits",
+        "on_step": 32,
+        "pred_prefix": "scores",
         "labels_prefix": "labels",
         "metrics": {
           "ndcg@5": {

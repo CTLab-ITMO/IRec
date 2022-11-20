@@ -62,11 +62,7 @@ class BasicOptimizer(BaseOptimizer, config_name='basic'):
             self._scheduler.step()
 
     def state_dict(self):
-        state_dict = {
-            'optimizer': self._optimizer.state_dict()
-        }
+        state_dict = {'optimizer': self._optimizer.state_dict()}
         if self._scheduler is not None:
-            state_dict.update(
-                {'scheduler': self._scheduler.state_dict()}
-            )
+            state_dict.update({'scheduler': self._scheduler.state_dict()})
         return state_dict

@@ -10,7 +10,7 @@
     "validation_size": 0.1,
     "test_size": 0.1,
     "samplers": {
-      "type": "sasrec",
+      "type": "next_item_prediction",
       "negative_sampler": {
         "type": "random",
         "sample_size": 99
@@ -38,54 +38,122 @@
     }
   },
   "model": {
-    "type": "sasrec",
+    "type": "feedforward",
     "projector": {
-      "type": "sasrec",
-      "sample_prefix": "sample",
-      "positive_prefix": "positive",
-      "negative_prefix": "negative",
-      "candidates_prefix": "candidates",
-      "embedding_dim": 256
+      "type": "basic",
+      "embedding_dim": 256,
+      "fields": [
+        {
+          "prefix": "sample",
+          "use_layernorm": true,
+          "use_position": true
+        },
+        {
+          "prefix": "positive"
+        },
+        {
+          "prefix": "negative"
+        },
+        {
+          "prefix": "candidates"
+        }
+      ]
     },
     "encoder": {
-      "type": "sasrec",
-      "sample_prefix": "sample",
-      "embedding_dim": 256,
-      "num_layers": 2,
-      "num_heads": 2
+      "type": "train/test",
+      "train": {
+        "type": "composite",
+        "encoders": [
+          {
+            "type": "sasrec",
+            "sample_prefix": "sample",
+            "embedding_dim": 256,
+            "num_layers": 2,
+            "num_heads": 2
+          },
+          {
+            "type": "einsum",
+            "fst_prefix": "sample",
+            "snd_prefix": "positive",
+            "mask_prefix": "positive",
+            "operation": "bsd,bsd->bs",
+            "output_prefix": "positive_scores"
+          },
+          {
+            "type": "einsum",
+            "fst_prefix": "sample",
+            "snd_prefix": "negative",
+            "mask_prefix": "negative",
+            "operation": "bsd,bsd->bs",
+            "output_prefix": "negative_scores"
+          },
+          {
+            "type": "unmask",
+            "prefix": [
+              "positive_scores",
+              "negative_scores"
+            ]
+          }
+        ]
+      },
+      "test": {
+        "type": "composite",
+        "encoders": [
+          {
+            "type": "sasrec",
+            "sample_prefix": "sample",
+            "embedding_dim": 256,
+            "num_layers": 2,
+            "num_heads": 2
+          },
+          {
+            "type": "last_item",
+            "prefix": "sample",
+            "output_prefix": "next_item_prediction"
+          },
+          {
+            "type": "einsum",
+            "fst_prefix": "next_item_prediction",
+            "snd_prefix": "candidates",
+            "mask_prefix": "candidates",
+            "operation": "bsd,bcd->bc",
+            "output_prefix": "logits"
+          }
+        ]
+      }
     },
     "head": {
-      "type": "sasrec",
-      "prefix": "sample",
-      "candidates_prefix": "candidates",
-      "labels_prefix": "labels",
-      "output_prefix": "logits",
-      "positive_prefix": "positive",
-      "negative_prefix": "negative"
-    }
-  },
-  "loss": {
-    "type": "composite",
-    "losses": [
-      {
-        "type": "bce",
-        "predictions_prefix": "positive.logits",
-        "labels_prefix": "positive.labels"
+      "type": "train/test",
+      "train": {
+        "type": "composite",
+        "heads": [
+          {
+            "type": "bce",
+            "predictions_prefix": "positive_scores",
+            "labels_prefix": "positive_labels.ids"
+          },
+          {
+            "type": "bce",
+            "predictions_prefix": "negative_scores",
+            "labels_prefix": "negative_labels.ids"
+          }
+        ],
+        "output_prefix": "loss"
       },
-      {
-        "type": "bce",
-        "predictions_prefix": "negative.logits",
-        "labels_prefix": "negative.labels"
+      "test": {
+        "type": "identity"
       }
-    ],
-    "output_prefix": "loss"
+    }
   },
   "optimizer": {
     "type": "basic",
     "optimizer": {
       "type": "adam",
       "lr": 1e-4,
-      "betas": [0.9, 0.98]
+      "betas": [
+        0.9,
+        0.98
+      ]
     },
     "clip_grad_threshold": 5.0
   },
@@ -99,7 +167,7 @@
       },
       {
         "type": "validation",
-        "on_step": 1000,
+        "on_step": 32,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {

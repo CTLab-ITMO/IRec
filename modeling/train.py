@@ -2,15 +2,13 @@ from utils import parse_args, create_logger, fix_random_seed, DEVICE
 
 from dataset import BaseDataset
 from dataloader import BaseDataloader
-from models.sasrec import *
-from models.bert4rec import *
-from blocks import BaseModel
-from loss import BaseLoss
+from models import BaseModel
 from optimizer import BaseOptimizer
 from callbacks import BaseCallback
 
 import json
 import torch
+torch.autograd.set_detect_anomaly(True)
 
 logger = create_logger(name=__name__)
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -18,7 +16,7 @@ seed_val = 42
 epoch_cnt = 10
 
 
-def train(dataloader, model, loss_function, optimizer, callback, epoch_cnt):
+def train(dataloader, model, optimizer, callback, epoch_cnt):
     step_num = 0
 
     for epoch in range(epoch_cnt):
@@ -29,11 +27,10 @@ def train(dataloader, model, loss_function, optimizer, callback, epoch_cnt):
             for key, values in inputs.items():
                 inputs[key] = inputs[key].to(device)
 
-            result = model(inputs)
-            loss = loss_function(result)
+            loss, inputs = model(inputs)
 
             optimizer.step(loss)
-            callback(result, step_num)
+            callback(inputs, step_num)
             step_num += 1
 
     logger.debug('Training procedure has been finished!')
@@ -66,7 +63,6 @@ def main():
         max_sequence_len=dataset.max_sequence_length
     ).to(DEVICE)
 
-    loss_function = BaseLoss.create_from_config(config['loss'])
     optimizer = BaseOptimizer.create_from_config(config['optimizer'], model=model)
 
     callback = BaseCallback.create_from_config(
@@ -86,7 +82,6 @@ def main():
     train(
         dataloader=train_dataloader,
         model=model,
-        loss_function=loss_function,
         optimizer=optimizer,
         callback=callback,
         epoch_cnt=config['train_epochs_num']

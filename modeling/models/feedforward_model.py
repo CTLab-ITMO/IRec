@@ -1,7 +1,8 @@
-from .base import TorchModel
-from .projector import BaseProjector
-from .encoder import BaseEncoder
-from .head import BaseHead
+from models.base import TorchModel
+
+from blocks.projector import BaseProjector
+from blocks.encoder import BaseEncoder
+from blocks.head import BaseHead
 
 
 class FeedForwardModel(TorchModel, config_name='feedforward'):
@@ -46,5 +47,4 @@ class FeedForwardModel(TorchModel, config_name='feedforward'):
     def forward(self, inputs):
         inputs = self._projector(inputs)
         inputs = self._encoder(inputs)
-        inputs = self._head(inputs)
-        return inputs
+        return self._head(inputs)

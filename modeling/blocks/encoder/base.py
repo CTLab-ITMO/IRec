@@ -1,4 +1,4 @@
-from utils import MetaParent, get_activation_function
+from utils import MetaParent, get_activation_function, maybe_to_list
 
 import torch
 import torch.nn as nn
@@ -12,6 +12,119 @@ class BaseEncoder(metaclass=MetaParent):
 
 class TorchEncoder(BaseEncoder, torch.nn.Module):
     pass
+
+
+class TrainTestEncoder(TorchEncoder, config_name='train/test'):
+
+    def __init__(self, train_encoder, test_encoder):
+        super().__init__()
+        self._train_encoder = train_encoder
+        self._test_encoder = test_encoder
+
+    @classmethod
+    def create_from_config(cls, config):
+        return cls(
+            train_encoder=BaseEncoder.create_from_config(config["train"]),
+            test_encoder=BaseEncoder.create_from_config(config["test"])
+        )
+
+    def forward(self, inputs):
+        if self.training:  # train mode
+            inputs = self._train_encoder(inputs)
+        else:  # eval mode
+            inputs = self._test_encoder(inputs)
+
+        return inputs
+
+
+class CompositeEncoder(TorchEncoder, config_name='composite'):
+
+    def __init__(self, encoders):
+        super().__init__()
+        self._encoders = encoders
+
+    @classmethod
+    def create_from_config(cls, config):
+        return cls(encoders=nn.ModuleList([
+            BaseEncoder.create_from_config(cfg)
+            for cfg in config['encoders']
+        ]))
+
+    def forward(self, inputs):
+        for encoder in self._encoders:
+            inputs = encoder(inputs)
+        return inputs
+
+
+class EinsumEncoder(TorchEncoder, config_name='einsum'):
+
+    def __init__(
+            self,
+            fst_prefix,
+            snd_prefix,
+            output_prefix,
+            mask_prefix,
+            operation
+    ):
+        super().__init__()
+        self._fst_prefix = fst_prefix
+        self._snd_prefix = snd_prefix
+        self._output_prefix = output_prefix
+        self._operation = operation
+        self._mask_prefix = mask_prefix
+
+    def forward(self, inputs):
+        fst_embeddings = inputs[self._fst_prefix]
+        snd_embeddings = inputs[self._snd_prefix]
+
+        inputs[self._output_prefix] = torch.einsum(self._operation, fst_embeddings, snd_embeddings)
+        inputs['{}.mask'.format(self._output_prefix)] = inputs['{}.mask'.format(self._mask_prefix)]
+
+        return inputs
+
+
+class LastItemEncoder(TorchEncoder, config_name='last_item'):
+
+    def __init__(self, prefix, output_prefix=None):
+        super().__init__()
+        self._prefix = prefix
+        self._output_prefix = output_prefix or prefix
+
+    def forward(self, inputs):
+        embeddings = inputs[self._prefix]  # (batch_size, seq_len, emb_dim)
+        mask = inputs['{}.mask'.format(self._prefix)]  # (batch_size, seq_len)
+
+        lengths = torch.sum(mask, dim=-1) - 1  # (batch_size)
+        lengths = lengths.unsqueeze(-1)  # (batch_size, 1)
+        last_masks = mask.gather(dim=1, index=lengths)  # (batch_size, 1)
+
+        lengths = lengths.unsqueeze(-1)  # (batch_size, 1, 1)
+        lengths = torch.tile(lengths, (1, 1, embeddings.shape[-1]))  # (batch_size, 1, emb_dim)
+        last_embeddings = embeddings.gather(dim=1, index=lengths)  # (batch_size, 1, emb_dim)
+
+        inputs[self._output_prefix] = last_embeddings  # (batch_size, 1, emb_dim)
+        inputs['{}.mask'.format(self._output_prefix)] = last_masks  # (batch_size, 1)
+
+        return inputs
+
+
+class UnmaskEncoder(TorchEncoder, config_name='unmask'):
+
+    def __init__(self, prefix, output_prefix=None):
+        super().__init__()
+        self._prefix = maybe_to_list(prefix)
+        self._output_prefix = maybe_to_list(output_prefix or prefix)
+        assert len(self._prefix) == len(self._output_prefix)
+
+    def forward(self, inputs):
+        for prefix, output_prefix in zip(self._prefix, self._output_prefix):
+            embeddings = inputs[prefix]
+            mask = inputs['{}.mask'.format(prefix)]
+
+            inputs[output_prefix] = embeddings[mask]
+            inputs['{}.mask'.format(output_prefix)] = mask[mask]
+
+        return inputs
 
 
 class Transformer(TorchEncoder, config_name='transformer'):
@@ -299,28 +412,20 @@ class DotProduct(TorchEncoder, config_name='dot_product'):
             assert len(self._num_tokens_per_target) == len(self._output_prefix), 'Should provide names for all targets'
 
     def forward(self, inputs):
-        user_embeddings = inputs[self._user_prefix]  # (batch_size, cls_tokens, embeddings_dim)
-        user_mask = inputs[f'{self._user_prefix}.mask'].bool()  # (batch_size, cls_tokens)
+        user_embeddings = inputs[self._user_prefix]  # (batch_size, seq_len, embeddings_dim)
+        user_mask = inputs[f'{self._user_prefix}.mask'].bool()  # (batch_size, seq_len)
 
-        candidate_embeddings = inputs[self._candidate_prefix]  # (batch_size, num_candidates, embedding_dim)
-        candidate_mask = inputs[f'{self._candidate_prefix}.mask'].bool()  # (batch_size, num_candidates)
+        candidate_embeddings = inputs[self._candidate_prefix]  # (batch_size, candidates_num, embedding_dim)
+        candidate_mask = inputs[f'{self._candidate_prefix}.mask'].bool()  # (batch_size, candidates_num)
 
-        # b - batch_size, j - num_cls_tokens, d - embedding_dim, c - num_candidates
-        scores = torch.einsum('bjd,bcd->bcj', user_embeddings, candidate_embeddings)  # (batch_size, num_candidates, num_cls_tokens)
-
+        # b - batch_size, s - seq_len, d - embedding_dim, c - candidates_num
+        scores = torch.einsum('bsd,bcd->bcs', user_embeddings,candidate_embeddings)  # (batch_size, candidates_num, seq_len)
+        scores = scores.mean(dim=-1)  # (batch_size, candidates_num)
         if self._normalize:
-            scores /= math.sqrt(user_embeddings.shape[-1])
-        scores = self._scale * scores + self._bias
-        if self._use_sigmoid:
-            scores = torch.sigmoid(scores)
+            scores /= math.sqrt(user_embeddings.shape[-1])  # (batch_size, candidates_num)
+        scores = self._scale * scores + self._bias  # (batch_size, candidates_num)
 
-        if self._num_tokens_per_target is not None:
-            offset = 0
-            for prefix, num_tokens in zip(self._output_prefix, self._num_tokens_per_target):
-                inputs[prefix] = scores[candidate_mask][:, offset: offset + num_tokens].mean(axis=-1)  # (all_candidates)
-                offset += num_tokens
-        else:
-            scores = scores[candidate_mask]  # (all_candidates, num_cls_tokens)
-            inputs[self._output_prefix] = scores.mean(dim=-1)  # (all_candidates)
+        inputs[self._output_prefix] = scores  # (batch_size, candidates_num)
+        inputs['{}.mask'.format(self._output_prefix)] = candidate_mask  # (batch_size, candidates_num)
 
         return inputs

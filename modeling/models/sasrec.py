@@ -1,13 +1,9 @@
-from models.base import TorchModel as Model
-
-from blocks.projector import BaseProjector, TorchProjector as Projector
-from blocks.encoder import BaseEncoder, TorchEncoder as Encoder
-from blocks.head import BaseHead, TorchHead as Head
+from blocks.encoder import TorchEncoder as Encoder
+from blocks.head import TorchHead as Head
 
 from utils import DEVICE
 
 import torch
-import torch.nn as nn
 
 
 class PointWiseFeedForward(torch.nn.Module):
@@ -25,151 +21,6 @@ class PointWiseFeedForward(torch.nn.Module):
         outputs = outputs.transpose(-1, -2)  # as Conv1D requires (N, C, Length)
         outputs += inputs
         return outputs
-
-
-# class SasRec(Model, config_name='sasrec'):
-#
-#     def __init__(self, projector, encoder, head):
-#         super().__init__()
-#         self._projector = projector
-#         self._encoder = encoder
-#         self._head = head
-#
-#     @classmethod
-#     def create_from_config(cls, config, num_users=None, num_items=None, max_sequence_len=None):
-#         projector = BaseProjector.create_from_config(
-#             config['projector'],
-#             num_users=num_users,
-#             num_items=num_items,
-#             max_sequence_len=max_sequence_len
-#         )
-#         encoder = BaseEncoder.create_from_config(config['encoder'])
-#         head = BaseHead.create_from_config(config['head'])
-#
-#         return cls(
-#             projector=projector,
-#             encoder=encoder,
-#             head=head
-#         )
-#
-#     def forward(self, inputs):
-#         inputs = self._projector(inputs)
-#         inputs = self._encoder(inputs)
-#         return self._head(inputs)
-
-
-# class SasRecProjector(Projector, config_name='sasrec'):
-#
-#     def __init__(
-#             self,
-#             sample_prefix,
-#             positive_prefix,
-#             negative_prefix,
-#             candidates_prefix,
-#             num_users,
-#             num_items,
-#             max_sequence_len,
-#             embedding_dim,
-#             dropout_rate=0.0,
-#             eps=1e-5
-#     ):
-#         super().__init__()
-#         self._sample_prefix = sample_prefix
-#         self._positive_prefix = positive_prefix
-#         self._negative_prefix = negative_prefix
-#         self._candidates_prefix = candidates_prefix
-#
-#         self._max_sequence_len = max_sequence_len
-#         self._num_users = num_users
-#         self._num_items = num_items
-#         self._embedding_dim = embedding_dim
-#         self._dropout_rate = dropout_rate
-#
-#         self._position_embeddings = nn.Embedding(
-#             num_embeddings=self._max_sequence_len,
-#             embedding_dim=self._embedding_dim
-#         )
-#         self._item_embeddings = nn.Embedding(
-#             num_embeddings=self._num_items + 2,  # all items, zero_embedding, mask_embedding
-#             embedding_dim=self._embedding_dim
-#         )
-#
-#         self._dropout = nn.Dropout(p=self._dropout_rate)
-#         self._layernorms = nn.LayerNorm(embedding_dim, eps)  # TODO change projector on composite
-#
-#     @classmethod
-#     def create_from_config(cls, config, num_users=None, num_items=None, max_sequence_len=None):
-#         return cls(
-#             sample_prefix=config['sample_prefix'],
-#             positive_prefix=config['positive_prefix'],
-#             negative_prefix=config['negative_prefix'],
-#             candidates_prefix=config['candidates_prefix'],
-#             num_users=num_users,
-#             num_items=num_items,
-#             max_sequence_len=max_sequence_len,
-#             embedding_dim=config['embedding_dim'],
-#             dropout_rate=config.get('dropout_rate', 0.0),
-#             eps=config.get('eps', 1e-5)
-#         )
-#
-#     def forward(self, inputs):  # TODO re-implement
-#         current_embeddings = []
-#         current_prefixes = []
-#
-#         if '{}.ids'.format(self._sample_prefix) in inputs:
-#             sample_embeddings = inputs['{}.ids'.format(self._sample_prefix)]  # (all_items)
-#             sample_embeddings = self._item_embeddings(sample_embeddings)  # (all_items, emb_dim)
-#             sample_embeddings *= self._item_embeddings.embedding_dim ** 0.5
-#
-#             if '{}.positions'.format(self._sample_prefix) in inputs:  # positional embedding
-#                 sample_positions = inputs['{}.positions'.format(self._sample_prefix)]  # (all_batch_items)
-#                 sample_positions = self._position_embeddings(sample_positions)  # (all_batch_items, emb_dim)
-#                 sample_embeddings += sample_positions  # (all_batch_items, emb_dim)
-#
-#             sample_embeddings = self._dropout(sample_embeddings)
-#
-#             current_embeddings.append(sample_embeddings)
-#             current_prefixes.append(self._sample_prefix)
-#
-#         if '{}.ids'.format(self._positive_prefix) in inputs:
-#             positive_embeddings = inputs['{}.ids'.format(self._positive_prefix)]  # (all_items)
-#             positive_embeddings = self._item_embeddings(positive_embeddings)  # (all_items, emb_dim)
-#             current_embeddings.append(positive_embeddings)
-#             current_prefixes.append(self._positive_prefix)
-#
-#         if '{}.ids'.format(self._candidates_prefix) in inputs:
-#             candidate_embeddings = inputs['{}.ids'.format(self._candidates_prefix)]  # (all_items)
-#             candidate_embeddings = self._item_embeddings(candidate_embeddings)  # (all_items, emb_dim)
-#             current_embeddings.append(candidate_embeddings)
-#             current_prefixes.append(self._candidates_prefix)
-#
-#         if '{}.ids'.format(self._negative_prefix) in inputs:
-#             negative_embeddings = inputs['{}.ids'.format(self._negative_prefix)]  # (all_items)
-#             negative_embeddings = self._item_embeddings(negative_embeddings)  # (all_items, emb_dim)
-#             current_embeddings.append(negative_embeddings)
-#             current_prefixes.append(self._negative_prefix)
-#
-#         for embeddings, prefix in zip(current_embeddings, current_prefixes):
-#             lengths = inputs['{}.length'.format(prefix)]  # (batch_size)
-#             batch_size = lengths.shape[0]
-#             max_sequence_length = lengths.max().item()
-#
-#             padded_embeddings = torch.zeros(
-#                 batch_size, max_sequence_length, self._embedding_dim,
-#                 dtype=torch.float, device=DEVICE
-#             )  # (batch_size, seq_len, emb_dim)
-#
-#             mask = torch.arange(
-#                 end=max_sequence_length,
-#                 device=DEVICE
-#             )[None].tile([batch_size, 1]) < lengths[:, None]  # (batch_size, seq_len)
-#
-#             padded_embeddings[mask] = embeddings
-#
-#             inputs[prefix] = padded_embeddings
-#             inputs['{}.mask'.format(prefix)] = mask
-#
-#         return inputs
 
 
 class SasRecEncoder(Encoder, config_name='sasrec'):

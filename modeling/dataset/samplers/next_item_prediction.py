@@ -5,7 +5,7 @@ import copy
 import numpy as np
 
 
-class SasRecTrainSampler(TrainSampler, config_name='sasrec'):
+class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_prediction'):
 
     def __init__(self, negative_sampler):
         super().__init__()
@@ -40,7 +40,9 @@ class SasRecTrainSampler(TrainSampler, config_name='sasrec'):
         assert len(sequence) == len(next_item_sequence) == len(negative_sequence)
 
         return {
-            'user_id': sample['user_id'],
+            'user.ids': [sample['user_id']],
+            'user.length': 1,
+
             'timestamp': sample['timestamp'],
 
             'sample.ids': sequence,
@@ -49,17 +51,20 @@ class SasRecTrainSampler(TrainSampler, config_name='sasrec'):
             'positive.ids': next_item_sequence,
             'positive.length': len(next_item_sequence),
 
+            'positive_labels.ids': [1] * len(next_item_sequence),
+            'positive_labels.length': len(next_item_sequence),
+
             'negative.ids': negative_sequence,
-            'negative.length': len(negative_sequence)
+            'negative.length': len(negative_sequence),
+
+            'negative_labels.ids': [0] * len(negative_sequence),
+            'negative_labels.length': len(negative_sequence),
         }
 
 
-class SasRecValSampler(EvalSampler, config_name='sasrec'):
+class NextItemPredictionEvalSampler(EvalSampler, config_name='next_item_prediction'):
 
-    def __init__(
-            self,
-            negative_sampler
-    ):
+    def __init__(self, negative_sampler):
         super().__init__()
         self._negative_sampler = negative_sampler
 
@@ -86,7 +91,9 @@ class SasRecValSampler(EvalSampler, config_name='sasrec'):
         labels = [1] * len(answer) + [0] * len(negatives)
 
         return {
-            'user_id': sample['user_id'],
+            'user.ids': [sample['user_id']],
+            'user.length': 1,
+
             'timestamp': sample['timestamp'],
 
             'sample.ids': sequence,

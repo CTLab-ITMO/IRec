@@ -5,7 +5,7 @@ import copy
 import numpy as np
 
 
-class BertTrainSampler(TrainSampler, config_name='bert'):
+class MaskedItemPredictionTrainSampler(TrainSampler, config_name='masked_item_prediction'):
 
     def __init__(
             self,
@@ -59,7 +59,9 @@ class BertTrainSampler(TrainSampler, config_name='bert'):
         sample['labels.length'] = len(labels)
 
         return {
-            'user_id': sample['user_id'],
+            'user.ids': [sample['user_id']],
+            'user.length': 1,
+
             'timestamp': sample['timestamp'],
 
             'sample.ids': masked_sequence,
@@ -70,7 +72,7 @@ class BertTrainSampler(TrainSampler, config_name='bert'):
         }
 
 
-class BertEvalSampler(EvalSampler, config_name='bert'):
+class MaskedItemPredictionEvalSampler(EvalSampler, config_name='masked_item_prediction'):
 
     def __init__(
             self,
@@ -113,7 +115,9 @@ class BertEvalSampler(EvalSampler, config_name='bert'):
         labels = [1] * len(answer) + [0] * len(negatives)
 
         return {
-            'user_id': sample['user_id'],
+            'user.ids': [sample['user_id']],
+            'user.length': 1,
+
             'timestamp': sample['timestamp'],
 
             'sample.ids': sequence,

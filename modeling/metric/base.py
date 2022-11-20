@@ -43,12 +43,14 @@ class NDCGMetric(BaseMetric, config_name='ndcg'):
     def __call__(self, inputs, pred_prefix, labels_prefix):
         predictions = inputs[pred_prefix]  # (batch_size, num_candidates)
         predictions = (-predictions).argsort(dim=1)  # (batch_size, num_candidates)
-        predictions = predictions[:, :self._k]  # (batch_size, k)
+        predictions = predictions[..., :self._k]  # (batch_size, k)
+        predictions = torch.reshape(predictions, (predictions.shape[0], self._k))
 
-        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (batch_size, num_candidates)
-        answer_count = labels.sum(dim=1)  # (batch_size)
+        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (all_batch_items)
+        labels = torch.reshape(labels, (predictions.shape[0], -1))  # (batch_size, num_candidates)
+        answer_count = labels.sum(dim=-1)  # (batch_size)
 
-        hits = labels.gather(dim=1, index=predictions)  # (batch_size, k)
+        hits = labels.gather(dim=-1, index=predictions)  # (batch_size, k)
 
         position = torch.arange(2, 2 + self._k)  # (k)
         weights = 1 / torch.log2(position.float())  # (k)
@@ -67,9 +69,11 @@ class RecallMetric(BaseMetric, config_name='recall'):
     def __call__(self, inputs, pred_prefix, labels_prefix):
         predictions = inputs[pred_prefix]  # (batch_size, num_candidates)
         predictions = (-predictions).argsort(dim=1)  # (batch_size, num_candidates)
-        predictions = predictions[:, :self._k]  # (batch_size, k)
+        predictions = predictions[..., :self._k]  # (batch_size, k)
+        predictions = torch.reshape(predictions, (predictions.shape[0], self._k))
 
-        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (batch_size, num_candidates)
+        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (all_batch_items)
+        labels = torch.reshape(labels, (predictions.shape[0], -1))  # (batch_size, num_candidates)
         hits = labels.gather(dim=1, index=predictions)  # (batch_size, k)
 
         recall = (
@@ -88,9 +92,11 @@ class MRRMetric(BaseMetric, config_name='mrr'):
     def __call__(self, inputs, pred_prefix, labels_prefix):
         predictions = inputs[pred_prefix]  # (batch_size, num_candidates)
         predictions = torch.argsort(predictions, dim=-1, descending=True)  # (batch_size, num_candidates)
-        predictions = predictions[:, :self._k]  # (batch_size, k)
+        predictions = predictions[..., :self._k]  # (batch_size, k)
+        predictions = torch.reshape(predictions, (predictions.shape[0], self._k))
 
-        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (batch_size, num_candidates)
+        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (all_batch_items)
+        labels = torch.reshape(labels, (predictions.shape[0], -1))  # (batch_size, num_candidates)
         hits = labels.gather(dim=1, index=predictions)  # (batch_size, k)
 
         good_samples = hits[hits.sum(dim=-1) > 0]  # (good_samples_num, k)

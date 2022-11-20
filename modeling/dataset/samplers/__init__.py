@@ -1,3 +1,3 @@
 from .base import TrainSampler, EvalSampler
-from .bert import BertTrainSampler, BertEvalSampler
-from .sasrec import SasRecTrainSampler, SasRecValSampler
+from .next_item_prediction import NextItemPredictionTrainSampler, NextItemPredictionEvalSampler
+from .masked_item_prediction import MaskedItemPredictionTrainSampler, MaskedItemPredictionEvalSampler
