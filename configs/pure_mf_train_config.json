@@ -64,15 +64,19 @@
         "type": "composite",
         "encoders": [
           {
-            "type": "dot_product",
-            "user_prefix": "user",
-            "candidate_prefix": "positive",
+            "type": "einsum",
+            "fst_prefix": "user",
+            "snd_prefix": "positive",
+            "operation": "bud,bpd->bp",
+            "mask_prefix": "positive",
             "output_prefix": "positive_scores"
           },
           {
-            "type": "dot_product",
-            "user_prefix": "user",
-            "candidate_prefix": "negative",
+            "type": "einsum",
+            "fst_prefix": "user",
+            "snd_prefix": "negative",
+            "operation": "bud,bnd->bn",
+            "mask_prefix": "negative",
             "output_prefix": "negative_scores"
           },
           {
@@ -88,14 +92,12 @@
         "type": "composite",
         "encoders": [
           {
-            "type": "dot_product",
-            "user_prefix": "user",
-            "candidate_prefix": "candidates",
+            "type": "einsum",
+            "fst_prefix": "user",
+            "snd_prefix": "candidates",
+            "operation": "bud,bcd->bc",
+            "mask_prefix": "candidates",
             "output_prefix": "scores"
-          },
-          {
-            "type": "unmask",
-            "prefix": ["scores"]
           }
         ]
       }
