@@ -96,7 +96,7 @@ class BPRHead(TorchHead, config_name='bpr'):
 
         loss = torch.mean(self._activation(negative_scores - positive_scores))  # (1)
         if self._use_regularization:
-            pass  # TODO
+            pass  # TODO add
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()
@@ -114,7 +114,7 @@ class CrossEntropyHead(TorchHead, config_name='ce'):
 
         self._loss = nn.CrossEntropyLoss()
 
-    def forward(self, inputs):
+    def forward(self, inputs):  # TODO check
         all_logits = inputs[self._pred_prefix]  # (all_batch_items, num_classes)
         all_labels = inputs['{}.ids'.format(self._labels_prefix)].long()  # (all_batch_items)
         assert all_logits.shape[0] == all_labels.shape[0]

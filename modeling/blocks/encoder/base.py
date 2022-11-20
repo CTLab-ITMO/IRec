@@ -448,12 +448,13 @@ class GatherEncoder(TorchEncoder, config_name='gather'):
         self._output_prefix = output_prefix
 
     def forward(self, inputs):
-        scores = inputs[self._prefix]  # (batch_size, ..., all_items)
-        scores = torch.reshape(scores, (scores.shape[0], scores.shape[-1]))
-        candidate_ids = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_items)
-        candidate_ids = torch.reshape(candidate_ids, (scores.shape[0], -1))  # (batch_size, num_candidates)c
+        last_values = inputs[self._prefix].squeeze(1)  # (batch_size, all_items)
 
-        inputs[self._output_prefix] = torch.gather(scores, dim=-1, index=candidate_ids)  # (batch_size, num_candidates)
-        inputs['{}.mask'.format(self._output_prefix)] = torch.ones(*candidate_ids.shape).bool()
+        candidate_ids = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_items)
+        candidate_ids = torch.reshape(candidate_ids, (last_values.shape[0], -1))  # (batch_size, num_candidates)
+        candidate_scores = last_values.gather(dim=1, index=candidate_ids)  # (batch_size, num_candidates)
+        inputs[self._output_prefix] = candidate_scores  # (batch_size, num_candidates)
+
+        inputs['{}.mask'.format(self._output_prefix)] = torch.ones(*candidate_ids.shape).bool()  # (batch_size)
 
         return inputs
