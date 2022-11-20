@@ -21,7 +21,7 @@
   "dataloader": {
     "train": {
       "type": "torch",
-      "batch_size": 2,
+      "batch_size": 256,
       "batch_processor": {
         "type": "amazon"
       },
@@ -30,7 +30,7 @@
     },
     "validation": {
       "type": "torch",
-      "batch_size": 2,
+      "batch_size": 256,
       "batch_processor": {
         "type": "amazon"
       },
