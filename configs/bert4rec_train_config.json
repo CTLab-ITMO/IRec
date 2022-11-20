@@ -53,23 +53,18 @@
     },
     "encoder": {
       "type": "train/test",
+      "shared": {
+        "type": "bert4rec",
+        "prefix": "sample",
+        "num_layers": 2,
+        "num_heads": 2,
+        "embedding_dim": 256,
+        "output_dim": 12102,
+        "output_prefix": "logits"
+      },
       "train": {
         "type": "composite",
         "encoders": [
-          {
-            "type": "bert4rec",
-            "prefix": "sample",
-            "num_layers": 2,
-            "num_heads": 2,
-            "embedding_dim": 256
-          },
-          {
-            "type": "tower",
-            "prefix": "sample",
-            "hidden_sizes": [256],
-            "output_prefix": "logits",
-            "output_dim": 12103
-          },
           {
             "type": "unmask",
             "prefix": "logits"
@@ -84,20 +79,6 @@
       "test": {
         "type": "composite",
         "encoders": [
-          {
-            "type": "bert4rec",
-            "prefix": "sample",
-            "num_layers": 2,
-            "num_heads": 2,
-            "embedding_dim": 256
-          },
-          {
-            "type": "tower",
-            "prefix": "sample",
-            "hidden_sizes": [256],
-            "output_prefix": "logits",
-            "output_dim": 12103
-          },
           {
             "type": "last_item",
             "prefix": "logits",
@@ -116,7 +97,7 @@
       "type": "train/test",
       "train": {
         "type": "ce",
-        "predictions_prefix": "masked_items_prediction",
+        "predictions_prefix": "logits",
         "labels_prefix": "labels",
         "output_prefix": "loss"
       },

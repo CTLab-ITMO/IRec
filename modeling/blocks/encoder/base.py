@@ -16,19 +16,23 @@ class TorchEncoder(BaseEncoder, torch.nn.Module):
 
 class TrainTestEncoder(TorchEncoder, config_name='train/test'):
 
-    def __init__(self, train_encoder, test_encoder):
+    def __init__(self, shared_encoder, train_encoder, test_encoder):
         super().__init__()
+        self._shared_encoder = shared_encoder
         self._train_encoder = train_encoder
         self._test_encoder = test_encoder
 
     @classmethod
     def create_from_config(cls, config):
         return cls(
+            shared_encoder=BaseEncoder.create_from_config(config['shared']),
             train_encoder=BaseEncoder.create_from_config(config["train"]),
             test_encoder=BaseEncoder.create_from_config(config["test"])
         )
 
     def forward(self, inputs):
+        inputs = self._shared_encoder(inputs)
+
         if self.training:  # train mode
             inputs = self._train_encoder(inputs)
         else:  # eval mode
@@ -450,13 +454,11 @@ class GatherEncoder(TorchEncoder, config_name='gather'):
     def forward(self, inputs):
         last_values = inputs[self._prefix].squeeze(1)  # (batch_size, all_items)
 
-        candidate_ids = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_items)
+        candidate_ids = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
         candidate_ids = torch.reshape(candidate_ids, (last_values.shape[0], -1))  # (batch_size, num_candidates)
         candidate_scores = last_values.gather(dim=1, index=candidate_ids)  # (batch_size, num_candidates)
+
         inputs[self._output_prefix] = candidate_scores  # (batch_size, num_candidates)
-
-        inputs['{}.mask'.format(self._output_prefix)] = torch.ones(*candidate_ids.shape).bool()  # (batch_size)
-
         return inputs
 
 

@@ -61,16 +61,16 @@
     },
     "encoder": {
       "type": "train/test",
+      "shared": {
+        "type": "sasrec",
+        "sample_prefix": "sample",
+        "embedding_dim": 256,
+        "num_layers": 2,
+        "num_heads": 2
+      },
       "train": {
         "type": "composite",
         "encoders": [
-          {
-            "type": "sasrec",
-            "sample_prefix": "sample",
-            "embedding_dim": 256,
-            "num_layers": 2,
-            "num_heads": 2
-          },
           {
             "type": "einsum",
             "fst_prefix": "sample",
@@ -99,13 +99,6 @@
       "test": {
         "type": "composite",
         "encoders": [
-          {
-            "type": "sasrec",
-            "sample_prefix": "sample",
-            "embedding_dim": 256,
-            "num_layers": 2,
-            "num_heads": 2
-          },
           {
             "type": "last_item",
             "prefix": "sample",
