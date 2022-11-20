@@ -66,15 +66,18 @@
           {
             "type": "tower",
             "prefix": "sample",
-            "hidden_sizes": [
-              256
-            ],
-            "output_prefix": "masked_items_prediction",
+            "hidden_sizes": [256],
+            "output_prefix": "logits",
             "output_dim": 12103
           },
           {
             "type": "unmask",
-            "prefix": "masked_items_prediction"
+            "prefix": "logits"
+          },
+          {
+            "type": "filter",
+            "logits_prefix": "logits",
+            "labels_prefix": "labels"
           }
         ]
       },

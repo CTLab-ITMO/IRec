@@ -458,3 +458,24 @@ class GatherEncoder(TorchEncoder, config_name='gather'):
         inputs['{}.mask'.format(self._output_prefix)] = torch.ones(*candidate_ids.shape).bool()  # (batch_size)
 
         return inputs
+
+
+class FilterEncoder(TorchEncoder, config_name='filter'):
+
+    def __init__(self, logits_prefix, labels_prefix):
+        super().__init__()
+        self._logits_prefix = logits_prefix
+        self._labels_prefix = labels_prefix
+
+    def forward(self, inputs):
+        all_logits = inputs[self._logits_prefix]  # (all_events)
+        all_labels = inputs['{}.ids'.format(self._labels_prefix)].long()  # (all_events)
+
+        labels_mask = (all_labels != 0).bool()  # (all_events)
+        needed_logits = all_logits[labels_mask]  # (non_zero_events)
+        needed_labels = all_labels[labels_mask]  # (non_zero_events)
+
+        inputs[self._logits_prefix] = needed_logits
+        inputs['{}.ids'.format(self._labels_prefix)] = needed_labels
+
+        return inputs
