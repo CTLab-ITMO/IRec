@@ -1,0 +1,120 @@
+{
+  "experiment_name": "test_experiment",
+  "dataset": {
+    "type": "amazon",
+    "path_to_data_dir": "../data/Beauty",
+    "dataset_prefix": "Beauty",
+    "min_sample_len": 5,
+    "max_sample_len": 200,
+    "validation_size": 0.1,
+    "test_size": 0.1,
+    "samplers": {
+      "type": "masked_item_prediction",
+      "mask_prob": 0.4,
+      "negative_sampler": {
+        "type": "random",
+        "sample_size": 99
+      }
+    }
+  },
+  "dataloader": {
+    "train": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "amazon"
+      },
+      "drop_last": true,
+      "shuffle": true
+    },
+    "validation": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "amazon"
+      },
+      "drop_last": false,
+      "shuffle": false
+    }
+  },
+  "model": {
+    "type": "feedforward",
+    "projector": {
+      "type": "basic",
+      "embedding_dim": 256,
+      "fields": [
+        {
+          "prefix": "sample",
+          "use_layernorm": true,
+          "use_position": true
+        }
+      ]
+    },
+    "encoder": {
+      "type": "train/test",
+      "shared": {
+        "type": "bert4rec",
+        "prefix": "sample",
+        "num_layers": 2,
+        "num_heads": 2,
+        "embedding_dim": 256,
+        "output_dim": 12102,
+        "output_prefix": "logits"
+      },
+      "train": {
+        "type": "composite",
+        "encoders": [
+          {
+            "type": "unmask",
+            "prefix": "logits"
+          },
+          {
+            "type": "filter",
+            "logits_prefix": "logits",
+            "labels_prefix": "labels"
+          }
+        ]
+      },
+      "test": {
+        "type": "composite",
+        "encoders": [
+          {
+            "type": "last_item",
+            "prefix": "logits",
+            "output_prefix": "next_item_prediction"
+          },
+          {
+            "type": "gather",
+            "prefix": "next_item_prediction",
+            "candidate_prefix": "candidates",
+            "output_prefix": "logits"
+          }
+        ]
+      }
+    },
+    "head": {
+      "type": "train/test",
+      "train": {
+        "type": "ce",
+        "predictions_prefix": "logits",
+        "labels_prefix": "labels",
+        "output_prefix": "loss"
+      },
+      "test": {
+        "type": "identity"
+      }
+    }
+  },
+  "metrics": {
+    "ndcg@5": {
+      "type": "ndcg",
+      "k": 5
+    },
+    "recall@5": {
+      "type": "recall",
+      "k": 5
+    }
+  },
+  "pred_prefix": "logits",
+  "labels_prefix": "labels"
+}

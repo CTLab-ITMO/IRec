@@ -58,13 +58,13 @@ class MetricCallback(BaseCallback, config_name='metric'):
                     predictions=inputs[self._model.schema['predictions_prefix']]
                 )
                 GLOBAL_TENSORBOARD_WRITER.add_scalar(
-                    '{}/train'.format(metric_name),
+                    'train/{}'.format(metric_name),
                     metric_value,
                     step_num
                 )
 
             GLOBAL_TENSORBOARD_WRITER.add_scalar(
-                '{}/train'.format(self._loss_prefix),
+                'train/{}'.format(self._loss_prefix),
                 inputs[self._loss_prefix],
                 step_num
             )
@@ -172,7 +172,7 @@ class QualityCheckCallbackCheck(BaseCallback, config_name='validation'):
 
             for label, value in running_params.items():
                 GLOBAL_TENSORBOARD_WRITER.add_scalar(
-                    '{}/validation'.format(label),
+                    'validation/{}'.format(label),
                     value / len(self._dataloader),
                     step_num
                 )

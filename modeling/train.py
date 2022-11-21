@@ -8,12 +8,10 @@ from callbacks import BaseCallback
 
 import json
 import torch
-torch.autograd.set_detect_anomaly(True)
+
 
 logger = create_logger(name=__name__)
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 seed_val = 42
-epoch_cnt = 10
 
 
 def train(dataloader, model, optimizer, callback, epoch_cnt):
@@ -25,7 +23,7 @@ def train(dataloader, model, optimizer, callback, epoch_cnt):
             model.train()
 
             for key, values in inputs.items():
-                inputs[key] = inputs[key].to(device)
+                inputs[key] = inputs[key].to(DEVICE)
 
             loss, inputs = model(inputs)
 
@@ -77,7 +75,6 @@ def main():
     logger.debug('Everything is ready for training process!')
     logger.debug('Start training...')
 
-    # TODO check overall code
     # Train process
     train(
         dataloader=train_dataloader,
@@ -86,6 +83,13 @@ def main():
         callback=callback,
         epoch_cnt=config['train_epochs_num']
     )
+
+    logger.debug('Training is done!')
+
+    logger.debug('Saving model...')
+    checkpoint_path = '../checkpoints/{}_final_state.pth'.format(config['experiment_name'])
+    torch.save(model.state_dict(), checkpoint_path)
+    logger.debug('Saved model!')
 
 
 if __name__ == '__main__':
