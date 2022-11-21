@@ -12,6 +12,7 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
     def __init__(
             self,
             dataset,
+            interactions,
             max_user_idx,
             max_item_idx,
             max_sequence_length,
@@ -22,6 +23,7 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
             test_size=0.1
     ):
         self._dataset = dataset
+        self._interactions = interactions
         self._max_user_idx = max_user_idx
         self._max_item_idx = max_item_idx
         self._max_sequence_length = max_sequence_length
@@ -37,13 +39,13 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
         logger.info(f'Validation dataset size: {len(validation_dataset)}')
         logger.info(f'Test dataset size: {len(test_dataset)}')
 
-        self._train_sampler = train_sampler.with_dataset(validation_dataset)  # TODO fix
+        self._train_sampler = train_sampler.with_dataset(train_dataset)
         self._validation_sampler = validation_sampler.with_dataset(validation_dataset)
         self._test_sampler = test_sampler.with_dataset(test_dataset)
 
     @classmethod
     def create_from_config(cls, config):
-        dataset, num_users, num_items, max_sequence_length = cls._get_dataset(
+        dataset, num_users, num_items, max_sequence_length, interactions = cls._get_dataset(
             path_to_data_dir=config['path_to_data_dir'],
             dataset_prefix=config['dataset_prefix'],
             min_sample_len=config.get('min_sample_len', 5),
@@ -70,6 +72,7 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
 
         return cls(
             dataset=dataset,
+            interactions=interactions,
             max_user_idx=num_users,
             max_item_idx=num_items,
             max_sequence_length=max_sequence_length,
@@ -92,6 +95,7 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
         logger.info(f'Amazon {dataset_prefix} dataset creation...')
 
         dataset = []
+        interactions = []  # TODO
 
         with open(os.path.join(path_to_data_dir, f'{dataset_prefix}.txt'), 'r') as f:
             user_sequences_id = f.readlines()
@@ -114,6 +118,9 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
 
             item_ids = [int(item_id) for item_id in item_ids.split(' ')]
             _, item_timestamps = timestamps.split(' ', 1)
+
+            for item_id in item_ids:
+                interactions.append([user_id, item_id])
 
             item_timestamps = [int(item_timestamp) for item_timestamp in item_timestamps.split(' ')]
 
@@ -149,11 +156,15 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
         logger.info(f'Amazon {dataset_prefix} dataset has been created!')
         logger.info(f'Dataset size: {len(dataset)}')
 
-        return dataset, max_user_idx, max_item_idx, max_sequence_length
+        return dataset, max_user_idx, max_item_idx, max_sequence_length, interactions
 
     @property
     def dataset(self):
         return self._dataset
+
+    @property
+    def interactions(self):
+        return self._interactions
 
     @property
     def num_users(self):
