@@ -29,19 +29,39 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
         self._max_sequence_length = max_sequence_length
 
         train_dataset = dataset[:int(len(dataset) * (1.0 - validation_size - test_size))]
+        train_items = set()
+        for train_sample in train_dataset:
+            for train_item_id in train_sample['sample.ids'] + train_sample['answer.ids']:
+                train_items.add(train_item_id)
+
         validation_dataset = dataset[
                      int(len(dataset) * (1.0 - validation_size - test_size)):
                      int(len(dataset) * (1.0 - test_size))
                      ]
+        filtered_validation_dataset = []
+        for validation_sample in validation_dataset:
+            for validation_item_id in validation_sample['sample.ids'] + validation_sample['answer.ids']:
+                if validation_item_id not in train_items:
+                    break
+            else:
+                filtered_validation_dataset.append(validation_sample)
+
         test_dataset = dataset[int(len(dataset) * (1.0 - test_size)):]
+        filtered_test_dataset = []
+        for test_sample in test_dataset:
+            for test_item_id in test_sample['sample.ids'] + test_sample['answer.ids']:
+                if test_item_id not in train_items:
+                    break
+            else:
+                filtered_test_dataset.append(test_sample)
 
         logger.info(f'Train dataset size: {len(train_dataset)}')
-        logger.info(f'Validation dataset size: {len(validation_dataset)}')
-        logger.info(f'Test dataset size: {len(test_dataset)}')
+        logger.info(f'Validation dataset size: {len(filtered_validation_dataset)}')
+        logger.info(f'Test dataset size: {len(filtered_test_dataset)}')
 
         self._train_sampler = train_sampler.with_dataset(train_dataset)
-        self._validation_sampler = validation_sampler.with_dataset(validation_dataset)
-        self._test_sampler = test_sampler.with_dataset(test_dataset)
+        self._validation_sampler = validation_sampler.with_dataset(filtered_validation_dataset)
+        self._test_sampler = test_sampler.with_dataset(filtered_test_dataset)
 
     @classmethod
     def create_from_config(cls, config):
