@@ -9,8 +9,7 @@
     "validation_size": 0.1,
     "test_size": 0.1,
     "samplers": {
-      "type": "masked_item_prediction",
-      "mask_prob": 0.4,
+      "type": "next_item_prediction",
       "negative_sampler": {
         "type": "random",
         "sample_size": 99
