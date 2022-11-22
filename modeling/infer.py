@@ -37,8 +37,8 @@ def inference(dataloader, model, metrics, pred_prefix, labels_prefix):
 
     logger.debug('Inference procedure has been finished!')
     logger.debug('Metrics are the following:')
-    for metric_name, metric_values in running_metrics.items():
-        logger.info('{}: {}'.format(metric_name, sum(metric_values) / len(dataloader)))
+    for metric_name, metric_value in running_metrics.items():
+        logger.info('{}: {}'.format(metric_name, metric_value / len(dataloader)))
 
 
 def main():
