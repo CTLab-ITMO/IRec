@@ -1,6 +1,5 @@
 {
   "experiment_name": "bert4rec_sanity_check",
-  "train_epochs_num": 10,
   "dataset": {
     "type": "amazon",
     "path_to_data_dir": "../data/Beauty",
@@ -106,39 +105,32 @@
       }
     }
   },
-  "optimizer": {
-    "type": "basic",
-    "optimizer": {
-      "type": "adamw",
-      "lr": 1e-4,
-      "eps": 1e-8
+  "metrics": {
+    "ndcg@5": {
+      "type": "ndcg",
+      "k": 5
     },
-    "clip_grad_threshold": 5.0
+    "ndcg@10": {
+      "type": "ndcg",
+      "k": 10
+    },
+    "ndcg@20": {
+      "type": "ndcg",
+      "k": 20
+    },
+    "recall@5": {
+      "type": "recall",
+      "k": 5
+    },
+    "recall@10": {
+      "type": "recall",
+      "k": 10
+    },
+    "recall@20": {
+      "type": "recall",
+      "k": 20
+    }
   },
-  "callback": {
-    "type": "composite",
-    "callbacks": [
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "loss"
-      },
-      {
-        "type": "validation",
-        "on_step": 32,
-        "pred_prefix": "logits",
-        "labels_prefix": "labels",
-        "metrics": {
-          "ndcg@5": {
-            "type": "ndcg",
-            "k": 5
-          },
-          "recall@5": {
-            "type": "recall",
-            "k": 5
-          }
-        }
-      }
-    ]
-  }
+  "pred_prefix": "logits",
+  "labels_prefix": "labels"
 }
