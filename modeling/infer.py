@@ -71,7 +71,7 @@ def main():
         for metric_name, metric_cfg in config['metrics'].items()
     }
 
-    inference(eval_dataloader, model, metrics, config['pred_predix'], config['labels_prefix'])
+    inference(eval_dataloader, model, metrics, config['pred_prefix'], config['labels_prefix'])
 
 
 if __name__ == '__main__':
