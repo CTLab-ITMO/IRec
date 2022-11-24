@@ -1,6 +1,6 @@
 {
   "experiment_name": "bert4rec_sanity_check",
-  "train_epochs_num": 10,
+  "train_epochs_num": 3,
   "dataset": {
     "type": "amazon",
     "path_to_data_dir": "../data/Beauty",
@@ -51,9 +51,8 @@
         }
       ]
     },
-    "encoder": {
-      "type": "train/test",
-      "shared": {
+    "encoders": [
+      {
         "type": "bert4rec",
         "prefix": "sample",
         "num_layers": 2,
@@ -62,49 +61,40 @@
         "output_dim": 12102,
         "output_prefix": "logits"
       },
-      "train": {
-        "type": "composite",
-        "encoders": [
-          {
-            "type": "unmask",
-            "prefix": "logits"
-          },
-          {
-            "type": "filter",
-            "logits_prefix": "logits",
-            "labels_prefix": "labels"
-          }
-        ]
-      },
-      "test": {
-        "type": "composite",
-        "encoders": [
-          {
-            "type": "last_item",
-            "prefix": "logits",
-            "output_prefix": "next_item_prediction"
-          },
-          {
-            "type": "gather",
-            "prefix": "next_item_prediction",
-            "candidate_prefix": "candidates",
-            "output_prefix": "logits"
-          }
-        ]
+      {
+        "type": "train/test",
+        "train": {
+          "type": "composite",
+          "encoders": [
+            {
+              "type": "unmask",
+              "prefix": "logits"
+            },
+            {
+              "type": "filter",
+              "logits_prefix": "logits",
+              "labels_prefix": "labels"
+            }
+          ]
+        },
+        "test": {
+          "type": "composite",
+          "encoders": [
+            {
+              "type": "last_item",
+              "prefix": "logits",
+              "output_prefix": "next_item_prediction"
+            },
+            {
+              "type": "gather",
+              "prefix": "next_item_prediction",
+              "candidate_prefix": "candidates",
+              "output_prefix": "logits"
+            }
+          ]
+        }
       }
-    },
-    "head": {
-      "type": "train/test",
-      "train": {
-        "type": "ce",
-        "predictions_prefix": "logits",
-        "labels_prefix": "labels",
-        "output_prefix": "loss"
-      },
-      "test": {
-        "type": "identity"
-      }
-    }
+    ]
   },
   "optimizer": {
     "type": "basic",
@@ -114,6 +104,12 @@
       "eps": 1e-8
     },
     "clip_grad_threshold": 5.0
+  },
+  "loss": {
+    "type": "ce",
+    "predictions_prefix": "logits",
+    "labels_prefix": "labels",
+    "output_prefix": "loss"
   },
   "callback": {
     "type": "composite",
@@ -133,12 +129,29 @@
             "type": "ndcg",
             "k": 5
           },
+          "ndcg@10": {
+            "type": "ndcg",
+            "k": 10
+          },
+          "ndcg@20": {
+            "type": "ndcg",
+            "k": 20
+          },
           "recall@5": {
             "type": "recall",
             "k": 5
+          },
+          "recall@10": {
+            "type": "recall",
+            "k": 10
+          },
+          "recall@20": {
+            "type": "recall",
+            "k": 20
           }
         }
       }
     ]
   }
 }
+
