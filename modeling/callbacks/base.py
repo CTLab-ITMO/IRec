@@ -155,7 +155,7 @@ class QualityCheckCallbackCheck(BaseCallback, config_name='validation'):
                     for key, value in batch.items():
                         batch[key] = value.to(DEVICE)
 
-                    loss, batch = self._model(batch)
+                    batch = self._model(batch)
 
                     for key, values in batch.items():
                         batch[key] = values.cpu()

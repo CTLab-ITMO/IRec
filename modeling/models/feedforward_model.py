@@ -1,21 +1,20 @@
 from models.base import TorchModel
 
 from blocks.projector import BaseProjector
-from blocks.encoder import BaseEncoder
-from blocks.head import BaseHead
+from blocks.encoder import BaseEncoder, CompositeEncoder
+
+import torch
 
 
 class FeedForwardModel(TorchModel, config_name='feedforward'):
     def __init__(
             self,
             projector,
-            encoder,
-            head
+            encoders
     ):
         super().__init__()
         self._projector = projector
-        self._encoder = encoder
-        self._head = head
+        self._encoders = encoders
 
     @classmethod
     def create_from_config(
@@ -31,20 +30,15 @@ class FeedForwardModel(TorchModel, config_name='feedforward'):
             num_items=num_items,
             max_sequence_len=max_sequence_len
         )
-        encoder = BaseEncoder.create_from_config(config['encoder'])
-        head = BaseHead.create_from_config(
-            config['head'],
-            num_users=num_users,
-            num_items=num_items
-        )
 
-        return cls(
-            projector=projector,
-            encoder=encoder,
-            head=head
-        )
+        encoders = CompositeEncoder(encoders=torch.nn.ModuleList([
+            BaseEncoder.create_from_config(cfg)
+            for cfg in config['encoders']
+        ]))
+
+        return cls(projector=projector, encoders=encoders)
 
     def forward(self, inputs):
         inputs = self._projector(inputs)
-        inputs = self._encoder(inputs)
-        return self._head(inputs)
+        inputs = self._encoders(inputs)
+        return inputs

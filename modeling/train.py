@@ -4,18 +4,20 @@ from dataset import BaseDataset
 from dataloader import BaseDataloader
 from models import BaseModel
 from optimizer import BaseOptimizer
+from loss import BaseLoss
 from callbacks import BaseCallback
 
 import json
 import torch
 
-
 logger = create_logger(name=__name__)
 seed_val = 42
 
 
-def train(dataloader, model, optimizer, callback, epoch_cnt):
+def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt):
     step_num = 0
+
+    logger.debug('Start training...')
 
     for epoch in range(epoch_cnt):
         logger.debug(f'Start epoch {epoch}')
@@ -25,7 +27,9 @@ def train(dataloader, model, optimizer, callback, epoch_cnt):
             for key, values in inputs.items():
                 inputs[key] = inputs[key].to(DEVICE)
 
-            loss, inputs = model(inputs)
+            inputs = model(inputs)
+
+            loss = loss_function(inputs)
 
             optimizer.step(loss)
             callback(inputs, step_num)
@@ -61,6 +65,8 @@ def main():
         max_sequence_len=dataset.max_sequence_length
     ).to(DEVICE)
 
+    loss_function = BaseLoss.create_from_config(config['loss'])
+
     optimizer = BaseOptimizer.create_from_config(config['optimizer'], model=model)
 
     callback = BaseCallback.create_from_config(
@@ -73,23 +79,21 @@ def main():
     # TODO add verbose option for all callbacks, multiple optimizer options (???), create strong baseline
     # TODO create pre/post callbacks
     logger.debug('Everything is ready for training process!')
-    logger.debug('Start training...')
 
     # Train process
     train(
         dataloader=train_dataloader,
         model=model,
         optimizer=optimizer,
+        loss_function=loss_function,
         callback=callback,
         epoch_cnt=config['train_epochs_num']
     )
 
-    logger.debug('Training is done!')
-
     logger.debug('Saving model...')
     checkpoint_path = '../checkpoints/{}_final_state.pth'.format(config['experiment_name'])
     torch.save(model.state_dict(), checkpoint_path)
-    logger.debug('Saved model!')
+    logger.debug('Saved model as {}!'.format(checkpoint_path))
 
 
 if __name__ == '__main__':

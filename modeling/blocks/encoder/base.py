@@ -16,24 +16,19 @@ class TorchEncoder(BaseEncoder, torch.nn.Module):
 
 class TrainTestEncoder(TorchEncoder, config_name='train/test'):
 
-    def __init__(self, train_encoder, test_encoder, shared_encoder=None):
+    def __init__(self, train_encoder, test_encoder):
         super().__init__()
-        self._shared_encoder = shared_encoder
         self._train_encoder = train_encoder
         self._test_encoder = test_encoder
 
     @classmethod
     def create_from_config(cls, config):
         return cls(
-            shared_encoder=BaseEncoder.create_from_config(config['shared']) if 'shared' in config else None,
             train_encoder=BaseEncoder.create_from_config(config["train"]),
             test_encoder=BaseEncoder.create_from_config(config["test"])
         )
 
     def forward(self, inputs):
-        if self._shared_encoder is not None:
-            inputs = self._shared_encoder(inputs)
-
         if self.training:  # train mode
             inputs = self._train_encoder(inputs)
         else:  # eval mode
@@ -436,8 +431,7 @@ class DotProduct(TorchEncoder, config_name='dot_product'):
         candidate_mask = inputs[f'{self._candidate_prefix}.mask'].bool()  # (batch_size, candidates_num)
 
         # b - batch_size, s - seq_len, d - embedding_dim, c - candidates_num
-        scores = torch.einsum('bsd,bcd->bcs', user_embeddings,
-                              candidate_embeddings)  # (batch_size, candidates_num, seq_len)
+        scores = torch.einsum('bsd,bcd->bcs', user_embeddings, candidate_embeddings)  # (batch_size, candidates_num, seq_len)
         scores = scores.mean(dim=-1)  # (batch_size, candidates_num)
         if self._normalize:
             scores /= math.sqrt(user_embeddings.shape[-1])  # (batch_size, candidates_num)
@@ -468,7 +462,7 @@ class GatherEncoder(TorchEncoder, config_name='gather'):
         return inputs
 
 
-class FilterEncoder(TorchEncoder, config_name='filter'):
+class FilterEncoder(TorchEncoder, config_name='filter'):  # TODO better naming
 
     def __init__(self, logits_prefix, labels_prefix):
         super().__init__()
