@@ -12,7 +12,6 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
     def __init__(
             self,
             dataset,
-            interactions,
             max_user_idx,
             max_item_idx,
             max_sequence_length,
@@ -23,49 +22,47 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
             test_size=0.1
     ):
         self._dataset = dataset
-        self._interactions = interactions
         self._max_user_idx = max_user_idx
         self._max_item_idx = max_item_idx
         self._max_sequence_length = max_sequence_length
 
         train_dataset = dataset[:int(len(dataset) * (1.0 - validation_size - test_size))]
-        train_items = set()
+        train_item_ids, train_user_ids = set(), set()
         for train_sample in train_dataset:
+            train_user_ids.add(train_sample['user_id'])
             for train_item_id in train_sample['sample.ids'] + train_sample['answer.ids']:
-                train_items.add(train_item_id)
+                train_item_ids.add(train_item_id)
+        self._train_dataset = train_dataset
+        print(len(train_user_ids), len(train_item_ids))
 
         validation_dataset = dataset[
                      int(len(dataset) * (1.0 - validation_size - test_size)):
                      int(len(dataset) * (1.0 - test_size))
                      ]
-        filtered_validation_dataset = []
-        for validation_sample in validation_dataset:
-            for validation_item_id in validation_sample['sample.ids'] + validation_sample['answer.ids']:
-                if validation_item_id not in train_items:
-                    break
-            else:
-                filtered_validation_dataset.append(validation_sample)
+        self._validation_dataset = self._filter_samples(
+            train_user_ids=train_user_ids,
+            train_item_ids=train_item_ids,
+            data=validation_dataset
+        )
 
         test_dataset = dataset[int(len(dataset) * (1.0 - test_size)):]
-        filtered_test_dataset = []
-        for test_sample in test_dataset:
-            for test_item_id in test_sample['sample.ids'] + test_sample['answer.ids']:
-                if test_item_id not in train_items:
-                    break
-            else:
-                filtered_test_dataset.append(test_sample)
+        self._test_dataset = self._filter_samples(
+            train_user_ids=train_user_ids,
+            train_item_ids=train_item_ids,
+            data=test_dataset
+        )
 
-        logger.info(f'Train dataset size: {len(train_dataset)}')
-        logger.info(f'Validation dataset size: {len(filtered_validation_dataset)}')
-        logger.info(f'Test dataset size: {len(filtered_test_dataset)}')
+        logger.info(f'Train dataset size: {len(self._train_dataset)}')
+        logger.info(f'Validation dataset size: {len(self._validation_dataset)}')
+        logger.info(f'Test dataset size: {len(self._test_dataset)}')
 
-        self._train_sampler = train_sampler.with_dataset(train_dataset)
-        self._validation_sampler = validation_sampler.with_dataset(filtered_validation_dataset)
-        self._test_sampler = test_sampler.with_dataset(filtered_test_dataset)
+        self._train_sampler = train_sampler.with_dataset(self._train_dataset)
+        self._validation_sampler = validation_sampler.with_dataset(self._validation_dataset)
+        self._test_sampler = test_sampler.with_dataset(self._test_dataset)
 
     @classmethod
     def create_from_config(cls, config):
-        dataset, num_users, num_items, max_sequence_length, interactions = cls._get_dataset(
+        dataset, num_users, num_items, max_sequence_length = cls._get_dataset(
             path_to_data_dir=config['path_to_data_dir'],
             dataset_prefix=config['dataset_prefix'],
             min_sample_len=config.get('min_sample_len', 5),
@@ -92,7 +89,6 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
 
         return cls(
             dataset=dataset,
-            interactions=interactions,
             max_user_idx=num_users,
             max_item_idx=num_items,
             max_sequence_length=max_sequence_length,
@@ -102,11 +98,42 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
         )
 
     @staticmethod
+    def _filter_samples(train_user_ids, train_item_ids, data):
+        filtered_samples = []
+
+        for sample in data:
+            user_id = sample['user_id']
+            answer_id = sample['answer.ids'][0]
+
+            if user_id in train_user_ids and answer_id in train_item_ids:
+                filtered_sequence = []
+
+                for item_id in sample['sample.ids']:
+                    if item_id in train_item_ids:
+                        filtered_sequence.append(item_id)
+
+                filtered_samples.append(
+                    {
+                        'user_id': user_id,
+                        'timestamp': sample['timestamp'],
+
+                        'sample.length': len(filtered_sequence),
+                        'sample.ids': filtered_sequence,
+
+                        'answer.length': 1,
+                        'answer.ids': [answer_id]
+                    }
+                )
+
+        return filtered_samples
+
+    @staticmethod
     def _get_dataset(
             path_to_data_dir,
             dataset_prefix,
             min_sample_len=5,
-            max_sample_len=None
+            max_sample_len=None,
+            augment_dataset=True
     ):
         max_user_idx = 0
         max_item_idx = 0
@@ -115,7 +142,6 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
         logger.info(f'Amazon {dataset_prefix} dataset creation...')
 
         dataset = []
-        interactions = []  # TODO
 
         with open(os.path.join(path_to_data_dir, f'{dataset_prefix}.txt'), 'r') as f:
             user_sequences_id = f.readlines()
@@ -139,9 +165,6 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
             item_ids = [int(item_id) for item_id in item_ids.split(' ')]
             _, item_timestamps = timestamps.split(' ', 1)
 
-            for item_id in item_ids:
-                interactions.append([user_id, item_id])
-
             item_timestamps = [int(item_timestamp) for item_timestamp in item_timestamps.split(' ')]
 
             assert len(item_ids) == len(item_timestamps)
@@ -151,8 +174,13 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
             item_ids = list(item_ids)
             item_timestamps = list(item_timestamps)
 
+            if not augment_dataset:
+                start_separation_idx = len(item_ids) - 1
+            else:
+                start_separation_idx = min_sample_len
+
             # Append into dataset
-            for separation_idx in range(min_sample_len, len(item_ids)):
+            for separation_idx in range(start_separation_idx, len(item_ids)):
                 sequence = item_ids[:separation_idx]
                 if max_sample_len is not None:
                     sequence = sequence[-max_sample_len:]
@@ -176,15 +204,7 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
         logger.info(f'Amazon {dataset_prefix} dataset has been created!')
         logger.info(f'Dataset size: {len(dataset)}')
 
-        return dataset, max_user_idx, max_item_idx, max_sequence_length, interactions
-
-    @property
-    def dataset(self):
-        return self._dataset
-
-    @property
-    def interactions(self):
-        return self._interactions
+        return dataset, max_user_idx, max_item_idx, max_sequence_length
 
     @property
     def num_users(self):
