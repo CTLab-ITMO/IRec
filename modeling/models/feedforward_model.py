@@ -24,7 +24,7 @@ class FeedForwardModel(TorchModel, config_name='feedforward'):
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        projector = BaseProjector.create_from_config(config['projector'], kwargs) if 'projector' in config else None
+        projector = BaseProjector.create_from_config(config['projector'], **kwargs) if 'projector' in config else None
         encoders = CompositeEncoder(encoders=torch.nn.ModuleList([
             BaseEncoder.create_from_config(cfg, **kwargs)
             for cfg in config['encoders']
