@@ -50,9 +50,8 @@
         }
       ]
     },
-    "encoder": {
-      "type": "train/test",
-      "shared": {
+    "encoders": [
+      {
         "type": "bert4rec",
         "prefix": "sample",
         "num_layers": 2,
@@ -61,49 +60,40 @@
         "output_dim": 12102,
         "output_prefix": "logits"
       },
-      "train": {
-        "type": "composite",
-        "encoders": [
-          {
-            "type": "unmask",
-            "prefix": "logits"
-          },
-          {
-            "type": "filter",
-            "logits_prefix": "logits",
-            "labels_prefix": "labels"
-          }
-        ]
-      },
-      "test": {
-        "type": "composite",
-        "encoders": [
-          {
-            "type": "last_item",
-            "prefix": "logits",
-            "output_prefix": "next_item_prediction"
-          },
-          {
-            "type": "gather",
-            "prefix": "next_item_prediction",
-            "candidate_prefix": "candidates",
-            "output_prefix": "logits"
-          }
-        ]
+      {
+        "type": "train/test",
+        "train": {
+          "type": "composite",
+          "encoders": [
+            {
+              "type": "unmask",
+              "prefix": "logits"
+            },
+            {
+              "type": "filter",
+              "logits_prefix": "logits",
+              "labels_prefix": "labels"
+            }
+          ]
+        },
+        "test": {
+          "type": "composite",
+          "encoders": [
+            {
+              "type": "last_item",
+              "prefix": "logits",
+              "output_prefix": "next_item_prediction"
+            },
+            {
+              "type": "gather",
+              "prefix": "next_item_prediction",
+              "candidate_prefix": "candidates",
+              "output_prefix": "logits"
+            }
+          ]
+        }
       }
-    },
-    "head": {
-      "type": "train/test",
-      "train": {
-        "type": "ce",
-        "predictions_prefix": "logits",
-        "labels_prefix": "labels",
-        "output_prefix": "loss"
-      },
-      "test": {
-        "type": "identity"
-      }
-    }
+    ]
   },
   "metrics": {
     "ndcg@5": {
