@@ -39,12 +39,11 @@ class MetricCallback(BaseCallback, config_name='metric'):
         self._metrics = metrics if metrics is not None else {}
 
     @classmethod
-    def create_from_config(cls, config, model=None, dataloader=None, optimizer=None):
-        assert model is not None, 'Model instance should be provided'
+    def create_from_config(cls, config, **kwargs):
         return cls(
-            model=model,
-            dataloader=dataloader,
-            optimizer=optimizer,
+            model=kwargs['model'],
+            dataloader=kwargs['dataloader'],
+            optimizer=kwargs['optimizer'],
             on_step=config['on_step'],
             metrics=config.get('metrics', None),
             loss_prefix=config['loss_prefix']
@@ -82,12 +81,11 @@ class CheckpointCallback(BaseCallback, config_name='checkpoint'):
             self._save_path.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def create_from_config(cls, config, model=None, dataloader=None, optimizer=None):
-        assert model is not None, 'Model instance should be provided'
+    def create_from_config(cls, config, **kwargs):
         return cls(
-            model=model,
-            dataloader=dataloader,
-            optimizer=optimizer,
+            model=kwargs['model'],
+            dataloader=kwargs['dataloader'],
+            optimizer=kwargs['optimizer'],
             on_step=config['on_step'],
             save_path=config['save_path'],
             model_name=config['model_name']
@@ -127,17 +125,16 @@ class QualityCheckCallbackCheck(BaseCallback, config_name='validation'):
         self._loss_prefix = loss_prefix
 
     @classmethod
-    def create_from_config(cls, config, model=None, dataloader=None, optimizer=None):
-        assert model is not None, 'Model instance should be provided'
+    def create_from_config(cls, config, **kwargs):
         metrics = {
-            metric_name: BaseMetric.create_from_config(metric_cfg)
+            metric_name: BaseMetric.create_from_config(metric_cfg, **kwargs)
             for metric_name, metric_cfg in config['metrics'].items()
         }
 
         return cls(
-            model=model,
-            dataloader=dataloader,
-            optimizer=optimizer,
+            model=kwargs['model'],
+            dataloader=kwargs['dataloader'],
+            optimizer=kwargs['optimizer'],
             on_step=config['on_step'],
             metrics=metrics,
             pred_prefix=config['pred_prefix'],
@@ -192,18 +189,14 @@ class CompositeCallback(BaseCallback, config_name='composite'):
         self._callbacks = callbacks
 
     @classmethod
-    def create_from_config(cls, config, model=None, dataloader=None, optimizer=None):
+    def create_from_config(cls, config, **kwargs):
         return cls(
-            model=model,
-            dataloader=dataloader,
-            optimizer=optimizer,
+            model=kwargs['model'],
+            dataloader=kwargs['dataloader'],
+            optimizer=kwargs['optimizer'],
             callbacks=[
-                BaseCallback.create_from_config(
-                    cfg,
-                    model=model,
-                    dataloader=dataloader,
-                    optimizer=optimizer
-                ) for cfg in config['callbacks']
+                BaseCallback.create_from_config(cfg, **kwargs)
+                for cfg in config['callbacks']
             ]
         )
 

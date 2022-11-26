@@ -24,13 +24,12 @@ class TorchDataloader(BaseDataloader, config_name='torch'):
         return len(self._dataloader)
 
     @classmethod
-    def create_from_config(cls, config, dataset=None):
-        assert dataset is not None, 'Dataset instance should be provided'
+    def create_from_config(cls, config, **kwargs):
         batch_processor = BaseBatchProcessor.create_from_config(
             config.pop('batch_processor') if 'batch_processor' in config else {'type': 'identity'}
         )
         config.pop('type')  # For passing as **config in torch DataLoader
-        return cls(dataloader=DataLoader(dataset, collate_fn=batch_processor, **config))
+        return cls(dataloader=DataLoader(kwargs['dataset'], collate_fn=batch_processor, **config))
 
 
 class SplitDataloader(BaseDataloader, config_name='split'):
@@ -39,9 +38,7 @@ class SplitDataloader(BaseDataloader, config_name='split'):
         self._dataloaders = dataloaders
 
     @classmethod
-    def create_from_config(cls, config, dataset=None):
-        assert dataset is not None, 'Dataset instance should be provided'
-
+    def create_from_config(cls, config, **kwargs):
         split_sizes = config['split_size']
         dataloaders_cfg = config['dataloaders']
 
@@ -58,6 +55,7 @@ class SplitDataloader(BaseDataloader, config_name='split'):
         assert np.sum(split_sizes) == 1, \
             'Sum of splits ratios must not exceed 1'
 
+        dataset = kwargs['dataset']
         head_parts_sizes = [int(split_size * len(dataset)) for split_size in split_sizes[:-1]]
         last_part_size = len(dataset) - sum(head_parts_sizes)
 
@@ -80,7 +78,7 @@ class SplitDataloader(BaseDataloader, config_name='split'):
         for dataset, dataloader_cfg in zip(datasets, dataloaders_cfg):
             dataloader_name = dataloader_cfg.pop('name')
 
-            dataloaders[dataloader_name] = BaseDataloader.create_from_config(dataloader_cfg, dataset=dataset)
+            dataloaders[dataloader_name] = BaseDataloader.create_from_config(dataloader_cfg, **kwargs)
 
         return cls(dataloaders=dataloaders)
 

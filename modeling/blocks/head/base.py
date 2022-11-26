@@ -11,7 +11,7 @@ class BaseHead(metaclass=MetaParent):
 class TorchHead(BaseHead, nn.Module):
 
     @classmethod
-    def create_from_config(cls, config, num_users=None, num_items=None):
+    def create_from_config(cls, config, **kwargs):
         return super().create_from_config(config)
 
 
@@ -29,10 +29,10 @@ class TrainTestHead(TorchHead, config_name='train/test'):
         self._test_head = test_head
 
     @classmethod
-    def create_from_config(cls, config, num_users=None, num_items=None):
+    def create_from_config(cls, config, **kwargs):
         return cls(
-            train_head=BaseHead.create_from_config(config["train"]),
-            test_head=BaseHead.create_from_config(config["test"])
+            train_head=BaseHead.create_from_config(config["train"], **kwargs),
+            test_head=BaseHead.create_from_config(config["test"], **kwargs)
         )
 
     def forward(self, inputs):
@@ -50,10 +50,10 @@ class CompositeHead(TorchHead, config_name='composite'):
         self._output_prefix = output_prefix
 
     @classmethod
-    def create_from_config(cls, config, num_users=None, num_items=None):
+    def create_from_config(cls, config, **kwargs):
         return cls(
             heads=nn.ModuleList([
-                BaseHead.create_from_config(head_cfg)
+                BaseHead.create_from_config(head_cfg, **kwargs)
                 for head_cfg in config['heads']
             ]),
             output_prefix=config.get('output_prefix', None)

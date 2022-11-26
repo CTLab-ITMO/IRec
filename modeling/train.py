@@ -58,12 +58,7 @@ def main():
         dataset=validation_dataset
     )
 
-    model = BaseModel.create_from_config(
-        config['model'],
-        num_users=dataset.num_users,
-        num_items=dataset.num_items,
-        max_sequence_len=dataset.max_sequence_length
-    ).to(DEVICE)
+    model = BaseModel.create_from_config(config['model'], **dataset.meta).to(DEVICE)
 
     loss_function = BaseLoss.create_from_config(config['loss'])
 
@@ -93,7 +88,7 @@ def main():
     logger.debug('Saving model...')
     checkpoint_path = '../checkpoints/{}_final_state.pth'.format(config['experiment_name'])
     torch.save(model.state_dict(), checkpoint_path)
-    logger.debug('Saved model as {}!'.format(checkpoint_path))
+    logger.debug('Saved model as {}'.format(checkpoint_path))
 
 
 if __name__ == '__main__':

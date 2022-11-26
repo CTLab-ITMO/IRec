@@ -20,10 +20,10 @@ class PopularNegativeSampler(BaseNegativeSampler, config_name='popular'):
         self._popular_items = self._items_by_popularity()
 
     @classmethod
-    def create_from_config(cls, config, num_users=None, num_items=None):
+    def create_from_config(cls, config, **kwargs):
         return cls(
-            num_users=num_users,
-            num_items=num_items,
+            num_users=kwargs['num_users'],
+            num_items=kwargs['num_items'],
             sample_size=config['sample_size']
         )
 

@@ -16,10 +16,8 @@ class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_predic
         return super().with_dataset(dataset)
 
     @classmethod
-    def create_from_config(cls, config, num_users=None, num_items=None):
-        negative_sampler = BaseNegativeSampler.create_from_config(
-            config['negative_sampler'], num_users=num_users, num_items=num_items
-        )
+    def create_from_config(cls, config, **kwargs):
+        negative_sampler = BaseNegativeSampler.create_from_config(config['negative_sampler'], **kwargs)
         return cls(negative_sampler=negative_sampler)
 
     def __getitem__(self, index):
@@ -73,10 +71,8 @@ class NextItemPredictionEvalSampler(EvalSampler, config_name='next_item_predicti
         return super().with_dataset(dataset)
 
     @classmethod
-    def create_from_config(cls, config, num_users=None, num_items=None):
-        negative_sampler = BaseNegativeSampler.create_from_config(
-            config['negative_sampler'], num_users=num_users, num_items=num_items
-        )
+    def create_from_config(cls, config, **kwargs):
+        negative_sampler = BaseNegativeSampler.create_from_config(config['negative_sampler'], **kwargs)
         return cls(negative_sampler=negative_sampler)
 
     def __getitem__(self, index):

@@ -6,10 +6,10 @@ import numpy as np
 class RandomNegativeSampler(BaseNegativeSampler, config_name='random'):
 
     @classmethod
-    def create_from_config(cls, config, num_users=None, num_items=None):
+    def create_from_config(cls, config, **kwargs):
         return cls(
-            num_users=num_users,
-            num_items=num_items,
+            num_users=kwargs['num_users'],
+            num_items=kwargs['num_items'],
             sample_size=config['sample_size']
         )
 

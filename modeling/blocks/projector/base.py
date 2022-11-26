@@ -26,13 +26,7 @@ class CompositeProjector(TorchProjector, config_name='composite'):
         self._projectors = projectors
 
     @classmethod
-    def create_from_config(
-            cls,
-            config,
-            num_users=None,
-            num_items=None,
-            max_sequence_len=None
-    ):
+    def create_from_config(cls, config, **kwargs):
         projectors_cfg = config['projectors']
         shared_params = config['shared']
 
@@ -42,12 +36,7 @@ class CompositeProjector(TorchProjector, config_name='composite'):
                     projector_cfg[shared_key] = shared_value
 
         return cls(projectors=nn.ModuleList([
-            BaseProjector.create_from_config(
-                projector_cfg,
-                num_users=num_users,
-                num_items=num_items,
-                max_sequence_len=max_sequence_len
-            )
+            BaseProjector.create_from_config(projector_cfg, **kwargs)
             for projector_cfg in projectors_cfg
         ]))
 
@@ -120,19 +109,13 @@ class BasicProjector(TorchProjector, config_name='basic'):
         nn.init.zeros_(self._layernorm.bias.data)
 
     @classmethod
-    def create_from_config(
-            cls,
-            config,
-            num_users=None,
-            num_items=None,
-            max_sequence_len=None
-    ):
+    def create_from_config(cls, config, **kwargs):
         return cls(
             fields=config.get('fields', None),
             embedding_dim=config['embedding_dim'],
-            num_users=num_users,
-            num_items=num_items,
-            max_sequence_len=max_sequence_len,
+            num_users=kwargs['num_users'],
+            num_items=kwargs['num_items'],
+            max_sequence_len=kwargs['max_sequence_len'],
             dropout=config.get('dropout', 0.0),
             eps=config.get('eps', 1e-5),
             initializer_range=config.get('initializer_range', 0.02)

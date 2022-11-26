@@ -28,7 +28,7 @@ class CompositeLoss(TorchLoss, config_name='composite'):
         self._output_prefix = output_prefix
 
     @classmethod
-    def create_from_config(cls, config):
+    def create_from_config(cls, config, **kwargs):
         losses = []
         weights = []
 

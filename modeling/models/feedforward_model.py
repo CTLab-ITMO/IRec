@@ -4,6 +4,7 @@ from blocks.projector import BaseProjector
 from blocks.encoder import BaseEncoder, CompositeEncoder
 
 import torch
+import torch.nn as nn
 
 
 class FeedForwardModel(TorchModel, config_name='feedforward'):
@@ -13,28 +14,21 @@ class FeedForwardModel(TorchModel, config_name='feedforward'):
             encoders
     ):
         super().__init__()
-        self._projector = projector
-        self._encoders = encoders
+        self._projector = nn.Identity()
+        if projector is not None:
+            self._projector = projector
+
+        self._encoders = nn.Identity()
+        if encoders is not None:
+            self._encoders = encoders
 
     @classmethod
-    def create_from_config(
-            cls,
-            config,
-            num_users=None,
-            num_items=None,
-            max_sequence_len=None
-    ):
-        projector = BaseProjector.create_from_config(
-            config['projector'],
-            num_users=num_users,
-            num_items=num_items,
-            max_sequence_len=max_sequence_len
-        )
-
+    def create_from_config(cls, config, **kwargs):
+        projector = BaseProjector.create_from_config(config['projector'], kwargs) if 'projector' in config else None
         encoders = CompositeEncoder(encoders=torch.nn.ModuleList([
-            BaseEncoder.create_from_config(cfg)
+            BaseEncoder.create_from_config(cfg, **kwargs)
             for cfg in config['encoders']
-        ]))
+        ])) if 'encoders' in config else None
 
         return cls(projector=projector, encoders=encoders)
 

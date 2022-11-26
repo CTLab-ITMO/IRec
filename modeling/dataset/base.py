@@ -13,6 +13,7 @@ class BaseDataset(metaclass=MetaParent):
 
 
 class GraphDataset(BaseDataset, config_name='graph'):
+
     def __init__(self, dataset):
         self._dataset = dataset
         self._num_users = dataset.num_users
@@ -72,10 +73,6 @@ class GraphDataset(BaseDataset, config_name='graph'):
         self._test_user_interactions = np.array(test_user_interactions)
         self._test_item_interactions = np.array(test_item_interactions)
 
-        self._graph = None
-
-        self.folds = 4  # TODO fix
-
         # (users, items), bipartite graph
         self._user2item_connections = csr_matrix(
             (np.ones(len(train_user_interactions)), (train_user_interactions, train_item_interactions)),
@@ -88,22 +85,13 @@ class GraphDataset(BaseDataset, config_name='graph'):
         self.items_degree = np.array(self._user2item_connections.sum(axis=0)).squeeze()
         self.items_degree[self.items_degree == 0.0] = 1.0
 
-        # pre-calculate
-        self._all_positives = self.get_user_positive_items(list(range(self._num_users)))
+        self._graph = None
+        self._graph = self.get_sparse_graph()
 
     @classmethod
     def create_from_config(cls, config):
         dataset = BaseDataset.create_from_config(config['dataset'])
         return cls(dataset=dataset)
-
-    def get_user_item_labels(self, users, items):
-        return np.array(self._user2item_connections[users, items]).astype('uint8').reshape((-1,))
-
-    def get_user_positive_items(self, users):
-        positive_items = []
-        for user in users:
-            positive_items.append(self._user2item_connections[user].nonzero()[1])
-        return positive_items
 
     def get_sparse_graph(self):
         if self._graph is None:
@@ -119,9 +107,9 @@ class GraphDataset(BaseDataset, config_name='graph'):
             adj_mat[self._num_users:, :self._num_users] = R.T  # (num_items, num_users)
 
             adj_mat = adj_mat.todok()
-            # adj_mat = adj_mat + sp.eye(adj_mat.shape[0]) regularization or self-attendance
+            adj_mat = adj_mat + sp.eye(adj_mat.shape[0])  # TODO ????
 
-            edges_degree = np.arrat(adj_mat.sum(axis=1))  # D
+            edges_degree = np.array(adj_mat.sum(axis=1))  # D
 
             d_inv = np.power(edges_degree, -0.5).flatten()  # D^(-0.5)
             d_inv[np.isinf(d_inv)] = 0.0  # fix NaNs
@@ -133,11 +121,8 @@ class GraphDataset(BaseDataset, config_name='graph'):
 
             norm_adj = norm_adj.tocsr()
 
-            if False:  # TODO fix
-                self._graph = self._split_A_hat(norm_adj)
-            else:
-                self._graph = self._convert_sp_mat_to_sp_tensor(norm_adj)
-                self._graph = self._graph.coalesce().to(DEVICE)
+            self._graph = self._convert_sp_mat_to_sp_tensor(norm_adj)
+            self._graph = self._graph.coalesce().to(DEVICE)
 
         return self._graph
 
@@ -148,18 +133,6 @@ class GraphDataset(BaseDataset, config_name='graph'):
         index = torch.stack([row, col])
         data = torch.FloatTensor(coo.data)
         return torch.sparse.FloatTensor(index, data, torch.Size(coo.shape))
-
-    def _split_A_hat(self, A):
-        A_fold = []
-        fold_len = (self._num_users + self._num_items) // self.folds
-        for i_fold in range(self.folds):
-            start = i_fold * fold_len
-            if i_fold == self.folds - 1:
-                end = self._num_users + self._num_items
-            else:
-                end = (i_fold + 1) * fold_len
-            A_fold.append(self._convert_sp_mat_to_sp_tensor(A[start:end]).coalesce().to(DEVICE))
-        return A_fold
 
     @property
     def num_users(self):
@@ -173,5 +146,18 @@ class GraphDataset(BaseDataset, config_name='graph'):
     def max_sequence_length(self):
         return self._dataset.max_sequence_length
 
+    @property
+    def graph(self):
+        return self._graph
+
     def get_samplers(self):
         return self._dataset.get_samplers()
+
+    @property
+    def meta(self):
+        return {
+            'num_users': self.num_users,
+            'num_items': self.num_items,
+            'max_sequence_length': self.max_sequence_length,
+            'graph': self.graph
+        }

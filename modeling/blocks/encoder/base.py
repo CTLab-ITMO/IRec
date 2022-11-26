@@ -22,10 +22,10 @@ class TrainTestEncoder(TorchEncoder, config_name='train/test'):
         self._test_encoder = test_encoder
 
     @classmethod
-    def create_from_config(cls, config):
+    def create_from_config(cls, config, **kwargs):
         return cls(
-            train_encoder=BaseEncoder.create_from_config(config["train"]),
-            test_encoder=BaseEncoder.create_from_config(config["test"])
+            train_encoder=BaseEncoder.create_from_config(config["train"], **kwargs),
+            test_encoder=BaseEncoder.create_from_config(config["test"], **kwargs)
         )
 
     def forward(self, inputs):
@@ -44,9 +44,9 @@ class CompositeEncoder(TorchEncoder, config_name='composite'):
         self._encoders = encoders
 
     @classmethod
-    def create_from_config(cls, config):
+    def create_from_config(cls, config, **kwargs):
         return cls(encoders=nn.ModuleList([
-            BaseEncoder.create_from_config(cfg)
+            BaseEncoder.create_from_config(cfg, **kwargs)
             for cfg in config['encoders']
         ]))
 

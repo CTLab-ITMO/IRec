@@ -115,7 +115,7 @@ class SasRecHead(Head, config_name='sasrec'):
         self._negative_prefix = negative_prefix
 
     @classmethod
-    def create_from_config(cls, config, num_users=None, num_items=None):
+    def create_from_config(cls, config, **kwargs):
         return cls(
             prefix=config['prefix'],
             labels_prefix=config['labels_prefix'],

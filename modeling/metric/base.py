@@ -25,9 +25,10 @@ class CompositeMetric(BaseMetric, config_name='composite'):
 
     @classmethod
     def create_from_config(cls, config):
-        return cls(
-            metrics=[BaseMetric.create_from_config(cfg) for cfg in config['metrics']]
-        )
+        return cls(metrics=[
+            BaseMetric.create_from_config(cfg)
+            for cfg in config['metrics']
+        ])
 
     def __call__(self, inputs):
         for metric in self._metrics:

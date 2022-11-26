@@ -26,11 +26,10 @@ class BasicOptimizer(BaseOptimizer, config_name='basic'):
         self._clip_grad_threshold = clip_grad_threshold
 
     @classmethod
-    def create_from_config(cls, config, model=None):
-        assert model is not None, 'Model instance should be provided'
+    def create_from_config(cls, config, **kwargs):
         optimizer_cfg = config['optimizer']
         optimizer = OPTIMIZERS[optimizer_cfg.pop('type')](
-            model.parameters(),
+            kwargs['model'].parameters(),
             **optimizer_cfg
         )
 
@@ -44,7 +43,7 @@ class BasicOptimizer(BaseOptimizer, config_name='basic'):
             scheduler = None
 
         return cls(
-            model=model,
+            model=kwargs['model'],
             optimizer=optimizer,
             scheduler=scheduler,
             clip_grad_threshold=config.get('clip_grad_threshold', None)

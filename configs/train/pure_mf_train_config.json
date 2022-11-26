@@ -101,19 +101,13 @@
           }
         ]
       }
-    },
-    "head": {
-      "type": "train/test",
-      "train": {
-        "type": "bpr",
-        "positive_prefix": "positive_scores",
-        "negative_prefix": "negative_scores",
-        "output_prefix": "loss"
-      },
-      "test": {
-        "type": "identity"
-      }
     }
+  },
+  "loss": {
+    "type": "bpr",
+    "positive_prefix": "positive_scores",
+    "negative_prefix": "negative_scores",
+    "output_prefix": "loss"
   },
   "optimizer": {
     "type": "basic",

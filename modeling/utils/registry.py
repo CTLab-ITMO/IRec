@@ -46,7 +46,7 @@ class MetaParent(type):
             break
 
         @classmethod
-        def child_create_from_config(cls, config):
+        def child_create_from_config(cls, config, **kwargs):
             kwargs = {}
             for key, argspec in init_kwargs.items():
                 if key == 'self':

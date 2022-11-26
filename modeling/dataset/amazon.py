@@ -33,7 +33,6 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
             for train_item_id in train_sample['sample.ids'] + train_sample['answer.ids']:
                 train_item_ids.add(train_item_id)
         self._train_dataset = train_dataset
-        print(len(train_user_ids), len(train_item_ids))
 
         validation_dataset = dataset[
                      int(len(dataset) * (1.0 - validation_size - test_size)):

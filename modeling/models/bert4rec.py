@@ -84,12 +84,12 @@ class BertHead(Head, config_name='bert4rec'):
         nn.init.uniform_(self._encoder.bias.data, a=-initializer_range, b=initializer_range)
 
     @classmethod
-    def create_from_config(cls, config, num_users=None, num_items=None):
+    def create_from_config(cls, config, **kwargs):
         return cls(
             prefix=config['prefix'],
             labels_prefix=config['labels_prefix'],
             input_dim=config['input_dim'],
-            output_dim=num_items + 1,
+            output_dim=kwargs['num_items'] + 1,
             candidates_prefix=config['candidates_prefix'],
             output_prefix=config.get('prefix', None)
         )

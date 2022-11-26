@@ -37,6 +37,7 @@ def inference(dataloader, model, metrics, pred_prefix, labels_prefix):
 
     logger.debug('Inference procedure has been finished!')
     logger.debug('Metrics are the following:')
+    # TODO add file inference option
     for metric_name, metric_value in running_metrics.items():
         logger.info('{}: {}'.format(metric_name, metric_value / len(dataloader)))
 

@@ -5,26 +5,25 @@ import copy
 import numpy as np
 
 
-class MaskedItemPredictionTrainSampler(TrainSampler, config_name='masked_item_prediction'):
+class UserItemPredictionTrainSampler(TrainSampler, config_name='user_item_prediction'):
 
-    def __init__(
-            self,
-            num_users,
-            num_items,
-            mask_prob=0.0
-    ):
+    def __init__(self, num_users, num_items, negative_sampler):
         super().__init__()
         self._num_users = num_users
         self._num_items = num_items
-        self._mask_item_idx = num_items + 1
-        self._mask_prob = mask_prob
+        self._negative_sampler = negative_sampler
+
+    def with_dataset(self, dataset):
+        self._negative_sampler = self._negative_sampler.with_dataset(dataset)
+        return super().with_dataset(dataset)
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
+        negative_sampler = BaseNegativeSampler.create_from_config(config['negative_sampler'], **kwargs)
         return cls(
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
-            mask_prob=config.get('mask_prob', 0.25)
+            negative_sampler=negative_sampler
         )
 
     def __getitem__(self, index):
@@ -33,57 +32,29 @@ class MaskedItemPredictionTrainSampler(TrainSampler, config_name='masked_item_pr
         sequence = sample['sample.ids']
         answer = sample['answer.ids']
 
-        masked_sequence = []
-        labels = []
-
-        for item in sequence:
-
-            prob = np.random.rand()
-
-            if prob < self._mask_prob:
-                prob /= self._mask_prob
-
-                masked_sequence.append(self._mask_item_idx)
-                labels.append(item)
-            else:
-                masked_sequence.append(item)
-                labels.append(0)
-
-        masked_sequence = masked_sequence + [self._mask_item_idx]
-        labels = labels + answer
-
-        sample['sample.ids'] = masked_sequence
-        sample['sample.length'] = len(masked_sequence)
-
-        sample['labels.ids'] = labels
-        sample['labels.length'] = len(labels)
+        positive = np.random.choice(sequence + answer)
+        negative = np.random.choice(self._negative_sampler.generate_negative_samples(sequence, answer))
 
         return {
             'user.ids': [sample['user_id']],
             'user.length': 1,
 
-            'timestamp': sample['timestamp'],
+            'positive.ids': [positive],
+            'positive.length': 1,
 
-            'sample.ids': masked_sequence,
-            'sample.length': len(masked_sequence),
+            'negative.ids': [negative],
+            'negative.length': 1,
 
-            'labels.ids': labels,
-            'labels.length': len(labels)
+            'timestamp': sample['timestamp']
         }
 
 
-class MaskedItemPredictionEvalSampler(EvalSampler, config_name='masked_item_prediction'):
+class UserItemPredictionEvalSampler(EvalSampler, config_name='user_item_prediction'):
 
-    def __init__(
-            self,
-            num_users,
-            num_items,
-            negative_sampler
-    ):
+    def __init__(self, num_users, num_items, negative_sampler):
         super().__init__()
         self._num_users = num_users
         self._num_items = num_items
-        self._mask_item_idx = num_items + 1
         self._negative_sampler = negative_sampler
 
     def with_dataset(self, dataset):
@@ -107,7 +78,6 @@ class MaskedItemPredictionEvalSampler(EvalSampler, config_name='masked_item_pred
 
         negatives = self._negative_sampler.generate_negative_samples(sequence, answer)
 
-        sequence = sequence + [self._mask_item_idx]
         candidates = answer + negatives
         labels = [1] * len(answer) + [0] * len(negatives)
 
@@ -116,9 +86,6 @@ class MaskedItemPredictionEvalSampler(EvalSampler, config_name='masked_item_pred
             'user.length': 1,
 
             'timestamp': sample['timestamp'],
-
-            'sample.ids': sequence,
-            'sample.length': len(sequence),
 
             'candidates.ids': candidates,
             'candidates.length': len(candidates),
