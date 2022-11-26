@@ -23,7 +23,7 @@ def inference(dataloader, model, metrics, pred_prefix, labels_prefix):
             for key, values in batch.items():
                 batch[key] = batch[key].to(DEVICE)
 
-            _, batch = model(batch)
+            batch = model(batch)
 
             for key, values in batch.items():
                 batch[key] = batch[key].cpu()
