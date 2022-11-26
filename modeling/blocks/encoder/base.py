@@ -24,8 +24,8 @@ class TrainTestEncoder(TorchEncoder, config_name='train/test'):
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
-            train_encoder=BaseEncoder.create_from_config(config["train"], **kwargs),
-            test_encoder=BaseEncoder.create_from_config(config["test"], **kwargs)
+            train_encoder=BaseEncoder.create_from_config(config['train'], **kwargs),
+            test_encoder=BaseEncoder.create_from_config(config['test'], **kwargs)
         )
 
     def forward(self, inputs):
@@ -254,6 +254,7 @@ class Tower(TorchEncoder, config_name='tower'):
 
         self._init_weights(initializer_range)
 
+    @torch.no_grad()
     def _init_weights(self, initializer_range):
         for layer in [self._input_projector, self._output_projector]:
             if isinstance(layer, nn.Linear):

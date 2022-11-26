@@ -217,5 +217,13 @@ class AmazonDataset(BaseDataset, config_name='amazon'):
     def max_sequence_length(self):
         return self._max_sequence_length
 
+    @property
+    def meta(self):
+        return {
+            'num_users': self.num_users,
+            'num_items': self.num_items,
+            'max_sequence_length': self.max_sequence_length
+        }
+
     def get_samplers(self):
         return self._train_sampler, self._validation_sampler, self._test_sampler

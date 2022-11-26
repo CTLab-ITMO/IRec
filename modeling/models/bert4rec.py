@@ -38,7 +38,7 @@ class BertEncoder(Encoder, config_name='bert4rec'):
         )
 
     @classmethod
-    def create_from_config(cls, config):
+    def create_from_config(cls, config, **kwargs):
         return cls(
             prefix=config['prefix'],
             num_layers=config['num_layers'],
