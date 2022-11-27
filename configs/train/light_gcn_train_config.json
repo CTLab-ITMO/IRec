@@ -1,6 +1,6 @@
 {
-  "experiment_name": "light_gcn_sanity_check",
-  "train_epochs_num": 3,
+  "experiment_name": "light_gcn_with_reg_loss_sanity_check",
+  "train_epochs_num": 10,
   "dataset": {
     "type": "graph",
     "dataset": {
@@ -117,9 +117,22 @@
     "clip_grad_threshold": 5.0
   },
   "loss": {
-    "type": "bpr",
-    "positive_prefix": "positive_scores",
-    "negative_prefix": "negative_scores",
+    "type": "composite",
+    "losses": [
+      {
+        "type": "bpr",
+        "positive_prefix": "positive_scores",
+        "negative_prefix": "negative_scores",
+        "output_prefix": "bpr_loss",
+        "weight": 1.0
+      },
+      {
+        "type": "regularization_loss",
+        "prefix": ["user_ego", "positive_ego", "negative_ego"],
+        "output_prefix": "reg_loss",
+        "weight": 0.5
+      }
+    ],
     "output_prefix": "loss"
   },
   "callback": {
@@ -129,6 +142,16 @@
         "type": "metric",
         "on_step": 1,
         "loss_prefix": "loss"
+      },
+       {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "bpr_loss"
+      },
+       {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "reg_loss"
       },
       {
         "type": "validation",

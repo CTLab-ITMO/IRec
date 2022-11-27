@@ -1,7 +1,6 @@
-import torch.nn
+from utils import MetaParent, get_activation_function, maybe_to_list
 
-from utils import MetaParent, get_activation_function
-
+import torch
 import torch.nn as nn
 
 
@@ -128,6 +127,24 @@ class BPRLoss(TorchLoss, config_name='bpr'):
         assert positive_scores.shape[0] == negative_scores.shape[0]
 
         loss = torch.mean(self._activation(negative_scores - positive_scores))  # (1)
+
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss
+
+
+class RegularizationLoss(TorchLoss, config_name='regularization_loss'):
+
+    def __init__(self, prefix, output_prefix=None):
+        super().__init__()
+        self._prefix = maybe_to_list(prefix)
+        self._output_prefix = output_prefix
+
+    def forward(self, inputs):
+        loss = 0.0
+        for prefix in self._prefix:
+            loss += inputs[prefix].norm(2).pow(2)
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()
