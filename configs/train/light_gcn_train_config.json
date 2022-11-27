@@ -128,9 +128,13 @@
       },
       {
         "type": "regularization_loss",
-        "prefix": ["user_ego", "positive_ego", "negative_ego"],
+        "prefix": [
+          "user_ego",
+          "positive_ego",
+          "negative_ego"
+        ],
         "output_prefix": "reg_loss",
-        "weight": 0.5
+        "weight": 0.0005
       }
     ],
     "output_prefix": "loss"
@@ -143,12 +147,12 @@
         "on_step": 1,
         "loss_prefix": "loss"
       },
-       {
+      {
         "type": "metric",
         "on_step": 1,
         "loss_prefix": "bpr_loss"
       },
-       {
+      {
         "type": "metric",
         "on_step": 1,
         "loss_prefix": "reg_loss"
