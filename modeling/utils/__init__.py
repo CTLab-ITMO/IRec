@@ -1,5 +1,5 @@
-from .registry import MetaParent
-from .tensorboards import GLOBAL_TENSORBOARD_WRITER
+from utils.registry import MetaParent
+from utils.tensorboards import GLOBAL_TENSORBOARD_WRITER, TensorboardWriter
 
 import json
 import random
@@ -18,7 +18,13 @@ def parse_args():
     args = parser.parse_args()
     with open(args.params) as f:
         params = json.load(f)
+
+    global GLOBAL_TENSORBOARD_WRITER
+    GLOBAL_TENSORBOARD_WRITER = TensorboardWriter(params['experiment_name'])
+
     return params
+
+parse_args()
 
 
 def create_logger(
