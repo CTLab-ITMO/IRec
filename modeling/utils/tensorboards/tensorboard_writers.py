@@ -9,7 +9,7 @@ GLOBAL_TENSORBOARD_WRITER = None
 class TensorboardWriter(SummaryWriter):
 
     def __init__(self, experiment_name):
-        super().__init__('{}/{}'.format(LOGS_DIR, experiment_name))
+        super().__init__(log_dir=LOGS_DIR, comment=experiment_name)
 
 
 class TensorboardTimer:
