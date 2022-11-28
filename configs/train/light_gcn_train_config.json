@@ -1,6 +1,6 @@
 {
   "experiment_name": "light_gcn_with_reg_loss_sanity_check",
-  "train_epochs_num": 10,
+  "train_epochs_num": 1000,
   "dataset": {
     "type": "graph",
     "dataset": {
@@ -53,10 +53,10 @@
           "negative",
           "candidates"
         ],
-        "embedding_dim": 256,
-        "num_layers": 2,
-        "keep_prob": 0.8,
-        "dropout": 0.2
+        "embedding_dim": 64,
+        "num_layers": 3,
+        "keep_prob": 0.6,
+        "dropout": 0.0
       },
       {
         "type": "train/test",
@@ -108,13 +108,8 @@
     "type": "basic",
     "optimizer": {
       "type": "adam",
-      "lr": 3e-3,
-      "betas": [
-        0.9,
-        0.98
-      ]
-    },
-    "clip_grad_threshold": 5.0
+      "lr": 0.001
+    }
   },
   "loss": {
     "type": "composite",
@@ -134,7 +129,7 @@
           "negative_ego"
         ],
         "output_prefix": "reg_loss",
-        "weight": 0.0005
+        "weight": 5e-5
       }
     ],
     "output_prefix": "loss"
