@@ -53,7 +53,7 @@ class BasicProjector(TorchProjector, config_name='basic'):
             embedding_dim,
             num_users,
             num_items,
-            max_sequence_len,
+            max_sequence_len=None,
             dropout=0.0,
             eps=1e-5,
             fields=None,
@@ -79,10 +79,13 @@ class BasicProjector(TorchProjector, config_name='basic'):
             num_embeddings=self._num_items + 2,
             embedding_dim=self._embedding_dim
         )
-        self._position_embeddings = nn.Embedding(
-            num_embeddings=self._max_sequence_len,
-            embedding_dim=self._embedding_dim
-        )
+
+        self._position_embeddings = nn.Identity()
+        if self._max_sequence_len is not None:  # TODO fix
+            self._position_embeddings = nn.Embedding(
+                num_embeddings=self._max_sequence_len,
+                embedding_dim=self._embedding_dim
+            )
 
         self._dropout = nn.Dropout(p=self._dropout)
         self._layernorm = nn.LayerNorm(self._embedding_dim, eps=self._eps)
@@ -92,18 +95,26 @@ class BasicProjector(TorchProjector, config_name='basic'):
     @torch.no_grad()
     def _init_weights(self, initializer_range):
         nn.init.trunc_normal_(
-            self._item_embeddings.weight.data,
+            self._user_embeddings.weight.data,
             std=initializer_range,
             a=-2 * initializer_range,
             b=2 * initializer_range
         )
 
         nn.init.trunc_normal_(
-            self._position_embeddings.weight.data,
+            self._item_embeddings.weight.data,
             std=initializer_range,
             a=-2 * initializer_range,
             b=2 * initializer_range
         )
+
+        if self._max_sequence_len is not None:  # TODO fix
+            nn.init.trunc_normal_(
+                self._position_embeddings.weight.data,
+                std=initializer_range,
+                a=-2 * initializer_range,
+                b=2 * initializer_range
+            )
 
         nn.init.ones_(self._layernorm.weight.data)
         nn.init.zeros_(self._layernorm.bias.data)
@@ -115,7 +126,7 @@ class BasicProjector(TorchProjector, config_name='basic'):
             embedding_dim=config['embedding_dim'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
-            max_sequence_len=kwargs['max_sequence_length'],
+            max_sequence_len=kwargs.get('max_sequence_length', None),
             dropout=config.get('dropout', 0.0),
             eps=config.get('eps', 1e-5),
             initializer_range=config.get('initializer_range', 0.02)

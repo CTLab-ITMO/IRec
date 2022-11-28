@@ -31,13 +31,14 @@ class PopularNegativeSampler(BaseNegativeSampler, config_name='popular'):
         popularity = Counter()
 
         for sample in self._dataset:
-            popularity.update(sample['sequence'])
+            for item_id in sample['item.ids']:
+                popularity[item_id] += 1
 
         popular_items = sorted(popularity, key=popularity.get, reverse=True)
         return popular_items
 
-    def generate_negative_samples(self, sequence, answer):
-        seen = set(sequence + answer)
+    def generate_negative_samples(self, items):
+        seen = set(items)
         negative_samples = []
 
         popularity_idx = 0
@@ -47,6 +48,6 @@ class PopularNegativeSampler(BaseNegativeSampler, config_name='popular'):
 
             if item not in seen:
                 negative_samples.append(item)
-                seen.add(item)
+                seen.add(item)  # TODO maybe remove ???
 
         return negative_samples

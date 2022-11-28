@@ -14,9 +14,5 @@ class BaseNegativeSampler(metaclass=MetaParent):
         self._num_items = num_items
         self._sample_size = sample_size
 
-    def with_dataset(self, dataset):
-        self._dataset = dataset
-        return self
-
-    def generate_negative_samples(self, sequence, answer):
+    def generate_negative_samples(self, items):
         raise NotImplementedError

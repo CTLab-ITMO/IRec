@@ -1,16 +1,12 @@
 {
-  "experiment_name": "test_experiment",
+  "experiment_name": "pure_mf_sanity_check",
   "train_epochs_num": 100,
   "dataset": {
-    "type": "amazon",
-    "path_to_data_dir": "../data/Beauty",
-    "dataset_prefix": "Beauty",
-    "min_sample_len": 5,
-    "max_sample_len": 200,
-    "validation_size": 0.1,
-    "test_size": 0.1,
+    "type": "interactions",
+    "name": "Gowalla",
+    "path_to_data_dir": "../data",
     "samplers": {
-      "type": "next_item_prediction",
+      "type": "pos_neg",
       "negative_sampler": {
         "type": "random",
         "sample_size": 99
@@ -20,18 +16,18 @@
   "dataloader": {
     "train": {
       "type": "torch",
-      "batch_size": 256,
+      "batch_size": 512,
       "batch_processor": {
-        "type": "amazon"
+        "type": "basic"
       },
       "drop_last": true,
       "shuffle": true
     },
     "validation": {
       "type": "torch",
-      "batch_size": 256,
+      "batch_size": 512,
       "batch_processor": {
-        "type": "amazon"
+        "type": "basic"
       },
       "drop_last": false,
       "shuffle": false
@@ -48,60 +44,65 @@
           "prefix": "user"
         },
         {
+          "type": "item",
           "prefix": "positive"
         },
         {
+          "type": "item",
           "prefix": "negative"
         },
         {
+          "type": "item",
           "prefix": "candidates"
         }
       ]
     },
-    "encoder": {
-      "type": "train/test",
-      "train": {
-        "type": "composite",
-        "encoders": [
-          {
-            "type": "einsum",
-            "fst_prefix": "user",
-            "snd_prefix": "positive",
-            "operation": "bud,bpd->bp",
-            "mask_prefix": "positive",
-            "output_prefix": "positive_scores"
-          },
-          {
-            "type": "einsum",
-            "fst_prefix": "user",
-            "snd_prefix": "negative",
-            "operation": "bud,bnd->bn",
-            "mask_prefix": "negative",
-            "output_prefix": "negative_scores"
-          },
-          {
-            "type": "unmask",
-            "prefix": [
-              "positive_scores",
-              "negative_scores"
-            ]
-          }
-        ]
-      },
-      "test": {
-        "type": "composite",
-        "encoders": [
-          {
-            "type": "einsum",
-            "fst_prefix": "user",
-            "snd_prefix": "candidates",
-            "operation": "bud,bcd->bc",
-            "mask_prefix": "candidates",
-            "output_prefix": "scores"
-          }
-        ]
+    "encoders": [
+      {
+        "type": "train/test",
+        "train": {
+          "type": "composite",
+          "encoders": [
+            {
+              "type": "einsum",
+              "fst_prefix": "user",
+              "snd_prefix": "positive",
+              "operation": "bud,bpd->bp",
+              "mask_prefix": "positive",
+              "output_prefix": "positive_scores"
+            },
+            {
+              "type": "einsum",
+              "fst_prefix": "user",
+              "snd_prefix": "negative",
+              "operation": "bud,bnd->bn",
+              "mask_prefix": "negative",
+              "output_prefix": "negative_scores"
+            },
+            {
+              "type": "unmask",
+              "prefix": [
+                "positive_scores",
+                "negative_scores"
+              ]
+            }
+          ]
+        },
+        "test": {
+          "type": "composite",
+          "encoders": [
+            {
+              "type": "einsum",
+              "fst_prefix": "user",
+              "snd_prefix": "candidates",
+              "operation": "bud,bcd->bc",
+              "mask_prefix": "candidates",
+              "output_prefix": "scores"
+            }
+          ]
+        }
       }
-    }
+    ]
   },
   "loss": {
     "type": "bpr",

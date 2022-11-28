@@ -3,24 +3,35 @@ from dataset.negative_samplers.base import BaseNegativeSampler
 
 import copy
 import numpy as np
+from collections import defaultdict
 
 
-class UserItemPredictionTrainSampler(TrainSampler, config_name='user_item_prediction'):
+def _get_seen_items(dataset):
+    seen = defaultdict(list)
 
-    def __init__(self, num_users, num_items, negative_sampler):
+    for sample in dataset:
+        user_id = sample['user.ids'][0]
+        items = sample['item.ids']
+        seen[user_id].extend(items)
+
+    return seen
+
+
+class PositiveNegativeTrainSampler(TrainSampler, config_name='pos_neg'):
+
+    def __init__(self, dataset, num_users, num_items, negative_sampler):
         super().__init__()
+        self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
         self._negative_sampler = negative_sampler
-
-    def with_dataset(self, dataset):
-        self._negative_sampler = self._negative_sampler.with_dataset(dataset)
-        return super().with_dataset(dataset)
+        self._seen_items = _get_seen_items(dataset)
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
         negative_sampler = BaseNegativeSampler.create_from_config(config['negative_sampler'], **kwargs)
         return cls(
+            dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
             negative_sampler=negative_sampler
@@ -29,42 +40,38 @@ class UserItemPredictionTrainSampler(TrainSampler, config_name='user_item_predic
     def __getitem__(self, index):
         sample = copy.deepcopy(self._dataset[index])
 
-        sequence = sample['sample.ids']
-        answer = sample['answer.ids']
-
-        positive = np.random.choice(sequence + answer)
-        negative = np.random.choice(self._negative_sampler.generate_negative_samples(sequence, answer))
+        assert len(sample['user.ids']) == 1
+        user = sample['user.ids'][0]
+        positive = sample['item.ids'][0]
+        negative = np.random.choice(self._negative_sampler.generate_negative_samples(self._seen_items[user]))
 
         return {
-            'user.ids': [sample['user_id']],
-            'user.length': 1,
+            'user.ids': sample['user.ids'],
+            'user.length': sample['user.length'],
 
             'positive.ids': [positive],
             'positive.length': 1,
 
             'negative.ids': [negative],
-            'negative.length': 1,
-
-            'timestamp': sample['timestamp']
+            'negative.length': 1
         }
 
 
-class UserItemPredictionEvalSampler(EvalSampler, config_name='user_item_prediction'):
+class UserItemPredictionEvalSampler(EvalSampler, config_name='pos_neg'):
 
-    def __init__(self, num_users, num_items, negative_sampler):
+    def __init__(self, dataset, num_users, num_items, negative_sampler):
         super().__init__()
+        self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
         self._negative_sampler = negative_sampler
-
-    def with_dataset(self, dataset):
-        self._negative_sampler = self._negative_sampler.with_dataset(dataset)
-        return super().with_dataset(dataset)
+        self._seen_items = _get_seen_items(dataset)
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
         negative_sampler = BaseNegativeSampler.create_from_config(config['negative_sampler'], **kwargs)
         return cls(
+            dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
             negative_sampler=negative_sampler
@@ -73,19 +80,17 @@ class UserItemPredictionEvalSampler(EvalSampler, config_name='user_item_predicti
     def __getitem__(self, index):
         sample = copy.deepcopy(self._dataset[index])
 
-        sequence = sample['sample.ids']
-        answer = sample['answer.ids']
+        assert len(sample['user.ids']) == 1
+        user = sample['user.ids'][0]
+        positive = sample['item.ids']
+        negatives = self._negative_sampler.generate_negative_samples(self._seen_items[user])
 
-        negatives = self._negative_sampler.generate_negative_samples(sequence, answer)
-
-        candidates = answer + negatives
-        labels = [1] * len(answer) + [0] * len(negatives)
+        candidates = positive + negatives
+        labels = [1] * len(positive) + [0] * len(negatives)
 
         return {
-            'user.ids': [sample['user_id']],
-            'user.length': 1,
-
-            'timestamp': sample['timestamp'],
+            'user.ids': sample['user.ids'],
+            'user.length': sample['user.length'],
 
             'candidates.ids': candidates,
             'candidates.length': len(candidates),

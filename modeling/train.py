@@ -29,6 +29,7 @@ def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt):
 
             inputs = model(inputs)
 
+            print(list(inputs.keys()))
             loss = loss_function(inputs)
 
             optimizer.step(loss)
@@ -46,16 +47,18 @@ def main():
 
     dataset = BaseDataset.create_from_config(config['dataset'])
 
-    train_dataset, validation_dataset, _ = dataset.get_samplers()
+    train_sampler, test_sampler = dataset.get_samplers()
 
     train_dataloader = BaseDataloader.create_from_config(
         config['dataloader']['train'],
-        dataset=train_dataset
+        dataset=train_sampler,
+        **dataset.meta
     )
 
     validation_dataloader = BaseDataloader.create_from_config(
         config['dataloader']['validation'],
-        dataset=validation_dataset
+        dataset=test_sampler,
+        **dataset.meta
     )
 
     model = BaseModel.create_from_config(config['model'], **dataset.meta).to(DEVICE)

@@ -17,25 +17,22 @@ class IdentityBatchProcessor(BaseBatchProcessor, config_name='identity'):
         return torch.tensor(batch)
 
 
-class AmazonBatchProcessor(BaseBatchProcessor, config_name='amazon'):
+class BasicBatchProcessor(BaseBatchProcessor, config_name='basic'):
 
     def __call__(self, batch):
         processed_batch = {}
 
-        processed_batch['timestamps'] = [sample['timestamp'] for sample in batch]
+        for key in batch[0].keys():
+            if key.endswith('.ids'):
+                prefix = key.split('.')[0]
+                assert '{}.length'.format(prefix) in batch[0]
 
-        # TODO fix
-        for prefix in ['sample', 'labels', 'candidates', 'positive', 'negative', 'user', 'positive_labels', 'negative_labels']:
-            if f'{prefix}.length' in batch[0]:
                 processed_batch[f'{prefix}.ids'] = []
-                processed_batch[f'{prefix}.positions'] = []
+                processed_batch[f'{prefix}.length'] = []
 
-                processed_batch[f'{prefix}.length'] = [sample[f'{prefix}.length'] for sample in batch]
                 for sample in batch:
                     processed_batch[f'{prefix}.ids'].extend(sample[f'{prefix}.ids'])
-                    processed_batch[f'{prefix}.positions'].extend(
-                        list(range(sample[f'{prefix}.length'] - 1, -1, -1))
-                    )
+                    processed_batch[f'{prefix}.length'].append(sample[f'{prefix}.length'])
 
         for part, values in processed_batch.items():
             processed_batch[part] = torch.tensor(values, dtype=torch.long)

@@ -1,3 +1,5 @@
+from dataset.samplers import TrainSampler, EvalSampler
+
 from utils import MetaParent, DEVICE
 
 import torch
@@ -5,11 +7,145 @@ import numpy as np
 import scipy.sparse as sp
 from scipy.sparse import csr_matrix
 
+import os
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class BaseDataset(metaclass=MetaParent):
 
     def get_samplers(self):
         raise NotImplementedError
+
+
+# TODO implement
+class CompositeDataset(BaseDataset, config_name='composite'):
+
+    def __init__(self):
+        pass
+
+    def get_samplers(self):
+        raise NotImplementedError
+
+
+class InteractionsDataset(BaseDataset, config_name='interactions'):
+
+    def __init__(
+            self,
+            train_sampler,
+            test_sampler,
+            num_users,
+            num_items
+    ):
+        self._train_sampler = train_sampler
+        self._test_sampler = test_sampler
+        self._num_users = num_users
+        self._num_items = num_items
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
+        max_user_idx, max_item_idx = 0, 0
+
+        train_dataset, train_num_interactions, train_max_user_idx, train_max_item_idx = cls._create_dataset(data_dir_path, 'train')
+        max_user_idx, max_item_idx = max(max_user_idx, train_max_user_idx), max(max_item_idx, train_max_item_idx)
+
+        test_dataset, test_num_interactions, test_max_user_idx, test_max_item_idx = cls._create_dataset(data_dir_path,'test')
+        max_user_idx, max_item_idx = max(max_user_idx, test_max_user_idx), max(max_item_idx, test_max_item_idx)
+
+        # Add zero user/item
+        max_user_idx += 1
+        max_item_idx += 1
+
+        logger.info('Max user idx: {}'.format(max_user_idx))
+        logger.info('Max item idx: {}'.format(max_item_idx))
+        logger.info('{} dataset sparsity: {}'.format(
+            config['name'], (train_num_interactions + test_num_interactions) / max_user_idx / max_item_idx
+        ))
+
+        train_sampler = TrainSampler.create_from_config(
+            config['samplers'],
+            dataset=train_dataset,
+            num_users=max_user_idx,
+            num_items=max_item_idx
+        )
+        test_sampler = EvalSampler.create_from_config(
+            config['samplers'],
+            dataset=test_dataset,
+            num_users=max_user_idx,
+            num_items=max_item_idx
+        )  # TODO sanity check
+
+        return cls(
+            train_sampler=train_sampler,
+            test_sampler=test_sampler,
+            num_users=max_user_idx,
+            num_items=max_item_idx
+        )
+
+    @staticmethod
+    def _create_dataset(dir_path, part):
+        max_user_idx = 0
+        max_item_idx = 0
+
+        dataset_path = os.path.join(dir_path, '{}.txt'.format(part))
+        with open(dataset_path, 'r') as f:
+            data = f.readlines()
+
+        interactions_info = InteractionsDataset._create_interactions(data)
+        user_interactions, item_interactions, num_interactions, _, _ = interactions_info
+        max_user_idx = max(max_user_idx, interactions_info[3])
+        max_item_idx = max(max_item_idx, interactions_info[4])
+
+        dataset = []
+        for user_id, item_id in zip(user_interactions, item_interactions):
+            dataset.append({
+                'user.ids': [user_id], 'user.length': 1,
+                'item.ids': [item_id], 'item.length': 1
+            })
+        logger.info('{} dataset size: {}'.format(part, len(dataset)))
+
+        return dataset, num_interactions, max_user_idx, max_item_idx
+
+    @staticmethod
+    def _create_interactions(data):
+        user_interactions = []
+        item_interactions = []
+        num_interactions = 0
+
+        max_user_id = 0
+        max_item_id = 0
+
+        for sample in data:
+            sample = sample.strip('\n').split(' ')
+            item_ids = [int(item_id) for item_id in sample[1:]]
+            user_id = int(sample[0])
+
+            max_user_id = max(max_user_id, user_id)
+            max_item_id = max(max_item_id, max(item_ids))
+
+            user_interactions.extend([user_id] * len(item_ids))
+            item_interactions.extend(item_ids)
+
+            num_interactions += len(item_ids)
+
+        return user_interactions, item_interactions, num_interactions, max_user_id, max_item_id
+
+    def get_samplers(self):
+        return self._train_sampler, self._test_sampler
+
+    @property
+    def num_users(self):
+        return self._num_users
+
+    @property
+    def num_items(self):
+        return self._num_items
+
+    @property
+    def meta(self):
+        return {'num_users': self.num_users, 'num_items': self.num_items}
 
 
 class GraphDataset(BaseDataset, config_name='graph'):
@@ -155,9 +291,4 @@ class GraphDataset(BaseDataset, config_name='graph'):
 
     @property
     def meta(self):
-        return {
-            'num_users': self.num_users,
-            'num_items': self.num_items,
-            'max_sequence_length': self.max_sequence_length,
-            'graph': self.graph
-        }
+        return {'graph': self.graph, **self._dataset.meta}

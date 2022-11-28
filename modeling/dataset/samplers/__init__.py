@@ -1,4 +1,4 @@
 from .base import TrainSampler, EvalSampler
 from .next_item_prediction import NextItemPredictionTrainSampler, NextItemPredictionEvalSampler
 from .masked_item_prediction import MaskedItemPredictionTrainSampler, MaskedItemPredictionEvalSampler
-from .user_item_prediction import UserItemPredictionTrainSampler, UserItemPredictionEvalSampler
+from .user_item_prediction import PositiveNegativeTrainSampler, UserItemPredictionEvalSampler

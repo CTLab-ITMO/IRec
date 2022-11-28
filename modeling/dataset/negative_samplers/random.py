@@ -13,18 +13,15 @@ class RandomNegativeSampler(BaseNegativeSampler, config_name='random'):
             sample_size=config['sample_size']
         )
 
-    def generate_negative_samples(self, sequence, answer):
-        seen = set(sequence + answer)
-
+    def generate_negative_samples(self, items):
+        seen = set(items)
         negative_samples = []
 
-        for _ in range(self._sample_size):
+        while len(negative_samples) < self._sample_size:
             item = np.random.randint(1, self._num_items)
 
-            while item in seen:
-                item = np.random.randint(1, self._num_items)
-
-            negative_samples.append(item)
-            seen.add(item)
+            if item not in seen:
+                negative_samples.append(item)
+                seen.add(item)  # TODO maybe remove ???
 
         return negative_samples
