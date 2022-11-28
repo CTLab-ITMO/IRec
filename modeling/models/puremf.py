@@ -1,5 +1,4 @@
 from blocks.encoder import TorchEncoder as Encoder
-from blocks.head import TorchHead as Head
 
 from utils import get_activation_function, DEVICE
 

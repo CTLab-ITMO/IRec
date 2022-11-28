@@ -1,5 +1,4 @@
 from blocks.encoder import TorchEncoder as Encoder
-from blocks.head import TorchHead as Head
 
 from utils import DEVICE
 
@@ -90,94 +89,5 @@ class SasRecEncoder(Encoder, config_name='sasrec'):
 
         inputs[self._sample_prefix] = sample_embeddings
         inputs['{}.mask'.format(self._sample_prefix)] = sample_mask
-
-        return inputs
-
-
-class SasRecHead(Head, config_name='sasrec'):
-
-    def __init__(
-            self,
-            prefix,
-            labels_prefix,
-            candidates_prefix,
-            positive_prefix,
-            negative_prefix,
-            output_prefix=None,
-    ):
-        super().__init__()
-        self._prefix = prefix
-        self._labels_prefix = labels_prefix
-        self._candidates_prefix = candidates_prefix
-        self._output_prefix = output_prefix or prefix
-
-        self._positive_prefix = positive_prefix
-        self._negative_prefix = negative_prefix
-
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        return cls(
-            prefix=config['prefix'],
-            labels_prefix=config['labels_prefix'],
-            candidates_prefix=config['candidates_prefix'],
-            positive_prefix=config['positive_prefix'],
-            negative_prefix=config['negative_prefix'],
-            output_prefix=config.get('output_prefix', None)
-        )
-
-    def forward(self, inputs):
-        if self.training:  # train mode
-            inputs = self._train_processing(inputs)
-        else:  # eval mode
-            inputs = self._eval_processing(inputs)
-
-        return inputs
-
-    def _train_processing(self, inputs):
-        embeddings = inputs[self._prefix]  # (batch_size, seq_len, emb_dim)
-        mask = inputs['{}.mask'.format(self._prefix)]  # (batch_size, seq_len)
-        embeddings[~mask] = 0
-
-        positive_embeddings = inputs[self._positive_prefix]  # (batch_size, seq_len, emb_dim)
-        positive_mask = inputs['{}.mask'.format(self._positive_prefix)]  # (batch_size, seq_len)
-
-        negative_embeddings = inputs[self._negative_prefix]  # (batch_size, seq_len, emb_dim)
-        negative_mask = inputs['{}.mask'.format(self._negative_prefix)]  # (batch_size, seq_len)
-
-        pos_logits = torch.einsum('bsd,bsd->bs', embeddings, positive_embeddings)
-        positive_labels = torch.ones_like(pos_logits)
-        neg_logits = torch.einsum('bsd,bsd->bs', embeddings, negative_embeddings)
-        negative_labels = torch.zeros_like(neg_logits)
-
-        all_positive_logits = pos_logits[positive_mask]
-        all_negative_logits = neg_logits[negative_mask]
-
-        all_positive_labels = positive_labels[positive_mask]
-        all_negative_labels = negative_labels[negative_mask]
-
-        inputs['positive.logits'] = all_positive_logits
-        inputs['positive.labels'] = all_positive_labels
-
-        inputs['negative.logits'] = all_negative_logits
-        inputs['negative.labels'] = all_negative_labels
-
-        return inputs
-
-    def _eval_processing(self, inputs):
-        embeddings = inputs[self._prefix]  # (batch_size, seq_len, emb_dim)
-
-        lengths = inputs['{}.length'.format(self._prefix)]  # (batch_size)
-        lengths = (lengths - 1).unsqueeze(-1).unsqueeze(-1)  # (batch_size, 1, 1)
-        lengths = torch.tile(lengths, (1, 1, embeddings.shape[-1]))  # (batch_size, 1, emb_dim)
-        last_embeddings = embeddings.gather(dim=1, index=lengths)  # (batch_size, 1, emb_dim)
-        # TODO check that everything works here (probably yes)
-
-        candidate_embeddings = inputs[self._candidates_prefix]  # (batch_size, num_candidates, emb_dim)
-        candidate_scores = torch.sum(candidate_embeddings * last_embeddings, dim=-1)  # (batch_size, num_candidates)
-        inputs[self._output_prefix] = candidate_scores  # (batch_size, num_candidates)
-
-        labels_ids = inputs['{}.ids'.format(self._labels_prefix)]  # (all_candidates)
-        labels_ids = torch.reshape(labels_ids, (embeddings.shape[0], -1))  # (batch_size, num_candidates)
-        inputs['{}.ids'.format(self._labels_prefix)] = labels_ids
 
         return inputs
