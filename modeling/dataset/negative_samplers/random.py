@@ -21,7 +21,7 @@ class RandomNegativeSampler(BaseNegativeSampler, config_name='random'):
             item = np.random.randint(1, self._num_items)
 
             if item not in seen:
+                print('n', end='', flush=True)
                 negative_samples.append(item)
-                seen.add(item)  # TODO maybe remove ???
 
         return negative_samples

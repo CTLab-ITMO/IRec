@@ -142,13 +142,15 @@ class QualityCheckCallbackCheck(BaseCallback, config_name='validation'):
         )
 
     def __call__(self, inputs, step_num):
-        if step_num % self._on_step == 0:
+        if step_num % self._on_step == 0:  # TODO Add time monitoring
             logger.debug('Validation on step {}...'.format(step_num))
             running_params = Counter()
 
             self._model.eval()
             with torch.no_grad():
                 for batch in self._dataloader:
+                    print('i', end='', flush=True)
+
                     for key, value in batch.items():
                         batch[key] = value.to(DEVICE)
 
