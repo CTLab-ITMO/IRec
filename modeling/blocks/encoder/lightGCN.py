@@ -24,8 +24,8 @@ class LightGCN(TorchEncoder, config_name='light_gcn'):
 
         self._user_prefix = maybe_to_list(user_prefix)
         self._item_prefix = maybe_to_list(item_prefix)
-        self._num_users = num_users + 1  # + zero embedding
-        self._num_items = num_items + 1  # + zero embedding
+        self._num_users = num_users
+        self._num_items = num_items
         self._embedding_dim = embedding_dim
         self._num_layers = num_layers
         self._keep_prob = keep_prob
@@ -60,30 +60,23 @@ class LightGCN(TorchEncoder, config_name='light_gcn'):
             graph=kwargs['graph']
         )
 
-    def __dropout(self, keep_prob):
-        size = self._graph.size()
-        index = self._graph.indices().t()
-        values = self._graph.values()
-        random_index = torch.rand(len(values)) + keep_prob
-        random_index = random_index.int().bool()
-        index = index[random_index]
-        values = values[random_index] / keep_prob
-        return torch.sparse.FloatTensor(index.t(), values, size)
-
     def computer(self):
-        """
-        propagate methods for lightGCN
-        """
         users_embeddings = self.user_embeddings.weight
         items_embeddings = self.item_embeddings.weight
-
         all_embeddings = torch.cat([users_embeddings, items_embeddings])
 
         embeddings = [all_embeddings]
 
         if self._dropout:  # drop some edges
             if self.training:  # training_mode
-                graph_dropped = self.__dropout(self._keep_prob)
+                size = self._graph.size()
+                index = self._graph.indices().t()
+                values = self._graph.values()
+                random_index = torch.rand(len(values)) + self._keep_prob
+                random_index = random_index.int().bool()
+                index = index[random_index]
+                values = values[random_index] / self._keep_prob
+                graph_dropped = torch.sparse.FloatTensor(index.t(), values, size)
             else:  # eval mode
                 graph_dropped = self._graph
         else:
@@ -97,19 +90,6 @@ class LightGCN(TorchEncoder, config_name='light_gcn'):
         light_out = torch.mean(embeddings, dim=1)
         user_final_embeddings, item_final_embeddings = torch.split(light_out, [self._num_users, self._num_items])
         return user_final_embeddings, item_final_embeddings
-
-    # def bpr_loss(self, users, pos, neg):
-    #     users_emb, pos_emb, neg_emb, user_emb_ego, pos_emb_ego, neg_emb_ego = self.get_embedding(users.long(), pos.long(), neg.long())
-    #     reg_loss = 0.5 * \
-    #                (user_emb_ego.norm(2).pow(2) + pos_emb_ego.norm(2).pow(2) + neg_emb_ego.norm(2).pow(2)) \
-    #                / float(len(users))
-    #
-    #     positive_scores = torch.einsum('bd,bd->b', users_emb, pos_emb)  # (batch_size)
-    #     negative_scores = torch.einsum('bd,bd->b', users_emb, neg_emb)  # (batch_size)
-    #
-    #     loss = torch.mean(torch.nn.functional.softplus(negative_scores - positive_scores))
-    #
-    #     return loss, reg_loss
 
     def tmp_function(self, lengths, data):  # TODO add to utils
         batch_size = lengths.shape[0]
