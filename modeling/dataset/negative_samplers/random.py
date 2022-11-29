@@ -9,11 +9,13 @@ class RandomNegativeSampler(BaseNegativeSampler, config_name='random'):
 
     def __init__(
             self,
+            dataset,
             num_users,
             num_items,
             sample_size
     ):
         super().__init__(
+            dataset=dataset,
             num_users=num_users,
             num_items=num_items,
             sample_size=sample_size
@@ -22,6 +24,15 @@ class RandomNegativeSampler(BaseNegativeSampler, config_name='random'):
         print('Precomputing negatives...')
         self._unseen_items = self._compute_negatives()
         print('Precomputing negatives done!')
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        return cls(
+            dataset=kwargs['dataset'],
+            num_users=kwargs['num_users'],
+            num_items=kwargs['num_items'],
+            sample_size=config['sample_size']
+        )
 
     def _compute_negatives(self):
         unseen_items = defaultdict(set)
@@ -33,17 +44,10 @@ class RandomNegativeSampler(BaseNegativeSampler, config_name='random'):
         for sample in self._dataset:
             user_id = sample['item.ids'][0]
             for item_id in sample['item.ids']:
-                unseen_items[user_id].remove(item_id)
+                if item_id in unseen_items[user_id]:
+                    unseen_items[user_id].remove(item_id)
 
         return unseen_items
 
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        return cls(
-            num_users=kwargs['num_users'],
-            num_items=kwargs['num_items'],
-            sample_size=config['sample_size']
-        )
-
-    def generate_negative_samples(self, _):
-        return np.random.choice(self._unseen_items, self._sample_size)
+    def generate_negative_samples(self, user_id, items):  # TODO implement caching
+        return np.random.choice(list(self._unseen_items[user_id]), self._sample_size)

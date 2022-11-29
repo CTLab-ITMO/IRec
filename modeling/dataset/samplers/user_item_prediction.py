@@ -43,7 +43,7 @@ class PositiveNegativeTrainSampler(TrainSampler, config_name='pos_neg'):
         assert len(sample['user.ids']) == 1
         user = sample['user.ids'][0]
         positive = sample['item.ids'][0]
-        negative = np.random.choice(self._negative_sampler.generate_negative_samples(self._seen_items[user]))
+        negative = np.random.choice(self._negative_sampler.generate_negative_samples(user, self._seen_items[user]))
 
         return {
             'user.ids': sample['user.ids'],
@@ -83,7 +83,7 @@ class UserItemPredictionEvalSampler(EvalSampler, config_name='pos_neg'):
         assert len(sample['user.ids']) == 1
         user = sample['user.ids'][0]
         positive = sample['item.ids']
-        negatives = self._negative_sampler.generate_negative_samples(self._seen_items[user])
+        negatives = self._negative_sampler.generate_negative_samples(user, self._seen_items[user])
 
         candidates = positive + negatives
         labels = [1] * len(positive) + [0] * len(negatives)

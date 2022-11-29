@@ -7,11 +7,13 @@ class PopularNegativeSampler(BaseNegativeSampler, config_name='popular'):
 
     def __init__(
             self,
+            dataset,
             num_users,
             num_items,
             sample_size
     ):
         super().__init__(
+            dataset=dataset,
             num_users=num_users,
             num_items=num_items,
             sample_size=sample_size
@@ -22,6 +24,7 @@ class PopularNegativeSampler(BaseNegativeSampler, config_name='popular'):
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
+            dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
             sample_size=config['sample_size']
@@ -37,7 +40,7 @@ class PopularNegativeSampler(BaseNegativeSampler, config_name='popular'):
         popular_items = sorted(popularity, key=popularity.get, reverse=True)
         return popular_items
 
-    def generate_negative_samples(self, items):
+    def generate_negative_samples(self, user_id, items):
         seen = set(items)
         negative_samples = []
 
