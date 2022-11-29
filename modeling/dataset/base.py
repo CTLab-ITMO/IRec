@@ -154,16 +154,15 @@ class GraphDataset(BaseDataset, config_name='graph'):
         self._dataset = dataset
         self._num_users = dataset.num_users
         self._num_items = dataset.num_items
-        train_sampler, validation_sampler, test_sampler = self._dataset.get_samplers()
+        train_sampler, test_sampler = self._dataset.get_samplers()
 
         train_interactions, train_user_interactions, train_item_interactions = [], [], []
-        val_interactions, val_user_interactions, val_item_interactions = [], [], []
         test_interactions, test_user_interactions, test_item_interactions = [], [], []
-        train_data_size, val_data_size, test_data_size = 0, 0, 0
+        train_data_size, test_data_size = 0, 0
 
         for sample in train_sampler.dataset:
-            user_id = sample['user_id']
-            item_ids = sample['sample.ids'] + sample['answer.ids']
+            user_id = sample['user.ids'][0]
+            item_ids = sample['item.ids']
 
             for item_id in item_ids:
                 train_interactions.append((user_id, item_id))
@@ -172,20 +171,9 @@ class GraphDataset(BaseDataset, config_name='graph'):
 
             train_data_size += len(item_ids)
 
-        for sample in validation_sampler.dataset:
-            user_id = sample['user_id']
-            item_ids = sample['sample.ids'] + sample['answer.ids']
-
-            for item_id in item_ids:
-                val_interactions.append((user_id, item_id))
-                val_user_interactions.append(user_id)
-                val_item_interactions.append(item_id)
-
-            val_data_size += len(item_ids)
-
         for sample in test_sampler.dataset:
-            user_id = sample['user_id']
-            item_ids = sample['sample.ids'] + sample['answer.ids']
+            user_id = sample['user.ids'][0]
+            item_ids = sample['item.ids']
 
             for item_id in item_ids:
                 test_interactions.append((user_id, item_id))
@@ -194,16 +182,9 @@ class GraphDataset(BaseDataset, config_name='graph'):
 
             test_data_size += len(item_ids)
 
-        self._num_users += 1
-        self._num_items += 1
-
         self._train_interactions = np.array(train_interactions)
         self._train_user_interactions = np.array(train_user_interactions)
         self._train_item_interactions = np.array(train_item_interactions)
-
-        self._val_interactions = np.array(val_interactions)
-        self._val_user_interactions = np.array(val_user_interactions)
-        self._val_item_interactions = np.array(val_item_interactions)
 
         self._test_interactions = np.array(test_interactions)
         self._test_user_interactions = np.array(test_user_interactions)
@@ -277,10 +258,6 @@ class GraphDataset(BaseDataset, config_name='graph'):
     @property
     def num_items(self):
         return self._dataset.num_items
-
-    @property
-    def max_sequence_length(self):
-        return self._dataset.max_sequence_length
 
     @property
     def graph(self):

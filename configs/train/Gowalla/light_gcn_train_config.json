@@ -1,13 +1,16 @@
 {
-  "experiment_name": "pure_mf_sanity_check",
-  "train_epochs_num": 100,
+  "experiment_name": "light_gcn_gowalla_basic",
+  "train_epochs_num": 1000,
   "dataset": {
-    "type": "interactions",
-    "name": "Gowalla",
-    "path_to_data_dir": "../data",
-    "samplers": {
-      "type": "pos_neg",
-      "negative_sampler_type": "random"
+    "type": "graph",
+    "dataset": {
+      "type": "interactions",
+      "name": "Gowalla",
+      "path_to_data_dir": "../data",
+      "samplers": {
+        "type": "pos_neg",
+        "negative_sampler_type": "random"
+      }
     }
   },
   "dataloader": {
@@ -32,29 +35,22 @@
   },
   "model": {
     "type": "feedforward",
-    "projector": {
-      "type": "basic",
-      "embedding_dim": 256,
-      "fields": [
-        {
-          "type": "user",
-          "prefix": "user"
-        },
-        {
-          "type": "item",
-          "prefix": "positive"
-        },
-        {
-          "type": "item",
-          "prefix": "negative"
-        },
-        {
-          "type": "item",
-          "prefix": "candidates"
-        }
-      ]
-    },
     "encoders": [
+      {
+        "type": "light_gcn",
+        "user_prefix": [
+          "user"
+        ],
+        "item_prefix": [
+          "positive",
+          "negative",
+          "candidates"
+        ],
+        "embedding_dim": 256,
+        "num_layers": 3,
+        "keep_prob": 0.6,
+        "dropout": false
+      },
       {
         "type": "train/test",
         "train": {
@@ -64,16 +60,16 @@
               "type": "einsum",
               "fst_prefix": "user",
               "snd_prefix": "positive",
-              "operation": "bud,bpd->bp",
               "mask_prefix": "positive",
+              "operation": "bsd,bsd->bs",
               "output_prefix": "positive_scores"
             },
             {
               "type": "einsum",
               "fst_prefix": "user",
               "snd_prefix": "negative",
-              "operation": "bud,bnd->bn",
               "mask_prefix": "negative",
+              "operation": "bsd,bsd->bs",
               "output_prefix": "negative_scores"
             },
             {
@@ -92,32 +88,44 @@
               "type": "einsum",
               "fst_prefix": "user",
               "snd_prefix": "candidates",
-              "operation": "bud,bcd->bc",
               "mask_prefix": "candidates",
-              "output_prefix": "scores"
+              "operation": "bsd,bcd->bc",
+              "output_prefix": "logits"
             }
           ]
         }
       }
     ]
   },
-  "loss": {
-    "type": "bpr",
-    "positive_prefix": "positive_scores",
-    "negative_prefix": "negative_scores",
-    "output_prefix": "loss"
-  },
   "optimizer": {
     "type": "basic",
     "optimizer": {
       "type": "adam",
-      "lr": 1e-4,
-      "betas": [
-        0.9,
-        0.98
-      ]
-    },
-    "clip_grad_threshold": 5.0
+      "lr": 0.001
+    }
+  },
+  "loss": {
+    "type": "composite",
+    "losses": [
+      {
+        "type": "bpr",
+        "positive_prefix": "positive_scores",
+        "negative_prefix": "negative_scores",
+        "output_prefix": "bpr_loss",
+        "weight": 1.0
+      },
+      {
+        "type": "regularization_loss",
+        "prefix": [
+          "user_ego",
+          "positive_ego",
+          "negative_ego"
+        ],
+        "output_prefix": "reg_loss",
+        "weight": 5e-5
+      }
+    ],
+    "output_prefix": "loss"
   },
   "callback": {
     "type": "composite",
@@ -128,9 +136,19 @@
         "loss_prefix": "loss"
       },
       {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "bpr_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "reg_loss"
+      },
+      {
         "type": "validation",
-        "on_step": 100,
-        "pred_prefix": "scores",
+        "on_step": 32,
+        "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {
           "ndcg@5": {
