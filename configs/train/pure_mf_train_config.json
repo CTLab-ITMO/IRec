@@ -7,10 +7,7 @@
     "path_to_data_dir": "../data",
     "samplers": {
       "type": "pos_neg",
-      "negative_sampler": {
-        "type": "random",
-        "sample_size": 99
-      }
+      "negative_sampler_type": "random"
     }
   },
   "dataloader": {
