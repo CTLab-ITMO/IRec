@@ -28,8 +28,6 @@ def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt):
                 inputs[key] = inputs[key].to(DEVICE)
 
             inputs = model(inputs)
-
-            print(list(inputs.keys()))
             loss = loss_function(inputs)
 
             optimizer.step(loss)

@@ -149,7 +149,6 @@ class QualityCheckCallbackCheck(BaseCallback, config_name='validation'):
             self._model.eval()
             with torch.no_grad():
                 for batch in self._dataloader:
-                    print('i', end='', flush=True)
 
                     for key, value in batch.items():
                         batch[key] = value.to(DEVICE)
