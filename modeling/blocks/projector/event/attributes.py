@@ -47,8 +47,6 @@ class Categorical(TorchAttributeEncoder, config_name='categorical'):
 
     def forward(self, inputs):
         values = inputs[self._field]
-        print(self._field)
-        print(values)
         if self._clipping_value is not None:
             values = torch.clamp(values, min=0, max=self._clipping_value)
         return self._encoder(values)
