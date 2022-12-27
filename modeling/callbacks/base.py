@@ -148,19 +148,19 @@ class QualityCheckCallbackCheck(BaseCallback, config_name='validation'):
 
             self._model.eval()
             with torch.no_grad():
-                for batch in self._dataloader:
+                for inputs in self._dataloader:
 
-                    for key, value in batch.items():
-                        batch[key] = value.to(DEVICE)
+                    for key, value in inputs.items():
+                        inputs[key] = value.to(DEVICE)
 
-                    batch = self._model(batch)
+                    inputs[self._pred_prefix] = self._model(inputs)
 
-                    for key, values in batch.items():
-                        batch[key] = values.cpu()
+                    for key, values in inputs.items():
+                        inputs[key] = values.cpu()
 
                     for metric_name, metric_function in self._metrics.items():
                         running_params[metric_name] += metric_function(
-                            inputs=batch,
+                            inputs=inputs,
                             pred_prefix=self._pred_prefix,
                             labels_prefix=self._labels_prefix,
                         )

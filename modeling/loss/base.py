@@ -150,3 +150,25 @@ class RegularizationLoss(TorchLoss, config_name='regularization_loss'):
             inputs[self._output_prefix] = loss.cpu().item()
 
         return loss
+
+
+class FpsLoss(TorchLoss, config_name='fps'):
+
+    def __init__(self, logits_prefix, labels_prefix, tau=0.0, output_prefix=None):
+        super().__init__()
+        self._logits_prefix = logits_prefix
+        self._labels_prefix = labels_prefix
+        self._tau = tau
+        self._output_prefix = output_prefix
+
+    def forward(self, inputs):
+        logits = inputs[self._logits_prefix]  # (batch_size, num_candidates)
+        labels = inputs[self._labels_prefix]  # (batch_size)
+
+        # TODO check and simplify
+        loss = -torch.log(torch.exp(logits[:, labels].squeeze()) / torch.sum(torch.exp(logits), dim=1))
+
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss

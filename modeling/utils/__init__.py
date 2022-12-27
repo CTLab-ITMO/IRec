@@ -72,3 +72,22 @@ def get_activation_function(name, **kwargs):
         return torch.nn.LogSoftmax()
     else:
         raise ValueError('Unknown activation function name `{}`'.format(name))
+
+
+def create_masked_tensor(data, lengths):
+    batch_size = lengths.shape[0]
+    max_sequence_length = lengths.max().item()
+
+    padded_embeddings = torch.zeros(
+        batch_size, max_sequence_length, data.shape[-1],
+        dtype=torch.float, device=DEVICE
+    )  # (batch_size, max_seq_len, emb_dim)
+
+    mask = torch.arange(
+        end=max_sequence_length,
+        device=DEVICE
+    )[None].tile([batch_size, 1]) < lengths[:, None]  # (batch_size, max_seq_len)
+
+    padded_embeddings[mask] = data
+
+    return padded_embeddings, mask

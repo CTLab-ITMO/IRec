@@ -27,7 +27,7 @@ def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt):
             for key, values in inputs.items():
                 inputs[key] = inputs[key].to(DEVICE)
 
-            inputs = model(inputs)
+            inputs.update(model(inputs))
             loss = loss_function(inputs)
 
             optimizer.step(loss)
