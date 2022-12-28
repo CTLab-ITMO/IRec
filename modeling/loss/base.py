@@ -1,4 +1,4 @@
-from utils import MetaParent, get_activation_function, maybe_to_list
+from utils import MetaParent, get_activation_function, maybe_to_list, DEVICE
 
 import torch
 import torch.nn as nn
@@ -154,19 +154,29 @@ class RegularizationLoss(TorchLoss, config_name='regularization_loss'):
 
 class FpsLoss(TorchLoss, config_name='fps'):
 
-    def __init__(self, logits_prefix, labels_prefix, tau=0.0, output_prefix=None):
+    def __init__(self, fst_embeddings_prefix, snd_embeddings_prefix, tau=1.0, output_prefix=None):
         super().__init__()
-        self._logits_prefix = logits_prefix
-        self._labels_prefix = labels_prefix
+        self._fst_embeddings_prefix = fst_embeddings_prefix
+        self._snd_embeddings_prefix = snd_embeddings_prefix
         self._tau = tau
         self._output_prefix = output_prefix
 
     def forward(self, inputs):
-        logits = inputs[self._logits_prefix]  # (batch_size, num_candidates)
-        labels = inputs[self._labels_prefix]  # (batch_size)
+        fst_embeddings = inputs[self._fst_embeddings_prefix]  # (x, embedding_dim)
+        snd_embeddings = inputs[self._snd_embeddings_prefix]  # (x, embedding_dim)
 
-        # TODO check and simplify
-        loss = -torch.log(torch.exp(logits[:, labels].squeeze()) / torch.sum(torch.exp(logits), dim=1))
+        fst_embeddings = torch.nn.functional.normalize(fst_embeddings, dim=1)  # (x, embedding_dim)
+        snd_embeddings = torch.nn.functional.normalize(snd_embeddings, dim=1)  # (x, embedding_dim)
+
+        similarity_matrix = torch.matmul(fst_embeddings, snd_embeddings.T)  # (x, x)
+        similarity_matrix = torch.exp(similarity_matrix / self._tau)  # (x, x)
+        mask = torch.eye(similarity_matrix.shape[0], dtype=torch.bool).to(DEVICE)  # (x, x)
+
+        positive_scores = similarity_matrix[mask].squeeze()  # (x)
+        only_negatives = torch.sum(similarity_matrix[~mask].view(similarity_matrix.shape[0], -1), dim=1)  # (x)
+        all_scores = torch.sum(similarity_matrix, dim=1)  # (x)
+
+        loss = torch.sum(-torch.log(positive_scores / (only_negatives + all_scores)))  # (1)
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()

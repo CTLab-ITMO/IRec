@@ -336,6 +336,7 @@ class GraphDataset(BaseDataset, config_name='graph'):
             shape=(self._num_users, self._num_items)
         )
 
+        # (items, users), bipartite graph
         user2item_connections_transpose = csr_matrix(
             (np.ones(len(train_user_interactions)), (train_item_interactions, train_user_interactions)),
             shape=(self._num_items, self._num_users)
@@ -344,15 +345,19 @@ class GraphDataset(BaseDataset, config_name='graph'):
         self._graph = self.get_sparse_graph_layer(user2item_connections, self._num_users, self._num_items)
 
         # TODO fix
-        # if self._use_user_graph:
-        #     # (users, user), bipartite graph
-        #     user2user_connections = user2item_connections.multiply(user2item_connections_transpose)
-        #     self._user_graph = self.get_sparse_graph_layer(user2user_connections, self._num_users, self._num_users)
-        #
-        # if self._use_item_graph:
-        #     # (item, item), bipartite graph
-        #     item2item_connections = user2item_connections_transpose.multiply(user2item_connections)
-        #     self._item_graph = self.get_sparse_graph_layer(item2item_connections, self._num_items, self._num_items)
+        if self._use_user_graph:
+            # (users, user), bipartite graph
+            user2user_connections = user2item_connections.multiply(user2item_connections_transpose)
+            self._user_graph = self.get_sparse_graph_layer(user2user_connections, self._num_users, self._num_users)
+        else:
+            self._user_graph = None
+
+        if self._use_item_graph:
+            # (item, item), bipartite graph
+            item2item_connections = user2item_connections_transpose.multiply(user2item_connections)
+            self._item_graph = self.get_sparse_graph_layer(item2item_connections, self._num_items, self._num_items)
+        else:
+            self._item_graph = None
 
     @classmethod
     def create_from_config(cls, config):
@@ -414,19 +419,15 @@ class GraphDataset(BaseDataset, config_name='graph'):
     def num_items(self):
         return self._dataset.num_items
 
-    @property
-    def graph(self):
-        return self._graph
-
     def get_samplers(self):
         return self._dataset.get_samplers()
 
     @property
     def meta(self):
-        meta = {'graph': self.graph, **self._dataset.meta}
-        if self._use_user_graph:
-            meta['user_graph'] = None
-        if self._use_item_graph:
-            meta['item_graph'] = None
-
+        meta = {
+            'user_graph': self._user_graph,
+            'item_graph': self._item_graph,
+            'graph': self._graph,
+            **self._dataset.meta
+        }
         return meta

@@ -24,7 +24,7 @@ class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_predic
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
             negative_sampler=negative_sampler,
-            num_negatives=config.get('num_negatives', 100)
+            num_negatives=config.get('num_negatives_train', 100)
         )
 
     def __getitem__(self, index):
@@ -80,7 +80,7 @@ class NextItemPredictionEvalSampler(EvalSampler, config_name='next_item_predicti
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
             negative_sampler=negative_sampler,
-            num_negatives=config.get('num_negatives', 100)
+            num_negatives=config.get('num_negatives_val', 100)
         )
 
     def __getitem__(self, index):
