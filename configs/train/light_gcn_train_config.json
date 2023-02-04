@@ -1,11 +1,12 @@
 {
-  "experiment_name": "light_gcn_gowalla_basic",
-  "train_epochs_num": 1000,
+  "experiment_name": "light_gcn_beauty_test",
+  "train_epochs_num": 20,
   "dataset": {
     "type": "graph",
+    "graph_dir_path": "../data/Beauty",
     "dataset": {
       "type": "interactions",
-      "name": "Gowalla",
+      "name": "Beauty",
       "path_to_data_dir": "../data",
       "samplers": {
         "type": "pos_neg",
@@ -16,7 +17,7 @@
   "dataloader": {
     "train": {
       "type": "torch",
-      "batch_size": 2048,
+      "batch_size": 256,
       "batch_processor": {
         "type": "basic"
       },
@@ -25,7 +26,7 @@
     },
     "validation": {
       "type": "torch",
-      "batch_size": 2048,
+      "batch_size": 256,
       "batch_processor": {
         "type": "basic"
       },

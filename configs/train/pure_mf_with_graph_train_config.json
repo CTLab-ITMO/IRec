@@ -1,13 +1,19 @@
 {
-  "experiment_name": "matrix_factorization",
+  "experiment_name": "matrix_factorization_w_user2item_graph_0.00001",
   "train_epochs_num": 10,
   "dataset": {
-    "type": "interactions",
-    "name": "Beauty",
-    "path_to_data_dir": "../data",
-    "samplers": {
-      "type": "pos_neg",
-      "negative_sampler_type": "random"
+    "type": "graph",
+    "use_user_graph": false,
+    "use_item_graph": false,
+    "graph_dir_path": "../data/Beauty",
+    "dataset": {
+      "type": "interactions",
+      "name": "Beauty",
+      "path_to_data_dir": "../data",
+      "samplers": {
+        "type": "pos_neg",
+        "negative_sampler_type": "random"
+      }
     }
   },
   "dataloader": {
@@ -31,19 +37,35 @@
     }
   },
   "model": {
-    "type": "pure_mf",
+    "type": "pure_mf_mclsr",
     "user_prefix": "user",
     "positive_prefix": "positive",
     "negative_prefix": "negative",
     "candidate_prefix": "candidates",
     "embedding_dim": 256,
-    "initializer_range": 0.02
+    "num_graph_layers": 3,
+    "keep_prob": 1.0,
+    "graph_dropout": 0.0,
+    "initializer_range": 0.02,
+    "alpha": 1.0
   },
   "loss": {
-    "type": "bpr",
-    "positive_prefix": "positive_scores",
-    "negative_prefix": "negative_scores",
-    "output_prefix": "loss"
+    "type": "composite",
+    "losses": [
+      {
+        "type": "bpr",
+        "positive_prefix": "positive_scores",
+        "negative_prefix": "negative_scores",
+        "output_prefix": "loss"
+      },
+      {
+        "type": "fps",
+        "fst_embeddings_prefix": "global_interest_embeddings",
+        "snd_embeddings_prefix": "current_interest_embeddings",
+        "output_prefix": "interest_level_contrastive",
+        "weight": 0.00001
+      }
+    ]
   },
   "optimizer": {
     "type": "basic",

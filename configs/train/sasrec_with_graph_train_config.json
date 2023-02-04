@@ -1,13 +1,23 @@
 {
-  "experiment_name": "matrix_factorization",
-  "train_epochs_num": 10,
+  "experiment_name": "sasrec_like_sasrec_beauty_test",
+  "train_epochs_num": 2,
   "dataset": {
-    "type": "interactions",
-    "name": "Beauty",
-    "path_to_data_dir": "../data",
-    "samplers": {
-      "type": "pos_neg",
-      "negative_sampler_type": "random"
+    "type": "graph",
+    "use_user_graph": false,
+    "use_item_graph": false,
+    "graph_dir_path": "../data/Beauty",
+    "dataset": {
+      "type": "sequence",
+      "path_to_data_dir": "../data",
+      "name": "Beauty",
+      "max_sample_len": 200,
+      "max_sequence_length": 200,
+      "samplers": {
+        "num_negatives_train": 100,
+        "num_negatives_eval": 100,
+        "type": "next_item_prediction",
+        "negative_sampler_type": "random"
+      }
     }
   },
   "dataloader": {
@@ -31,19 +41,25 @@
     }
   },
   "model": {
-    "type": "pure_mf",
+    "type": "sasrec_mclsr",
     "user_prefix": "user",
+    "sequence_prefix": "item",
+    "labels_prefix": "labels",
     "positive_prefix": "positive",
     "negative_prefix": "negative",
     "candidate_prefix": "candidates",
     "embedding_dim": 256,
-    "initializer_range": 0.02
-  },
-  "loss": {
-    "type": "bpr",
-    "positive_prefix": "positive_scores",
-    "negative_prefix": "negative_scores",
-    "output_prefix": "loss"
+    "num_encoder_heads": 2,
+    "num_encoder_layers": 2,
+    "dim_feedforward": 1024,
+    "num_graph_layers": 3,
+    "encoder_dropout": 0.0,
+    "activation": "relu",
+    "layer_norm_eps": 1e-5,
+    "keep_prob": 1.0,
+    "graph_dropout": 0.0,
+    "initializer_range": 0.02,
+    "alpha": 1.0
   },
   "optimizer": {
     "type": "basic",
@@ -51,6 +67,22 @@
       "type": "adam",
       "lr": 0.001
     }
+  },
+  "loss": {
+    "type": "composite",
+    "losses": [
+      {
+        "type": "bce",
+        "predictions_prefix": "positive_scores",
+        "labels_prefix": "positive_labels.ids"
+      },
+      {
+        "type": "bce",
+        "predictions_prefix": "negative_scores",
+        "labels_prefix": "negative_labels.ids"
+      }
+    ],
+    "output_prefix": "loss"
   },
   "callback": {
     "type": "composite",
@@ -63,7 +95,7 @@
       {
         "type": "validation",
         "on_step": 32,
-        "pred_prefix": "scores",
+        "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {
           "ndcg@5": {

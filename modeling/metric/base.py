@@ -43,23 +43,22 @@ class NDCGMetric(BaseMetric, config_name='ndcg'):
 
     def __call__(self, inputs, pred_prefix, labels_prefix):
         predictions = inputs[pred_prefix]  # (batch_size, num_candidates)
+        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (all_batch_items)
+        labels = torch.reshape(labels, predictions.shape)  # (batch_size, num_candidates)
         predictions = (-predictions).argsort(dim=-1)  # (batch_size, num_candidates)
         predictions = predictions[..., :self._k]  # (batch_size, k)
-        predictions = torch.reshape(predictions, (predictions.shape[0], self._k))
-
-        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (all_batch_items)
-        labels = torch.reshape(labels, (predictions.shape[0], -1))  # (batch_size, num_candidates)
-        answer_count = labels.sum(dim=-1)  # (batch_size)
-
         hits = labels.gather(dim=-1, index=predictions)  # (batch_size, k)
 
-        position = torch.arange(2, 2 + self._k)  # (k)
-        weights = 1 / torch.log2(position.float())  # (k)
-        dcg = (hits * weights.to(hits.device)).sum(dim=1)  # (batch_size)
-        idcg = torch.Tensor([weights[:min(int(n), self._k)].sum() for n in answer_count]).to(dcg.device)  # (batch_size)
-        ndcg = (dcg / idcg).mean()  # (1)
+        answer_count = labels.sum(dim=-1)  # (batch_size)
+        discount_factor = 1 / torch.log2(torch.arange(1, self._k + 1, 1).float() + 1.).to(hits.device)  # (k)
 
-        return ndcg.cpu().item()
+        dcg = torch.einsum('bk,k->b', hits, discount_factor)  # (batch_size)
+        idcg = torch.Tensor([
+            discount_factor[:min(int(n), self._k)].sum() for n in answer_count
+        ]).to(dcg.device)  # (batch_size)
+        ndcg = (dcg / idcg)  # (batch_size)
+
+        return ndcg.mean().cpu().item()
 
 
 class RecallMetric(BaseMetric, config_name='recall'):
@@ -69,20 +68,17 @@ class RecallMetric(BaseMetric, config_name='recall'):
 
     def __call__(self, inputs, pred_prefix, labels_prefix):
         predictions = inputs[pred_prefix]  # (batch_size, num_candidates)
+        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (all_batch_items)
+        labels = torch.reshape(labels, predictions.shape)  # (batch_size, num_candidates)
         predictions = (-predictions).argsort(dim=-1)  # (batch_size, num_candidates)
         predictions = predictions[..., :self._k]  # (batch_size, k)
-        predictions = torch.reshape(predictions, (predictions.shape[0], self._k))
-
-        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (all_batch_items)
-        labels = torch.reshape(labels, (predictions.shape[0], -1))  # (batch_size, num_candidates)
         hits = labels.gather(dim=-1, index=predictions)  # (batch_size, k)
 
         recall = (
-                hits.sum(dim=-1) /
-                torch.min(torch.Tensor([self._k]).to(labels.device), labels.sum(dim=-1).float())
-        ).mean()  # (1)
+                hits.sum(dim=-1) / torch.minimum(labels.sum(dim=-1).float(), labels.new_ones(predictions.shape[0]).float() * self._k)
+        )  # (batch_sie)
 
-        return recall.cpu().item()
+        return recall.mean().cpu().item()
 
 
 class MRRMetric(BaseMetric, config_name='mrr'):

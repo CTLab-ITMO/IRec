@@ -1,3 +1,7 @@
+from collections import defaultdict
+
+from tqdm import tqdm
+
 from dataset.samplers import TrainSampler, EvalSampler
 
 from utils import MetaParent, DEVICE
@@ -48,10 +52,10 @@ class InteractionsDataset(BaseDataset, config_name='interactions'):
         data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
         max_user_idx, max_item_idx = 0, 0
 
-        train_dataset, train_num_interactions, train_max_user_idx, train_max_item_idx = cls._create_dataset(data_dir_path, 'train')
+        train_dataset, train_num_interactions, train_max_user_idx, train_max_item_idx = cls._create_dataset(data_dir_path, 'train_new')
         max_user_idx, max_item_idx = max(max_user_idx, train_max_user_idx), max(max_item_idx, train_max_item_idx)
 
-        test_dataset, test_num_interactions, test_max_user_idx, test_max_item_idx = cls._create_dataset(data_dir_path, 'test')
+        test_dataset, test_num_interactions, test_max_user_idx, test_max_item_idx = cls._create_dataset(data_dir_path, 'test_new')
         max_user_idx, max_item_idx = max(max_user_idx, test_max_user_idx), max(max_item_idx, test_max_item_idx)
 
         # Add zero user/item
@@ -145,7 +149,11 @@ class InteractionsDataset(BaseDataset, config_name='interactions'):
 
     @property
     def meta(self):
-        return {'num_users': self.num_users, 'num_items': self.num_items}
+        return {
+            'num_users': self.num_users,
+            'num_items': self.num_items,
+            'max_sequence_length': 1  # TODO ????
+        }
 
 
 class SequenceDataset(BaseDataset, config_name='sequence'):
@@ -165,18 +173,18 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
         self._max_sequence_length = max_sequence_length
 
     @classmethod
-    def create_from_config(cls, config, **kwargs):  # TODO implement amazon attributes in more general way
+    def create_from_config(cls, config, **kwargs):
         data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
         max_user_idx, max_item_idx, max_sequence_length = 0, 0, 0
 
         train_dataset, train_max_user_idx, train_max_item_idx, train_max_sequence_length = cls._create_dataset(
-            data_dir_path, 'train', config['max_sequence_length']
+            data_dir_path, 'train_new', config['max_sequence_length']
         )
         max_user_idx, max_item_idx = max(max_user_idx, train_max_user_idx), max(max_item_idx, train_max_item_idx)
         max_sequence_length = max(max_sequence_length, train_max_sequence_length)
 
         test_dataset, test_max_user_idx, test_max_item_idx, test_max_sequence_length = cls._create_dataset(
-            data_dir_path, 'test', config['max_sequence_length']
+            data_dir_path, 'validation_new', config['max_sequence_length']
         )
         max_user_idx, max_item_idx = max(max_user_idx, test_max_user_idx), max(max_item_idx, test_max_item_idx)
         max_sequence_length = max(max_sequence_length, test_max_sequence_length)
@@ -208,8 +216,8 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
             max_sequence_length=max_sequence_length
         )
 
-    @staticmethod
-    def _create_dataset(dir_path, part, max_sequence_length=None):
+    @classmethod
+    def _create_dataset(cls, dir_path, part, max_sequence_length=None):
         max_user_idx = 0
         max_item_idx = 0
         max_sequence_len = 0
@@ -218,7 +226,7 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
         with open(dataset_path, 'r') as f:
             data = f.readlines()
 
-        sequence_info = SequenceDataset._create_sequences(data, max_sequence_length)
+        sequence_info = cls._create_sequences(data, max_sequence_length)
         user_sequences, item_sequences, _, _, _ = sequence_info
         max_user_idx = max(max_user_idx, sequence_info[2])
         max_item_idx = max(max_item_idx, sequence_info[3])
@@ -226,11 +234,10 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
 
         dataset = []
         for user_idx, item_ids in zip(user_sequences, item_sequences):
-            if len(item_ids) > 5:  # TODO fix
-                dataset.append({
-                    'user.ids': [user_idx], 'user.length': 1,
-                    'item.ids': item_ids, 'item.length': len(item_ids)
-                })
+            dataset.append({
+                'user.ids': [user_idx], 'user.length': 1,
+                'item.ids': item_ids, 'item.length': len(item_ids)
+            })
 
         logger.info('{} dataset size: {}'.format(part, len(dataset)))
         logger.info('{} dataset max sequence length: {}'.format(part, max_sequence_len))
@@ -286,8 +293,9 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
 
 class GraphDataset(BaseDataset, config_name='graph'):
 
-    def __init__(self, dataset, use_user_graph=False, use_item_graph=False):
+    def __init__(self, dataset, graph_dir_path, use_user_graph=False, use_item_graph=False):
         self._dataset = dataset
+        self._graph_dir_path = graph_dir_path
         self._use_user_graph = use_user_graph
         self._use_item_graph = use_item_graph
 
@@ -300,6 +308,9 @@ class GraphDataset(BaseDataset, config_name='graph'):
         test_interactions, test_user_interactions, test_item_interactions = [], [], []
         train_data_size, test_data_size = 0, 0
 
+        train_user_2_items = defaultdict(set)
+        train_item_2_users = defaultdict(set)
+
         for sample in train_sampler.dataset:
             user_id = sample['user.ids'][0]
             item_ids = sample['item.ids']
@@ -308,6 +319,9 @@ class GraphDataset(BaseDataset, config_name='graph'):
                 train_interactions.append((user_id, item_id))
                 train_user_interactions.append(user_id)
                 train_item_interactions.append(item_id)
+
+                train_user_2_items[user_id].add(item_id)
+                train_item_2_users[item_id].add(user_id)
 
             train_data_size += len(item_ids)
 
@@ -330,32 +344,74 @@ class GraphDataset(BaseDataset, config_name='graph'):
         self._test_user_interactions = np.array(test_user_interactions)
         self._test_item_interactions = np.array(test_item_interactions)
 
-        # (users, items), bipartite graph
-        user2item_connections = csr_matrix(
-            (np.ones(len(train_user_interactions)), (train_user_interactions, train_item_interactions)),
-            shape=(self._num_users, self._num_items)
-        )
+        path_to_graph = os.path.join(graph_dir_path, 'general_graph.npz')
+        if os.path.exists(path_to_graph):
+            self._graph = sp.load_npz(path_to_graph)
+        else:
+            # (users, items), bipartite graph
+            user2item_connections = csr_matrix(
+                (np.ones(len(train_user_interactions)), (train_user_interactions, train_item_interactions)),
+                shape=(self._num_users, self._num_items)
+            )
+            self._graph = self.get_sparse_graph_layer(user2item_connections, self._num_users, self._num_items,
+                                                      biparite=True)
+            sp.save_npz(path_to_graph, self._graph)
 
-        # (items, users), bipartite graph
-        user2item_connections_transpose = csr_matrix(
-            (np.ones(len(train_user_interactions)), (train_item_interactions, train_user_interactions)),
-            shape=(self._num_items, self._num_users)
-        )
-
-        self._graph = self.get_sparse_graph_layer(user2item_connections, self._num_users, self._num_items)
+        self._graph = self._convert_sp_mat_to_sp_tensor(self._graph).coalesce().to(DEVICE)
 
         # TODO fix
         if self._use_user_graph:
-            # (users, user), bipartite graph
-            user2user_connections = user2item_connections.multiply(user2item_connections_transpose)
-            self._user_graph = self.get_sparse_graph_layer(user2user_connections, self._num_users, self._num_users)
+            path_to_user_graph = os.path.join(graph_dir_path, 'user_graph.npz')
+            if os.path.exists(path_to_user_graph):
+                self._user_graph = sp.load_npz(path_to_user_graph)
+            else:
+                user2user_interactions_fst = []
+                user2user_interactions_snd = []
+
+                for user_id, item_id in tqdm(zip(self._train_user_interactions, self._train_item_interactions)):
+                    for connected_user_id in train_item_2_users[item_id]:
+                        if user_id != connected_user_id:
+                            user2user_interactions_fst.append(user_id)
+                            user2user_interactions_snd.append(connected_user_id)
+
+                # (users, user) graph
+                user2user_connections = csr_matrix(
+                    (
+                    np.ones(len(user2user_interactions_fst)), (user2user_interactions_fst, user2user_interactions_snd)),
+                    shape=(self._num_users, self._num_users)
+                )
+
+                self._user_graph = self.get_sparse_graph_layer(user2user_connections, self._num_users, self._num_users)
+                sp.save_npz(path_to_user_graph, self._user_graph)
+
+            self._user_graph = self._convert_sp_mat_to_sp_tensor(self._user_graph).coalesce().to(DEVICE)
         else:
             self._user_graph = None
 
         if self._use_item_graph:
-            # (item, item), bipartite graph
-            item2item_connections = user2item_connections_transpose.multiply(user2item_connections)
-            self._item_graph = self.get_sparse_graph_layer(item2item_connections, self._num_items, self._num_items)
+            path_to_item_graph = os.path.join(graph_dir_path, 'item_graph.npz')
+            if os.path.exists(path_to_item_graph):
+                self._item_graph = sp.load_npz(path_to_item_graph)
+            else:
+                item2item_interactions_fst = []
+                item2item_interactions_snd = []
+
+                for user_id, item_id in tqdm(zip(self._train_user_interactions, self._train_item_interactions)):
+                    for connected_item_id in train_user_2_items[user_id]:
+                        if item_id != connected_item_id:
+                            item2item_interactions_fst.append(item_id)
+                            item2item_interactions_snd.append(connected_item_id)
+
+                # (item, item) graph
+                item2item_connections = csr_matrix(
+                    (
+                    np.ones(len(item2item_interactions_fst)), (item2item_interactions_fst, item2item_interactions_snd)),
+                    shape=(self._num_items, self._num_items)
+                )
+                self._item_graph = self.get_sparse_graph_layer(item2item_connections, self._num_items, self._num_items)
+                sp.save_npz(path_to_item_graph, self._item_graph)
+
+            self._item_graph = self._convert_sp_mat_to_sp_tensor(self._item_graph).coalesce().to(DEVICE)
         else:
             self._item_graph = None
 
@@ -364,23 +420,26 @@ class GraphDataset(BaseDataset, config_name='graph'):
         dataset = BaseDataset.create_from_config(config['dataset'])
         return cls(
             dataset=dataset,
+            graph_dir_path=config['graph_dir_path'],
             use_user_graph=config.get('use_user_graph', False),
             use_item_graph=config.get('use_item_graph', False)
         )
 
     @staticmethod
-    def get_sparse_graph_layer(sparse_matrix, fst_dim, snd_dim):
+    def get_sparse_graph_layer(sparse_matrix, fst_dim, snd_dim, biparite=False):
+        mat_dim_size = fst_dim + snd_dim if biparite else fst_dim
+
         adj_mat = sp.dok_matrix(
-            (fst_dim + snd_dim, fst_dim + snd_dim),
+            (mat_dim_size, mat_dim_size),
             dtype=np.float32
         )
-
         adj_mat = adj_mat.tolil()
 
-        R = sparse_matrix.tolil()  # list of lists (num_users, num_items)
+        R = sparse_matrix.tolil()  # list of lists (fst_dim, snd_dim)
 
-        adj_mat[:fst_dim, fst_dim:] = R  # (num_users, num_items)
-        adj_mat[fst_dim:, :fst_dim] = R.T  # (num_items, num_users)
+        if biparite:
+            adj_mat[:fst_dim, fst_dim:] = R  # (num_users, num_items)
+            adj_mat[fst_dim:, :fst_dim] = R.T  # (num_items, num_users)
 
         adj_mat = adj_mat.todok()
         adj_mat = adj_mat + sp.eye(adj_mat.shape[0])  # TODO ????
@@ -398,9 +457,7 @@ class GraphDataset(BaseDataset, config_name='graph'):
 
         norm_adj = norm_adj.tocsr()
 
-        graph = GraphDataset._convert_sp_mat_to_sp_tensor(norm_adj).coalesce().to(DEVICE)
-
-        return graph
+        return norm_adj
 
     @staticmethod
     def _convert_sp_mat_to_sp_tensor(X):
@@ -431,3 +488,102 @@ class GraphDataset(BaseDataset, config_name='graph'):
             **self._dataset.meta
         }
         return meta
+
+
+class ScientificDataset(BaseDataset, config_name='scientific'):
+
+    def __init__(
+            self,
+            train_sampler,
+            test_sampler,
+            num_users,
+            num_items,
+            max_sequence_length
+    ):
+        self._train_sampler = train_sampler
+        self._test_sampler = test_sampler
+        self._num_users = num_users
+        self._num_items = num_items
+        self._max_sequence_length = max_sequence_length
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
+        max_user_idx, max_item_idx, max_sequence_length = 0, 0, 0
+        train_dataset, test_dataset = [], []
+
+        dataset_path = os.path.join(data_dir_path, '{}.txt'.format('all_data'))
+        with open(dataset_path, 'r') as f:
+            data = f.readlines()
+
+        for sample in data:
+            sample = sample.strip('\n').split(' ')
+            item_ids = [int(item_id) for item_id in sample[1:]][-max_sequence_length:]
+            user_idx = int(sample[0])
+
+            max_user_idx = max(max_user_idx, user_idx)
+            max_item_idx = max(max_item_idx, max(item_ids))
+            max_sequence_length = max(max_sequence_length, len(item_ids))
+
+            train_dataset.append({
+                'user.ids': [user_idx], 'user.length': 1,
+                'item.ids': item_ids[:-1], 'item.length': len(item_ids[:-1])
+            })
+
+            test_dataset.append({
+                'user.ids': [user_idx], 'user.length': 1,
+                'item.ids': item_ids, 'item.length': len(item_ids)
+            })
+
+        logger.info('Train dataset size: {}'.format(len(train_dataset)))
+        logger.info('Test dataset size: {}'.format(len(test_dataset)))
+        logger.info('Max user idx: {}'.format(max_user_idx))
+        logger.info('Max item idx: {}'.format(max_item_idx))
+        logger.info('Max sequence length: {}'.format(max_sequence_length))
+        logger.info('{} dataset sparsity: {}'.format(
+            config['name'], (len(train_dataset) + len(test_dataset)) / max_user_idx / max_item_idx
+        ))
+
+        train_sampler = TrainSampler.create_from_config(
+            config['samplers'],
+            dataset=train_dataset,
+            num_users=max_user_idx,
+            num_items=max_item_idx
+        )
+        test_sampler = EvalSampler.create_from_config(
+            config['samplers'],
+            dataset=test_dataset,
+            num_users=max_user_idx,
+            num_items=max_item_idx
+        )  # TODO sanity check
+
+        return cls(
+            train_sampler=train_sampler,
+            test_sampler=test_sampler,
+            num_users=max_user_idx,
+            num_items=max_item_idx,
+            max_sequence_length=max_sequence_length
+        )
+
+    def get_samplers(self):
+        return self._train_sampler, self._test_sampler
+
+    @property
+    def num_users(self):
+        return self._num_users
+
+    @property
+    def num_items(self):
+        return self._num_items
+
+    @property
+    def max_sequence_length(self):
+        return self._max_sequence_length
+
+    @property
+    def meta(self):
+        return {
+            'num_users': self.num_users,
+            'num_items': self.num_items,
+            'max_sequence_length': self.max_sequence_length
+        }

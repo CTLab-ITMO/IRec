@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 
 
-class LightGCN(TorchEncoder, config_name='light_gcn'):
+class LightGCN(TorchEncoder, config_name='light_gcn___'):
 
     def __init__(
             self,

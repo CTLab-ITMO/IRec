@@ -1,10 +1,10 @@
 {
-  "experiment_name": "bert4rec_gowalla_sanity_check",
-  "train_epochs_num": 3,
+  "experiment_name": "bert4rec_beauty",
+  "train_epochs_num": 20,
   "dataset": {
     "type": "sequence",
     "path_to_data_dir": "../data",
-    "name": "Gowalla",
+    "name": "Beauty",
     "max_sequence_length": 200,
     "samplers": {
       "type": "masked_item_prediction",
@@ -15,7 +15,7 @@
   "dataloader": {
     "train": {
       "type": "torch",
-      "batch_size": 10,
+      "batch_size": 64,
       "batch_processor": {
         "type": "basic"
       },
@@ -24,7 +24,7 @@
     },
     "validation": {
       "type": "torch",
-      "batch_size": 10,
+      "batch_size": 64,
       "batch_processor": {
         "type": "basic"
       },
@@ -42,21 +42,29 @@
     "num_layers": 2,
     "dim_feedforward": 1024,
     "dropout": 0.0,
+    "activation": "relu",
+    "layer_norm_eps": 1e-5,
     "initializer_range": 0.02
   },
   "optimizer": {
     "type": "basic",
     "optimizer": {
       "type": "adamw",
-      "lr": 1e-4,
+      "lr": 3e-4,
       "eps": 1e-8
     },
     "clip_grad_threshold": 5.0
   },
   "loss": {
-    "type": "ce",
-    "predictions_prefix": "logits",
-    "labels_prefix": "labels",
+    "type": "composite",
+    "losses": [
+      {
+        "type": "ce",
+        "predictions_prefix": "logits",
+        "labels_prefix": "labels",
+        "output_prefix": "loss"
+      }
+    ],
     "output_prefix": "loss"
   },
   "callback": {
@@ -69,7 +77,7 @@
       },
       {
         "type": "validation",
-        "on_step": 32,
+        "on_step": 128,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {
@@ -102,4 +110,3 @@
     ]
   }
 }
-

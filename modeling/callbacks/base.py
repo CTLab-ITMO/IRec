@@ -1,7 +1,7 @@
 from metric import BaseMetric
 
+import utils
 from utils import MetaParent, create_logger, maybe_to_list
-from utils import GLOBAL_TENSORBOARD_WRITER, DEVICE
 
 import os
 import torch
@@ -56,17 +56,18 @@ class MetricCallback(BaseCallback, config_name='metric'):
                     ground_truth=inputs[self._model.schema['ground_truth_prefix']],
                     predictions=inputs[self._model.schema['predictions_prefix']]
                 )
-                GLOBAL_TENSORBOARD_WRITER.add_scalar(
+
+                utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
                     'train/{}'.format(metric_name),
                     metric_value,
                     step_num
                 )
-
-            GLOBAL_TENSORBOARD_WRITER.add_scalar(
+            utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
                 'train/{}'.format(self._loss_prefix),
                 inputs[self._loss_prefix],
                 step_num
             )
+            utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.flush()
 
 
 class CheckpointCallback(BaseCallback, config_name='checkpoint'):
@@ -148,32 +149,34 @@ class QualityCheckCallbackCheck(BaseCallback, config_name='validation'):
 
             self._model.eval()
             with torch.no_grad():
-                for inputs in self._dataloader:
+                for batch in self._dataloader:
 
-                    for key, value in inputs.items():
-                        inputs[key] = value.to(DEVICE)
+                    for key, value in batch.items():
+                        batch[key] = value.to(utils.DEVICE)
 
-                    inputs[self._pred_prefix] = self._model(inputs)
+                    batch[self._pred_prefix] = self._model(batch)
 
-                    for key, values in inputs.items():
-                        inputs[key] = values.cpu()
+                    for key, values in batch.items():
+                        batch[key] = values.cpu()
 
                     for metric_name, metric_function in self._metrics.items():
                         running_params[metric_name] += metric_function(
-                            inputs=inputs,
+                            inputs=batch,
                             pred_prefix=self._pred_prefix,
                             labels_prefix=self._labels_prefix,
                         )
 
                     if self._loss_prefix is not None:
-                        running_params[self._loss_prefix] += inputs[self._loss_prefix].item()
+                        running_params[self._loss_prefix] += batch[self._loss_prefix].item()
 
             for label, value in running_params.items():
-                GLOBAL_TENSORBOARD_WRITER.add_scalar(
+                inputs[label] = value / len(self._dataloader)
+                utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
                     'validation/{}'.format(label),
                     value / len(self._dataloader),
                     step_num
                 )
+            utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.flush()
 
             logger.debug('Validation on step {} is done!'.format(step_num))
 
