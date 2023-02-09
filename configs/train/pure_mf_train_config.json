@@ -1,12 +1,15 @@
 {
-  "experiment_name": "matrix_factorization",
+  "experiment_name": "matrix_factorization_beauty_test",
   "train_epochs_num": 10,
   "dataset": {
-    "type": "interactions",
+    "type": "sequence",
     "name": "Beauty",
     "path_to_data_dir": "../data",
+    "max_sequence_length": 200,
     "samplers": {
-      "type": "pos_neg",
+      "num_negatives_train": 100,
+      "num_negatives_eval": 100,
+      "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
   },

@@ -2,7 +2,6 @@ from dataset.samplers.base import TrainSampler, EvalSampler
 from dataset.negative_samplers.base import BaseNegativeSampler
 
 import copy
-import numpy as np
 
 
 class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_prediction'):
@@ -32,13 +31,9 @@ class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_predic
 
         item_sequence = sample['item.ids'][:-1]
         next_item_sequence = sample['item.ids'][1:]
+        negative_sequence = self._negative_sampler.generate_negative_samples(sample, len(next_item_sequence))
 
-        negative_sequence = []
-        for idx in range(len(item_sequence)):
-            negatives = self._negative_sampler.generate_negative_samples(sample, self._num_negatives)
-            negative_sequence.append(np.random.choice(negatives))
-
-        assert len(item_sequence) == len(next_item_sequence) == len(negative_sequence)
+        assert len(next_item_sequence) == len(negative_sequence)
 
         return {
             'user.ids': sample['user.ids'],

@@ -1,4 +1,5 @@
 from utils.registry import MetaParent
+from utils.grid_search import Params
 import utils.tensorboards
 
 import json
@@ -67,6 +68,22 @@ def get_activation_function(name, **kwargs):
         return torch.nn.LogSoftmax()
     else:
         raise ValueError('Unknown activation function name `{}`'.format(name))
+
+
+def dict_to_str(x, params):
+    parts = []
+    for k, v in x.items():
+        if k in params:
+            if isinstance(v, dict):
+                part = '_'.join([f'{k}-{sub_part}' for sub_part in dict_to_str(v, params[k]).split('_')])
+            elif isinstance(v, list):
+                continue
+            else:
+                part = f'{k}-{v}'
+            parts.append(part)
+        else:
+            continue
+    return '_'.join(parts).replace('.', '-')
 
 
 def create_masked_tensor(data, lengths):

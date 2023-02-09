@@ -197,15 +197,11 @@ class SasRecModel(TorchModel, config_name='sasrec'):
             all_negative_sample_events = inputs['{}.ids'.format(self._negative_prefix)]  # (all_batch_events)
 
             all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
-            all_positive_sample_embeddings = self._item_embeddings(
-                all_positive_sample_events)  # (all_batch_events, embedding_dim)
-            all_negative_sample_embeddings = self._item_embeddings(
-                all_negative_sample_events)  # (all_batch_events, embedding_dim)
+            all_positive_sample_embeddings = self._item_embeddings(all_positive_sample_events)  # (all_batch_events, embedding_dim)
+            all_negative_sample_embeddings = self._item_embeddings(all_negative_sample_events)  # (all_batch_events, embedding_dim)
 
-            positive_scores = torch.einsum('bd,bd->b', all_sample_embeddings,
-                                           all_positive_sample_embeddings)  # (all_batch_events)
-            negative_scores = torch.einsum('bd,bd->b', all_sample_embeddings,
-                                           all_negative_sample_embeddings)  # (all_batch_events)
+            positive_scores = torch.einsum('bd,bd->b', all_sample_embeddings, all_positive_sample_embeddings)  # (all_batch_events)
+            negative_scores = torch.einsum('bd,bd->b', all_sample_embeddings, all_negative_sample_embeddings)  # (all_batch_events)
 
             return {'positive_scores': positive_scores, 'negative_scores': negative_scores}
         else:  # eval mode
@@ -498,44 +494,7 @@ class SasRecMCLSRModel(TorchModel, config_name='sasrec_mclsr'):
         return padded_embeddings, padded_ego_embeddings, mask
 
     def forward(self, inputs):
-        # light gcn
-        # all_final_user_embeddings, all_final_item_embeddings = self.computer()  # (user_num, emb_dim), (items_num, emb_dim)
-        #
-        # user_embeddings, user_ego_embeddings, user_mask = self._get_embeddings(
-        #     inputs, self._user_prefix, self._user_embeddings, all_final_user_embeddings
-        # )
-        # user_embeddings = user_embeddings[user_mask]  # (batch_size, embedding_dim)
-        #
-        # if self.training:  # training mode
-        #     positive_embeddings, _, positive_mask = self._get_embeddings(
-        #         inputs, self._positive_prefix, self._item_embeddings, all_final_item_embeddings
-        #     )
-        #     positive_embeddings = positive_embeddings[positive_mask]  # (batch_size, embedding_dim)
-        #
-        #     negative_embeddings, _, negative_mask = self._get_embeddings(
-        #         inputs, self._negative_prefix, self._item_embeddings, all_final_item_embeddings
-        #     )
-        #     negative_embeddings = negative_embeddings[negative_mask]  # (batch_size, embedding_dim)
-        #
-        #     positive_scores = torch.einsum('bd,bd->b', user_embeddings, positive_embeddings)  # (batch_size)
-        #     negative_scores = torch.einsum('bd,bd->b', user_embeddings, negative_embeddings)  # (batch_size)
-        #
-        #     return {'positive_scores': positive_scores, 'negative_scores': negative_scores}
-        #
-        # else:  # eval mode
-        #     candidates_embeddings, _, _ = self._get_embeddings(
-        #         inputs, self._candidate_prefix, self._item_embeddings, all_final_item_embeddings
-        #     )
-        #
-        #     candidates_scores = torch.einsum(
-        #         'bd,bcd->bc',
-        #         user_embeddings,
-        #         candidates_embeddings
-        #     )  # (batch_size, num_candidates)
-        #
-        #     return candidates_scores
-
-        # sasrec
+        # sasrec_new
         all_sample_events = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
         all_sample_lengths = inputs['{}.length'.format(self._sequence_prefix)]  # (batch_size)
 
@@ -554,22 +513,89 @@ class SasRecMCLSRModel(TorchModel, config_name='sasrec_mclsr'):
             src_key_padding_mask=~mask
         )  # (batch_size, seq_len, embedding_dim)
 
+        # Current interest learning part TODO try other options
+        sequence_logits = torch.einsum(
+            'n,bsn->bs',
+            self._weights_2,
+            torch.tanh(torch.einsum('nd,bsd->bsn', self._weights_1, embeddings))
+        )  # (batch_size, max_seq_len)
+
+        # TODO ask
+        sequence_logits[~mask] = -SasRecMCLSRModel.INF
+        attention_probits = torch.softmax(sequence_logits, dim=1)  # (batch_size, max_seq_len)
+
+        current_interest_embedding = torch.einsum(
+            'bs,bsd->bd', attention_probits, embeddings
+        )  # (batch_size, embedding_dim)
+
         if self.training:  # training mode
+            training_output = {'current_interest_embeddings': current_interest_embedding}
+
             all_positive_sample_events = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
             all_negative_sample_events = inputs['{}.ids'.format(self._negative_prefix)]  # (all_batch_events)
 
             all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
-            all_positive_sample_embeddings = self._item_embeddings(
-                all_positive_sample_events)  # (all_batch_events, embedding_dim)
-            all_negative_sample_embeddings = self._item_embeddings(
-                all_negative_sample_events)  # (all_batch_events, embedding_dim)
+            all_positive_sample_embeddings = self._item_embeddings(all_positive_sample_events)  # (all_batch_events, embedding_dim)
+            all_negative_sample_embeddings = self._item_embeddings(all_negative_sample_events)  # (all_batch_events, embedding_dim)
 
-            positive_scores = torch.einsum('bd,bd->b', all_sample_embeddings,
-                                           all_positive_sample_embeddings)  # (all_batch_events)
-            negative_scores = torch.einsum('bd,bd->b', all_sample_embeddings,
-                                           all_negative_sample_embeddings)  # (all_batch_events)
+            positive_scores = torch.einsum('bd,bd->b', all_sample_embeddings, all_positive_sample_embeddings)  # (all_batch_events)
+            negative_scores = torch.einsum('bd,bd->b', all_sample_embeddings, all_negative_sample_embeddings)  # (all_batch_events)
 
-            return {'positive_scores': positive_scores, 'negative_scores': negative_scores}
+            training_output['encoder_positive_scores'] = positive_scores  # (all_batch_events)
+            training_output['encoder_negative_scores'] = negative_scores  # (all_batch_events)
+
+            # General interest learning part
+            user_ids = inputs['{}.ids'.format(self._user_prefix)]  # (batch_size)
+            all_user_final_embeddings, all_item_final_embeddings = self.computer()
+            user_embeddings = all_user_final_embeddings[user_ids]  # (batch_size, embedding_dim)
+            item_embeddings = all_item_final_embeddings[all_sample_events]  # (all_batch_events, embedding_dim)
+
+            positive_embeddings, _, positive_mask = self._get_embeddings(
+                inputs, self._positive_prefix, self._item_embeddings, all_item_final_embeddings
+            )
+
+            negative_embeddings, _, negative_mask = self._get_embeddings(
+                inputs, self._negative_prefix, self._item_embeddings, all_item_final_embeddings
+            )
+
+            positive_scores = torch.einsum('bd,bsd->bs', user_embeddings, positive_embeddings)  # (batch_size, seq_len)
+            negative_scores = torch.einsum('bd,bsd->bs', user_embeddings, negative_embeddings)  # (batch_size, seq_len)
+
+            training_output['graph_positive_scores'] = positive_scores[positive_mask]  # (all_batch_events)
+            training_output['graph_negative_scores'] = negative_scores[negative_mask]  # (all_batch_events)
+
+            all_item_final_embeddings, _ = create_masked_tensor(
+                data=item_embeddings, lengths=all_sample_lengths
+            )  # (batch_size, max_seq_len, embedding_dim)
+
+            # TODO try linear layer
+            graph_logits = torch.einsum(
+                'bd,bsd->bs',
+                torch.tanh(torch.einsum('bd,da->ba', user_embeddings, self._weights_3)),
+                all_item_final_embeddings
+            )  # (batch_size, max_seq_len)
+
+            graph_logits[~mask] = -SasRecMCLSRModel.INF
+            attention_graph_probits = torch.softmax(graph_logits, dim=1)  # (batch_size, max_seq_len)
+
+            global_interest_embedding = torch.einsum(
+                'bs,bsd->bd', attention_graph_probits, all_item_final_embeddings
+            )  # (batch_size, embedding_dim)
+            training_output['global_interest_embeddings'] = global_interest_embedding
+
+            # Training part
+            # combined_embedding = self._alpha * current_interest_embedding + (1 - self._alpha) * global_interest_embedding
+            # training_output['combined_embedding'] = combined_embedding  # (batch_size, embedding_dim)
+
+            # # (in-batch setting) TODO make random
+            # positive_events = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_candidates)
+            # positive_lengths = inputs['{}.length'.format(self._positive_prefix)]  # (batch_size)
+            # next_events = positive_events[torch.cumsum(positive_lengths, dim=0).long() - 1]  # (batch_size)
+            # next_embeddings = self._item_embeddings(next_events)  # (batch_size, embedding_dim)
+            # training_output['next_item_embedding'] = next_embeddings  # (batch_size, embedding_dim)
+
+            return training_output
+
         else:  # eval mode
             candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
             candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
@@ -593,8 +619,7 @@ class SasRecMCLSRModel(TorchModel, config_name='sasrec_mclsr'):
 
             last_embeddings = last_embeddings[last_masks]  # (batch_size, emb_dim)
 
-            candidate_scores = torch.einsum('bd,bnd->bn', last_embeddings,
-                                            candidate_embeddings)  # (batch_size, num_candidates)
+            candidate_scores = torch.einsum('bd,bnd->bn', last_embeddings, candidate_embeddings)  # (batch_size, num_candidates)
 
             return candidate_scores
         # sasrec+
@@ -651,15 +676,15 @@ class SasRecMCLSRModel(TorchModel, config_name='sasrec_mclsr'):
 
             # General interest learning part
             user_ids = inputs['{}.ids'.format(self._user_prefix)]  # (batch_size)
-            user_final_embeddings, item_final_embeddings = self.computer()
-            user_final_embeddings = user_final_embeddings[user_ids]  # (batch_size, embedding_dim)
-            item_final_embeddings = item_final_embeddings[sequence_ids]  # (all_batch_events, embedding_dim)
+            all_user_final_embeddings, all_item_final_embeddings = self.computer()
+            all_user_final_embeddings = all_user_final_embeddings[user_ids]  # (batch_size, embedding_dim)
+            all_item_final_embeddings = all_item_final_embeddings[sequence_ids]  # (all_batch_events, embedding_dim)
 
             # Feature-level contrastive learning part
             if self._user_graph is not None:
                 user_graph_final_embeddings = self.compute_user_graph_encoder()[user_ids]  # (batch_size, embedding_dim)
                 training_output['user_final_embeddings'] = self._user_sequential(
-                    user_final_embeddings)  # (batch_size, embedding_dim)
+                    all_user_final_embeddings)  # (batch_size, embedding_dim)
                 training_output['user_graph_final_embeddings'] = self._user_sequential(
                     user_graph_final_embeddings)  # (batch_size, embedding_dim)
 
@@ -667,25 +692,25 @@ class SasRecMCLSRModel(TorchModel, config_name='sasrec_mclsr'):
                 item_graph_final_embeddings = self.compute_item_graph_encoder()[
                     sequence_ids]  # (all_batch_items, embedding_dim)
                 training_output['item_graph_embeddings'] = self._item_sequential(
-                    item_final_embeddings)  # (all_batch_items, embedding_dim)
+                    all_item_final_embeddings)  # (all_batch_items, embedding_dim)
                 training_output['item_graph_final_embeddings'] = self._item_sequential(
                     item_graph_final_embeddings)  # (all_batch_items, embedding_dim)
 
-            item_final_embeddings, _ = create_masked_tensor(
-                data=item_final_embeddings, lengths=sequence_length
+            all_item_final_embeddings, _ = create_masked_tensor(
+                data=all_item_final_embeddings, lengths=sequence_length
             )  # (batch_size, max_seq_len, embedding_dim)
 
             graph_logits = torch.einsum(
                 'bd,bsd->bs',
-                torch.tanh(torch.einsum('bd,da->ba', user_final_embeddings, self._weights_3)),
-                item_final_embeddings
+                torch.tanh(torch.einsum('bd,da->ba', all_user_final_embeddings, self._weights_3)),
+                all_item_final_embeddings
             )  # (batch_size, max_seq_len)
 
             graph_logits[~sequence_mask] = -MCLSRModel.INF
             attention_graph_probits = torch.softmax(graph_logits, dim=1)  # (batch_size, max_seq_len)
 
             global_interest_embedding = torch.einsum(
-                'bs,bsd->bd', attention_graph_probits, item_final_embeddings
+                'bs,bsd->bd', attention_graph_probits, all_item_final_embeddings
             )  # (batch_size, embedding_dim)
             training_output['global_interest_embeddings'] = global_interest_embedding
 

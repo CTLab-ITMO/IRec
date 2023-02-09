@@ -1,5 +1,5 @@
 import utils
-from utils import parse_args, create_logger, fix_random_seed, DEVICE
+from utils import parse_args, create_logger, fix_random_seed, DEVICE, Params, dict_to_str
 from train import train
 
 
@@ -39,25 +39,30 @@ def main():
         **dataset.meta
     )
 
-    model_params = Params(config, 'model')
-    loss_function_params = Params(config, 'loss')
-    optimizer_params = Params(config, 'optimizer')
+    model_params = Params(config['model'], config['model_params'])
+    loss_function_params = Params(config['loss'], config['loss_params'])
+    optimizer_params = Params(config['optimizer'], config['optimizer_params'])
 
     logger.debug('Everything is ready for training process!')
 
     for model_param in model_params:
         for loss_param in loss_function_params:
             for optimizer_param in optimizer_params:
-                model_name = dict_to_str(model_param) + '_' + dict_to_str(loss_param) + '_' + dict_to_str(optimizer_param)
+                model_name = '_'.join([
+                    config['experiment_name'],
+                    dict_to_str(model_param, config['model_params']),
+                    dict_to_str(loss_param, config['loss_params']),
+                    dict_to_str(optimizer_param, config['optimizer_params'])
+                ])
 
                 # TODO test it
                 if utils.tensorboards.GLOBAL_TENSORBOARD_WRITER is not None:
                     utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.close()
                 utils.tensorboards.GLOBAL_TENSORBOARD_WRITER = utils.tensorboards.TensorboardWriter(model_name)
 
-                model = BaseModel.create_from_config(config['model'], **dataset.meta).to(DEVICE)
-                loss_function = BaseLoss.create_from_config(config['loss'])
-                optimizer = BaseOptimizer.create_from_config(config['optimizer'], model=model)
+                model = BaseModel.create_from_config(model_param, **dataset.meta).to(DEVICE)
+                loss_function = BaseLoss.create_from_config(loss_param)
+                optimizer = BaseOptimizer.create_from_config(optimizer_param, model=model)
 
                 callback = BaseCallback.create_from_config(
                     config['callback'],

@@ -33,6 +33,7 @@ class CompositeDataset(BaseDataset, config_name='composite'):
         raise NotImplementedError
 
 
+# It has leaks in the test dataset
 class InteractionsDataset(BaseDataset, config_name='interactions'):
 
     def __init__(

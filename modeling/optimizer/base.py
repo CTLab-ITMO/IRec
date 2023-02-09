@@ -1,3 +1,5 @@
+import copy
+
 from utils import MetaParent
 
 import torch
@@ -27,14 +29,14 @@ class BasicOptimizer(BaseOptimizer, config_name='basic'):
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        optimizer_cfg = config['optimizer']
+        optimizer_cfg = copy.deepcopy(config['optimizer'])
         optimizer = OPTIMIZERS[optimizer_cfg.pop('type')](
             kwargs['model'].parameters(),
             **optimizer_cfg
         )
 
         if 'scheduler' in config:
-            scheduler_cfg = config['scheduler']
+            scheduler_cfg = copy.deepcopy(config['scheduler'])
             scheduler = SCHEDULERS[scheduler_cfg.pop('type')](
                 optimizer,
                 **scheduler_cfg

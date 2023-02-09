@@ -72,22 +72,30 @@ class PureMF(TorchModel, config_name='pure_mf'):
         )
 
     def forward(self, inputs):
-        all_users = inputs['{}.ids'.format(self._user_prefix)]  # (batch_size)
-        all_users_embeddings = self._user_embeddings(all_users)  # (batch_size, embedding_dim)
+        user_ids = inputs['{}.ids'.format(self._user_prefix)]  # (batch_size)
+        user_embeddings = self._user_embeddings(user_ids)  # (batch_size, embedding_dim)
 
         if self.training:  # training mode
-            all_positive = inputs['{}.ids'.format(self._positive_prefix)]  # (batch_size)
-            all_positive_embeddings = self._item_embeddings(all_positive)  # (batch_size, embedding_dim)
+            all_positive = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
+            all_positive_embeddings = self._item_embeddings(all_positive)  # (all_batch_events, embedding_dim)
+            positive_lengths = inputs['{}.length'.format(self._positive_prefix)]  # (batch_size)
 
-            all_negative = inputs['{}.ids'.format(self._negative_prefix)]  # (batch_size)
-            all_negative_embeddings = self._item_embeddings(all_negative)  # (batch_size, embedding_dim)
+            all_negative = inputs['{}.ids'.format(self._negative_prefix)]  # (all_batch_events)
+            all_negative_embeddings = self._item_embeddings(all_negative)  # (all_batch_events, embedding_dim)
+            negative_lengths = inputs['{}.length'.format(self._negative_prefix)]  # (batch_size)
 
-            all_positive_scores = torch.einsum('bd,bd->b', all_users_embeddings, all_positive_embeddings)
-            all_negative_scores = torch.einsum('bd,bd->b', all_users_embeddings, all_negative_embeddings)
+            positive_embeddings, positive_mask = create_masked_tensor(all_positive_embeddings, positive_lengths)
+            negative_embeddings, negative_mask = create_masked_tensor(all_negative_embeddings, negative_lengths)
+
+            positive_scores = torch.einsum('bd,bsd->bs', user_embeddings, positive_embeddings)  # (batch_size, seq_len)
+            negative_scores = torch.einsum('bd,bsd->bs', user_embeddings, negative_embeddings)  # (batch_size, seq_len)
+
+            positive_scores = positive_scores[positive_mask]  # (all_batch_events)
+            negative_scores = negative_scores[negative_mask]  # (all_batch_events)
 
             return {
-                'positive_scores': all_positive_scores,
-                'negative_scores': all_negative_scores
+                'positive_scores': positive_scores,
+                'negative_scores': negative_scores
             }
         else:
             candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
@@ -99,7 +107,7 @@ class PureMF(TorchModel, config_name='pure_mf'):
                 lengths=candidate_lengths
             )  # (batch_size, num_candidates, embedding_dim)
 
-            all_candidates_scores = torch.einsum('bd,bcd->bc', all_users_embeddings, candidate_embeddings)
+            all_candidates_scores = torch.einsum('bd,bcd->bc', user_embeddings, candidate_embeddings)
             return all_candidates_scores
 
 
@@ -231,17 +239,25 @@ class PureMFMCLSRModel(TorchModel, config_name='pure_mf_mclsr'):
         if self.training:  # training mode
             training_output = {'current_interest_embeddings': user_embeddings}
 
-            all_positive_sample_events = inputs['{}.ids'.format(self._positive_prefix)]  # (batch_size)
-            all_negative_sample_events = inputs['{}.ids'.format(self._negative_prefix)]  # (batch_size)
+            all_positive = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
+            all_positive_embeddings = self._item_embeddings(all_positive)  # (all_batch_events, embedding_dim)
+            positive_lengths = inputs['{}.length'.format(self._positive_prefix)]  # (batch_size)
 
-            all_positive_embeddings = self._item_embeddings(all_positive_sample_events)  # (batch_size, embedding_dim)
-            all_negative_embeddings = self._item_embeddings(all_negative_sample_events)  # (batch_size, embedding_dim)
+            all_negative = inputs['{}.ids'.format(self._negative_prefix)]  # (all_batch_events)
+            all_negative_embeddings = self._item_embeddings(all_negative)  # (all_batch_events, embedding_dim)
+            negative_lengths = inputs['{}.length'.format(self._negative_prefix)]  # (batch_size)
 
-            all_positive_scores = torch.einsum('bd,bd->b', user_embeddings, all_positive_embeddings)
-            all_negative_scores = torch.einsum('bd,bd->b', user_embeddings, all_negative_embeddings)
+            positive_embeddings, positive_mask = create_masked_tensor(all_positive_embeddings, positive_lengths)
+            negative_embeddings, negative_mask = create_masked_tensor(all_negative_embeddings, negative_lengths)
 
-            training_output['positive_scores'] = all_positive_scores
-            training_output['negative_scores'] = all_negative_scores
+            positive_scores = torch.einsum('bd,bsd->bs', user_embeddings, positive_embeddings)  # (batch_size, seq_len)
+            negative_scores = torch.einsum('bd,bsd->bs', user_embeddings, negative_embeddings)  # (batch_size, seq_len)
+
+            positive_scores = positive_scores[positive_mask]  # (all_batch_events)
+            negative_scores = negative_scores[negative_mask]  # (all_batch_events)
+
+            training_output['positive_scores'] = positive_scores
+            training_output['negative_scores'] = negative_scores
 
             user_final_embeddings, _ = self.computer()
             user_final_embeddings = user_final_embeddings[user_ids]  # (batch_size, embedding_dim)

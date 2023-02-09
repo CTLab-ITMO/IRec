@@ -1,5 +1,5 @@
 {
-  "experiment_name": "matrix_factorization_w_user2item_graph_0.00001",
+  "experiment_name": "matrix_factorization_beauty_w_user2item_graph_0.001",
   "train_epochs_num": 10,
   "dataset": {
     "type": "graph",
@@ -7,11 +7,14 @@
     "use_item_graph": false,
     "graph_dir_path": "../data/Beauty",
     "dataset": {
-      "type": "interactions",
+      "type": "sequence",
       "name": "Beauty",
       "path_to_data_dir": "../data",
+      "max_sequence_length": 200,
       "samplers": {
-        "type": "pos_neg",
+        "num_negatives_train": 100,
+        "num_negatives_eval": 100,
+        "type": "next_item_prediction",
         "negative_sampler_type": "random"
       }
     }
@@ -63,7 +66,7 @@
         "fst_embeddings_prefix": "global_interest_embeddings",
         "snd_embeddings_prefix": "current_interest_embeddings",
         "output_prefix": "interest_level_contrastive",
-        "weight": 0.00001
+        "weight": 0.001
       }
     ]
   },

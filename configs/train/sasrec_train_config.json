@@ -1,11 +1,10 @@
 {
-  "experiment_name": "sasrec_beauty_test",
-  "train_epochs_num": 2,
+  "experiment_name": "sasrec_beauty_test_new",
+  "train_epochs_num": 1,
   "dataset": {
     "type": "sequence",
     "path_to_data_dir": "../data",
     "name": "Beauty",
-    "max_sample_len": 200,
     "max_sequence_length": 200,
     "samplers": {
       "num_negatives_train": 100,

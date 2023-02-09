@@ -148,15 +148,16 @@ class LightGCNModel(TorchModel, config_name='light_gcn'):
             positive_embeddings, _, positive_mask = self._get_embeddings(
                 inputs, self._positive_prefix, self._item_embeddings, all_final_item_embeddings
             )
-            positive_embeddings = positive_embeddings[positive_mask]  # (batch_size, embedding_dim)
 
             negative_embeddings, _, negative_mask = self._get_embeddings(
                 inputs, self._negative_prefix, self._item_embeddings, all_final_item_embeddings
             )
-            negative_embeddings = negative_embeddings[negative_mask]  # (batch_size, embedding_dim)
 
-            positive_scores = torch.einsum('bd,bd->b', user_embeddings, positive_embeddings)  # (batch_size)
-            negative_scores = torch.einsum('bd,bd->b', user_embeddings, negative_embeddings)  # (batch_size)
+            positive_scores = torch.einsum('bd,bsd->bs', user_embeddings, positive_embeddings)  # (batch_size, seq_len)
+            negative_scores = torch.einsum('bd,bsd->bs', user_embeddings, negative_embeddings)  # (batch_size, seq_len)
+
+            positive_scores = positive_scores[positive_mask]  # (all_batch_events)
+            negative_scores = negative_scores[negative_mask]  # (all_batch_events)
 
             return {'positive_scores': positive_scores, 'negative_scores': negative_scores}
 

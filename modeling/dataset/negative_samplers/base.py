@@ -18,7 +18,7 @@ class BaseNegativeSampler(metaclass=MetaParent):
         self._seen_items = defaultdict(set)
         for sample in self._dataset:
             user_id = sample['user.ids'][0]
-            items = sample['item.ids']
+            items = list(sample['item.ids'])
             self._seen_items[user_id].update(items)
 
     def generate_negative_samples(self, sample, num_negatives):

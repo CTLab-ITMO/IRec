@@ -1,20 +1,16 @@
 {
-  "experiment_name": "light_gcn_beauty_test_old",
+  "experiment_name": "sasrec_beauty_grid",
   "train_epochs_num": 20,
   "dataset": {
-    "type": "graph",
-    "graph_dir_path": "../data/Beauty",
-    "dataset": {
-      "type": "sequence",
-      "name": "Beauty",
-      "path_to_data_dir": "../data",
-      "max_sequence_length": 200,
-      "samplers": {
-        "num_negatives_train": 100,
-        "num_negatives_eval": 100,
-        "type": "next_item_prediction",
-        "negative_sampler_type": "random"
-      }
+    "type": "sequence",
+    "path_to_data_dir": "../data",
+    "name": "Beauty",
+    "max_sequence_length": 200,
+    "samplers": {
+      "num_negatives_train": 100,
+      "num_negatives_eval": 100,
+      "type": "next_item_prediction",
+      "negative_sampler_type": "random"
     }
   },
   "dataloader": {
@@ -38,36 +34,50 @@
     }
   },
   "model": {
-    "type": "light_gcn",
-    "user_prefix": "user",
+    "type": "sasrec",
+    "sequence_prefix": "item",
+    "labels_prefix": "labels",
     "positive_prefix": "positive",
     "negative_prefix": "negative",
-    "candidates_prefix": "candidates",
-    "embedding_dim": 256,
-    "num_layers": 3,
-    "keep_prob": 1.0,
-    "dropout": 0.0,
-    "initializer_range": 0.02
+    "candidate_prefix": "candidates"
+  },
+  "model_params": {
+    "embedding_dim": [128, 256],
+    "num_heads": [2, 4, 8, 16],
+    "num_layers": [2, 3, 4],
+    "dim_feedforward": [128, 256, 512, 1024, 2048],
+    "dropout": [0.0, 0.1, 0.25, 0.4, 0.5, 0.6],
+    "initializer_range": [0.02, 0.05, 0.1, 0.5, 1]
   },
   "optimizer": {
     "type": "basic",
     "optimizer": {
-      "type": "adam",
-      "lr": 0.001
+      "type": "adam"
+    }
+  },
+  "optimizer_params": {
+    "optimizer": {
+      "lr": [0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
     }
   },
   "loss": {
     "type": "composite",
     "losses": [
       {
-        "type": "bpr",
-        "positive_prefix": "positive_scores",
-        "negative_prefix": "negative_scores",
-        "output_prefix": "bpr_loss",
-        "weight": 1.0
+        "type": "bce",
+        "predictions_prefix": "positive_scores",
+        "labels_prefix": "positive_labels.ids"
+      },
+      {
+        "type": "bce",
+        "predictions_prefix": "negative_scores",
+        "labels_prefix": "negative_labels.ids"
       }
     ],
     "output_prefix": "loss"
+  },
+  "loss_params": {
+
   },
   "callback": {
     "type": "composite",
@@ -76,11 +86,6 @@
         "type": "metric",
         "on_step": 1,
         "loss_prefix": "loss"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "bpr_loss"
       },
       {
         "type": "validation",
