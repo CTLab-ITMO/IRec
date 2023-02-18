@@ -1,3 +1,5 @@
+import copy
+
 from utils import MetaParent, get_activation_function, maybe_to_list, DEVICE
 
 import torch
@@ -31,7 +33,7 @@ class CompositeLoss(TorchLoss, config_name='composite'):
         losses = []
         weights = []
 
-        for loss_cfg in config['losses']:
+        for loss_cfg in copy.deepcopy(config)['losses']:
             weight = loss_cfg.pop('weight') if 'weight' in loss_cfg else 1.0
             loss_function = BaseLoss.create_from_config(loss_cfg)
 

@@ -1,3 +1,5 @@
+import copy
+
 from utils import MetaParent
 from .batch_processors import BaseBatchProcessor
 
@@ -25,11 +27,12 @@ class TorchDataloader(BaseDataloader, config_name='torch'):
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
+        create_config = copy.deepcopy(config)
         batch_processor = BaseBatchProcessor.create_from_config(
-            config.pop('batch_processor') if 'batch_processor' in config else {'type': 'identity'}
+            create_config.pop('batch_processor') if 'batch_processor' in create_config else {'type': 'identity'}
         )
-        config.pop('type')  # For passing as **config in torch DataLoader
-        return cls(dataloader=DataLoader(kwargs['dataset'], collate_fn=batch_processor, **config))
+        create_config.pop('type')  # For passing as **config in torch DataLoader
+        return cls(dataloader=DataLoader(kwargs['dataset'], collate_fn=batch_processor, **create_config))
 
 
 class SplitDataloader(BaseDataloader, config_name='split'):
