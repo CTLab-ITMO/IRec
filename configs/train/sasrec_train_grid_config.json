@@ -13,7 +13,7 @@
     }
   },
   "dataset_params": {
-    "max_sequence_length": [50, 100, 200, 300],
+    "max_sequence_length": [100, 200, 300],
     "samplers": {
       "num_negatives_train": [50, 100, 200]
     }
@@ -47,11 +47,11 @@
     "candidate_prefix": "candidates"
   },
   "model_params": {
-    "embedding_dim": [64, 128, 256, 512],
-    "num_heads": [2, 4, 8, 16],
-    "num_layers": [1, 2, 3, 4],
-    "dim_feedforward": [128, 256, 512, 1024, 2048],
-    "dropout": [0.0, 0.1, 0.25, 0.4, 0.5],
+    "embedding_dim": [128, 256, 512],
+    "num_heads": [2, 4, 8],
+    "num_layers": [2, 3, 4],
+    "dim_feedforward": [256, 512, 1024, 2048],
+    "dropout": [0.0, 0.1, 0.25],
     "initializer_range": [0.02, 0.05, 0.1, 0.5]
   },
   "optimizer": {
@@ -62,7 +62,7 @@
   },
   "optimizer_params": {
     "optimizer": {
-      "lr": [0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
+      "lr": [0.001, 0.01, 0.1]
     }
   },
   "loss": {
