@@ -94,7 +94,7 @@
       },
       {
         "type": "validation",
-        "on_step": 32,
+        "on_step": 128,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {
