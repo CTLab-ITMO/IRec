@@ -23,67 +23,72 @@ def main():
 
     logger.debug('Training config: \n{}'.format(json.dumps(config, indent=2)))
 
-    dataset = BaseDataset.create_from_config(config['dataset'])
-
-    train_sampler, test_sampler = dataset.get_samplers()
-
-    train_dataloader = BaseDataloader.create_from_config(
-        config['dataloader']['train'],
-        dataset=train_sampler,
-        **dataset.meta
-    )
-
-    validation_dataloader = BaseDataloader.create_from_config(
-        config['dataloader']['validation'],
-        dataset=test_sampler,
-        **dataset.meta
-    )
-
+    dataset_params = Params(config['dataset'], config['dataset_params'])
     model_params = Params(config['model'], config['model_params'])
     loss_function_params = Params(config['loss'], config['loss_params'])
     optimizer_params = Params(config['optimizer'], config['optimizer_params'])
 
     logger.debug('Everything is ready for training process!')
 
-    for model_param in model_params:
-        for loss_param in loss_function_params:
-            for optimizer_param in optimizer_params:
-                model_name = '_'.join([
-                    config['experiment_name'],
-                    dict_to_str(model_param, config['model_params']),
-                    dict_to_str(loss_param, config['loss_params']),
-                    dict_to_str(optimizer_param, config['optimizer_params'])
-                ])
+    for dataset_param in dataset_params:
+        for model_param in model_params:
+            for loss_param in loss_function_params:
+                for optimizer_param in optimizer_params:
+                    model_name = '_'.join([
+                        config['experiment_name'],
+                        dict_to_str(dataset_param, config['model_params']),
+                        dict_to_str(model_param, config['model_params']),
+                        dict_to_str(loss_param, config['loss_params']),
+                        dict_to_str(optimizer_param, config['optimizer_params'])
+                    ])
 
-                # TODO test it
-                if utils.tensorboards.GLOBAL_TENSORBOARD_WRITER is not None:
-                    utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.close()
-                utils.tensorboards.GLOBAL_TENSORBOARD_WRITER = utils.tensorboards.TensorboardWriter(model_name)
+                    logger.debug('Starting {}'.format(model_name))
 
-                model = BaseModel.create_from_config(model_param, **dataset.meta).to(DEVICE)
-                loss_function = BaseLoss.create_from_config(loss_param)
-                optimizer = BaseOptimizer.create_from_config(optimizer_param, model=model)
+                    dataset = BaseDataset.create_from_config(dataset_param)
 
-                callback = BaseCallback.create_from_config(
-                    config['callback'],
-                    model=model,
-                    dataloader=validation_dataloader,
-                    optimizer=optimizer
-                )
+                    train_sampler, test_sampler = dataset.get_samplers()
 
-                best_model_checkpoint = train(
-                    dataloader=train_dataloader,
-                    model=model,
-                    optimizer=optimizer,
-                    loss_function=loss_function,
-                    callback=callback,
-                    epoch_cnt=config['train_epochs_num']
-                )
+                    train_dataloader = BaseDataloader.create_from_config(
+                        config['dataloader']['train'],
+                        dataset=train_sampler,
+                        **dataset.meta
+                    )
 
-                logger.debug('Saving best model checkpoint...')
-                checkpoint_path = '../checkpoints/{}_best_checkpoint.pth'.format(model_name)
-                torch.save(best_model_checkpoint, checkpoint_path)
-                logger.debug('Saved model as {}'.format(checkpoint_path))
+                    validation_dataloader = BaseDataloader.create_from_config(
+                        config['dataloader']['validation'],
+                        dataset=test_sampler,
+                        **dataset.meta
+                    )
+
+                    # TODO test it
+                    if utils.tensorboards.GLOBAL_TENSORBOARD_WRITER is not None:
+                        utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.close()
+                    utils.tensorboards.GLOBAL_TENSORBOARD_WRITER = utils.tensorboards.TensorboardWriter(model_name)
+
+                    model = BaseModel.create_from_config(model_param, **dataset.meta).to(DEVICE)
+                    loss_function = BaseLoss.create_from_config(loss_param)
+                    optimizer = BaseOptimizer.create_from_config(optimizer_param, model=model)
+
+                    callback = BaseCallback.create_from_config(
+                        config['callback'],
+                        model=model,
+                        dataloader=validation_dataloader,
+                        optimizer=optimizer
+                    )
+
+                    best_model_checkpoint = train(
+                        dataloader=train_dataloader,
+                        model=model,
+                        optimizer=optimizer,
+                        loss_function=loss_function,
+                        callback=callback,
+                        epoch_cnt=config['train_epochs_num']
+                    )
+
+                    logger.debug('Saving best model checkpoint...')
+                    checkpoint_path = '../checkpoints/{}_best_checkpoint.pth'.format(model_name)
+                    torch.save(best_model_checkpoint, checkpoint_path)
+                    logger.debug('Saved model as {}'.format(checkpoint_path))
 
 
 if __name__ == '__main__':
