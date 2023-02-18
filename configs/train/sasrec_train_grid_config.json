@@ -1,14 +1,14 @@
 {
   "experiment_name": "sasrec_beauty_grid",
-  "train_epochs_num": 20,
+  "train_epochs_num": 10,
   "dataset": {
     "type": "sequence",
     "path_to_data_dir": "../data",
     "name": "Beauty",
+    "max_sequence_length": 200,
     "samplers": {
       "num_negatives_train": 100,
       "num_negatives_eval": 100,
-      "max_sequence_length": 200,
       "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
