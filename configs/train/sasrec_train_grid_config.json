@@ -5,12 +5,17 @@
     "type": "sequence",
     "path_to_data_dir": "../data",
     "name": "Beauty",
-    "max_sequence_length": 200,
     "samplers": {
       "num_negatives_train": 100,
       "num_negatives_eval": 100,
       "type": "next_item_prediction",
       "negative_sampler_type": "random"
+    }
+  },
+  "dataset_params": {
+    "max_sequence_length": [50, 100, 200, 300],
+    "samplers": {
+      "num_negatives_train": [50, 100, 200]
     }
   },
   "dataloader": {
@@ -42,12 +47,12 @@
     "candidate_prefix": "candidates"
   },
   "model_params": {
-    "embedding_dim": [128, 256],
+    "embedding_dim": [64, 128, 256, 512],
     "num_heads": [2, 4, 8, 16],
-    "num_layers": [2, 3, 4],
+    "num_layers": [1, 2, 3, 4],
     "dim_feedforward": [128, 256, 512, 1024, 2048],
-    "dropout": [0.0, 0.1, 0.25, 0.4, 0.5, 0.6],
-    "initializer_range": [0.02, 0.05, 0.1, 0.5, 1]
+    "dropout": [0.0, 0.1, 0.25, 0.4, 0.5],
+    "initializer_range": [0.02, 0.05, 0.1, 0.5]
   },
   "optimizer": {
     "type": "basic",

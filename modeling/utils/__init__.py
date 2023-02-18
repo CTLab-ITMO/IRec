@@ -19,7 +19,6 @@ def parse_args():
     args = parser.parse_args()
     with open(args.params) as f:
         params = json.load(f)
-
     return params
 
 
