@@ -14,11 +14,11 @@ import json
 import torch
 
 logger = create_logger(name=__name__)
-seed_val = 42
+# seed_val = 42
 
 
 def main():
-    fix_random_seed(seed_val)
+    # fix_random_seed(seed_val)
     config = parse_args()
 
     logger.debug('Training config: \n{}'.format(json.dumps(config, indent=2)))
@@ -30,10 +30,17 @@ def main():
 
     logger.debug('Everything is ready for training process!')
 
+    start_from = config.get('start_from', 0)
+    cnt = 0
+
     for dataset_param in dataset_params:
         for model_param in model_params:
             for loss_param in loss_function_params:
                 for optimizer_param in optimizer_params:
+                    cnt += 1
+                    if cnt < start_from:
+                        continue
+
                     model_name = '_'.join([
                         config['experiment_name'],
                         dict_to_str(dataset_param, config['model_params']),
@@ -60,7 +67,6 @@ def main():
                         **dataset.meta
                     )
 
-                    # TODO test it
                     if utils.tensorboards.GLOBAL_TENSORBOARD_WRITER is not None:
                         utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.close()
                     utils.tensorboards.GLOBAL_TENSORBOARD_WRITER = utils.tensorboards.TensorboardWriter(model_name)
