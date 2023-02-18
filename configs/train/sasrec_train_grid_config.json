@@ -8,14 +8,14 @@
     "samplers": {
       "num_negatives_train": 100,
       "num_negatives_eval": 100,
+      "max_sequence_length": 200,
       "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
   },
   "dataset_params": {
-    "max_sequence_length": [100, 200, 300],
     "samplers": {
-      "num_negatives_train": [50, 100, 200]
+      "num_negatives_train": [100, 200]
     }
   },
   "dataloader": {
@@ -48,11 +48,11 @@
   },
   "model_params": {
     "embedding_dim": [128, 256, 512],
-    "num_heads": [2, 4, 8],
-    "num_layers": [2, 3, 4],
-    "dim_feedforward": [256, 512, 1024, 2048],
-    "dropout": [0.0, 0.1, 0.25],
-    "initializer_range": [0.02, 0.05, 0.1, 0.5]
+    "num_heads": [2, 4],
+    "num_layers": [2, 3],
+    "dim_feedforward": [1024, 2048],
+    "dropout": [0.0, 0.1, 0.2],
+    "initializer_range": [0.02, 0.05, 0.1]
   },
   "optimizer": {
     "type": "basic",
