@@ -1,6 +1,6 @@
 {
   "experiment_name": "bert4rec_beauty",
-  "train_epochs_num": 20,
+  "train_epochs_num": 15,
   "dataset": {
     "type": "sequence",
     "path_to_data_dir": "../data",
@@ -8,8 +8,12 @@
     "max_sequence_length": 200,
     "samplers": {
       "type": "masked_item_prediction",
-      "mask_prob": 0.3,
       "negative_sampler_type": "random"
+    }
+  },
+  "dataset_params": {
+    "samplers": {
+      "mask_prob": [0.0, 0.2, 0.4]
     }
   },
   "dataloader": {
@@ -37,23 +41,29 @@
     "sequence_prefix": "item",
     "labels_prefix": "labels",
     "candidate_prefix": "candidates",
-    "embedding_dim": 256,
-    "num_heads": 2,
-    "num_layers": 2,
-    "dim_feedforward": 1024,
-    "dropout": 0.0,
-    "activation": "relu",
-    "layer_norm_eps": 1e-5,
-    "initializer_range": 0.02
+    "activation": "relu"
+  },
+  "model_params": {
+    "embedding_dim": [128, 256, 512],
+    "num_heads": [2, 4],
+    "num_layers": [1, 2, 3],
+    "dim_feedforward": [512, 1024],
+    "dropout": [0.0, 0.1, 0.2],
+    "initializer_range": [0.01, 0.02, 0.05],
+    "layer_norm_eps": [1e-12, 1e-5]
   },
   "optimizer": {
     "type": "basic",
     "optimizer": {
       "type": "adamw",
-      "lr": 3e-4,
       "eps": 1e-8
+    }
+  },
+  "optimizer_params": {
+    "optimizer": {
+      "lr": [0.001, 0.005]
     },
-    "clip_grad_threshold": 5.0
+    "clip_grad_threshold": [5.0, 100.0]
   },
   "loss": {
     "type": "composite",
@@ -66,6 +76,9 @@
       }
     ],
     "output_prefix": "loss"
+  },
+  "loss_params": {
+
   },
   "callback": {
     "type": "composite",
