@@ -16,7 +16,7 @@
   "dataloader": {
     "train": {
       "type": "torch",
-      "batch_size": 256,
+      "batch_size": 64,
       "batch_processor": {
         "type": "basic"
       },
@@ -25,7 +25,7 @@
     },
     "validation": {
       "type": "torch",
-      "batch_size": 256,
+      "batch_size": 64,
       "batch_processor": {
         "type": "basic"
       },
@@ -82,7 +82,7 @@
         "type": "validation",
         "on_step": 32,
         "pred_prefix": "logits",
-        "labels_prefix": "labels",
+        "labels_prefix": "candidates",
         "metrics": {
           "ndcg@5": {
             "type": "ndcg",

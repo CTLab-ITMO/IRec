@@ -21,7 +21,7 @@ class MaskedItemPredictionTrainSampler(TrainSampler, config_name='masked_item_pr
             dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
-            mask_prob=config.get('mask_prob', 0.25)
+            mask_prob=config.get('mask_prob', 0.0)
         )
 
     def __getitem__(self, index):

@@ -10,7 +10,6 @@ from callbacks import BaseCallback
 
 import copy
 import json
-import torch
 
 logger = create_logger(name=__name__)
 seed_val = 42
@@ -100,13 +99,13 @@ def main():
         loss_function=loss_function,
         callback=callback,
         epoch_cnt=config['train_epochs_num'],
-        best_metric='ndcg@10'
+        best_metric=config.get('best_metric', None)
     )
 
-    logger.debug('Saving model...')
-    checkpoint_path = '../checkpoints/{}_final_state.pth'.format(config['experiment_name'])
-    torch.save(model.state_dict(), checkpoint_path)
-    logger.debug('Saved model as {}'.format(checkpoint_path))
+    # logger.debug('Saving model...')
+    # checkpoint_path = '../checkpoints/{}_final_state.pth'.format(config['experiment_name'])
+    # torch.save(model.state_dict(), checkpoint_path)
+    # logger.debug('Saved model as {}'.format(checkpoint_path))
 
 
 if __name__ == '__main__':
