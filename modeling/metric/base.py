@@ -42,16 +42,10 @@ class NDCGMetric(BaseMetric, config_name='ndcg'):
         self._k = k
 
     def __call__(self, inputs, pred_prefix, labels_prefix):
-        predictions = inputs[pred_prefix]  # (batch_size, all_items)
-        positive = torch.unsqueeze(inputs['{}.ids'.format(labels_prefix)], dim=-1)  # (batch_size)
-
-        labels = torch.zeros_like(predictions).scatter_(
-            dim=1,
-            index=positive,
-            src=torch.ones_like(positive).float()
-        )  # (batch_size, all_items)
-
-        predictions = (-predictions).argsort(dim=-1)  # (batch_size, all_items)
+        predictions = inputs[pred_prefix]  # (batch_size, num_candidates)
+        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (all_batch_items)
+        labels = torch.reshape(labels, predictions.shape)  # (batch_size, num_candidates)
+        predictions = (-predictions).argsort(dim=-1)  # (batch_size, num_candidates)
         predictions = predictions[..., :self._k]  # (batch_size, k)
         hits = labels.gather(dim=-1, index=predictions)  # (batch_size, k)
 
@@ -73,17 +67,10 @@ class RecallMetric(BaseMetric, config_name='recall'):
         self._k = k
 
     def __call__(self, inputs, pred_prefix, labels_prefix):
-        predictions = inputs[pred_prefix]  # (batch_size, all_items)
-
-        positive = torch.unsqueeze(inputs['{}.ids'.format(labels_prefix)], dim=-1)  # (batch_size)
-
-        labels = torch.zeros_like(predictions).scatter_(
-            dim=1,
-            index=positive,
-            src=torch.ones_like(positive).float()
-        )  # (batch_size, all_items)
-
-        predictions = (-predictions).argsort(dim=-1)  # (batch_size, all_items)
+        predictions = inputs[pred_prefix]  # (batch_size, num_candidates)
+        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (all_batch_items)
+        labels = torch.reshape(labels, predictions.shape)  # (batch_size, num_candidates)
+        predictions = (-predictions).argsort(dim=-1)  # (batch_size, num_candidates)
         predictions = predictions[..., :self._k]  # (batch_size, k)
         hits = labels.gather(dim=-1, index=predictions)  # (batch_size, k)
 

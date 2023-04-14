@@ -84,7 +84,12 @@ class NextItemPredictionEvalSampler(EvalSampler, config_name='next_item_predicti
         assert len(sample['user.ids']) == 1
 
         item_sequence = sample['item.ids'][:-1]
-        positive = [sample['item.ids'][-1]]
+
+        positive = sample['item.ids'][-1]
+        negatives = self._negative_sampler.generate_negative_samples(sample, self._num_negatives)
+
+        candidates = [positive] + negatives
+        labels = [1] + [0] * len(negatives)
 
         return {
             'user.ids': sample['user.ids'],
@@ -93,6 +98,9 @@ class NextItemPredictionEvalSampler(EvalSampler, config_name='next_item_predicti
             'item.ids': item_sequence,
             'item.length': len(item_sequence),
 
-            'candidates.ids': positive,
-            'candidates.length': len(positive)
+            'candidates.ids': candidates,
+            'candidates.length': len(candidates),
+
+            'labels.ids': labels,
+            'labels.length': len(labels),
         }
