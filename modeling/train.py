@@ -57,6 +57,7 @@ def main():
         utils.tensorboards.TensorboardWriter(config['experiment_name'])
 
     logger.debug('Training config: \n{}'.format(json.dumps(config, indent=2)))
+    logger.debug('Current DEVICE: {}'.format(DEVICE))
 
     dataset = BaseDataset.create_from_config(config['dataset'])
 
