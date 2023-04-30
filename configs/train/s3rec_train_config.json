@@ -1,0 +1,118 @@
+{
+  "experiment_name": "s3rec_beauty_test_new",
+  "train_epochs_num": 1,
+  "dataset": {
+    "type": "sequence",
+    "path_to_data_dir": "../data",
+    "name": "Gowalla",
+    "max_sequence_length": 200,
+    "samplers": {
+      "num_negatives_train": 100,
+      "num_negatives_eval": 100,
+      "type": "next_item_prediction",
+      "negative_sampler_type": "random"
+    }
+  },
+  "dataloader": {
+    "train": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "basic"
+      },
+      "drop_last": true,
+      "shuffle": true
+    },
+    "validation": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "basic"
+      },
+      "drop_last": false,
+      "shuffle": false
+    }
+  },
+  "model": {
+    "type": "s3rec",
+    "sequence_prefix": "item",
+    "labels_prefix": "labels",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
+    "sequence_segment_prefix": "item_segment",
+    "positive_segment_prefix": "positive_segment",
+    "negative_segment_prefix": "negative_segment",
+    "candidate_prefix": "candidates",
+    "embedding_dim": 256,
+    "num_heads": 2,
+    "num_layers": 2,
+    "dim_feedforward": 1024,
+    "dropout": 0.0,
+    "initializer_range": 0.02
+  },
+  "optimizer": {
+    "type": "basic",
+    "optimizer": {
+      "type": "adam",
+      "lr": 0.001
+    }
+  },
+  "loss": {
+    "type": "composite",
+    "losses": [
+      {
+        "type": "bce",
+        "predictions_prefix": "positive_scores",
+        "labels_prefix": "positive_labels.ids"
+      },
+      {
+        "type": "bce",
+        "predictions_prefix": "negative_scores",
+        "labels_prefix": "negative_labels.ids"
+      }
+    ],
+    "output_prefix": "loss"
+  },
+  "callback": {
+    "type": "composite",
+    "callbacks": [
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "loss"
+      },
+      {
+        "type": "validation",
+        "on_step": 32,
+        "pred_prefix": "logits",
+        "labels_prefix": "labels",
+        "metrics": {
+          "ndcg@5": {
+            "type": "ndcg",
+            "k": 5
+          },
+          "ndcg@10": {
+            "type": "ndcg",
+            "k": 10
+          },
+          "ndcg@20": {
+            "type": "ndcg",
+            "k": 20
+          },
+          "recall@5": {
+            "type": "recall",
+            "k": 5
+          },
+          "recall@10": {
+            "type": "recall",
+            "k": 10
+          },
+          "recall@20": {
+            "type": "recall",
+            "k": 20
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "experiment_name": "pretrain_s3rec_beauty_test_new",
+  "pretrain_epochs_num": 1,
+  "dataset": {
+    "type": "sequence",
+    "path_to_data_dir": "../data",
+    "name": "Beauty",
+    "max_sequence_length": 200,
+    "samplers": {
+      "type": "s3rec_pretrain",
+      "negative_sampler_type": "random",
+      "mask_prob": 0.3
+    }
+  },
+  "dataloader": {
+    "train": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "basic"
+      },
+      "drop_last": true,
+      "shuffle": true
+    },
+    "validation": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "basic"
+      },
+      "drop_last": false,
+      "shuffle": false
+    }
+  },
+  "model": {
+    "type": "s3rec",
+    "sequence_prefix": "item",
+    "labels_prefix": "labels",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
+    "sequence_segment_prefix": "item_segment",
+    "positive_segment_prefix": "positive_segment",
+    "negative_segment_prefix": "negative_segment",
+    "candidate_prefix": "candidates",
+    "embedding_dim": 256,
+    "num_heads": 2,
+    "num_layers": 2,
+    "dim_feedforward": 1024,
+    "dropout": 0.0,
+    "initializer_range": 0.02
+  },
+  "optimizer": {
+    "type": "basic",
+    "optimizer": {
+      "type": "adam",
+      "lr": 0.001
+    }
+  },
+  "loss": {
+    "type": "composite",
+    "losses": [
+      {
+        "type": "bce",
+        "predictions_prefix": "mip_distance",
+        "labels_prefix": "mip_labels",
+        "output_prefix": "mip_loss",
+        "weight": 1.0
+      },
+      {
+        "type": "bce",
+        "predictions_prefix": "sp_distance",
+        "labels_prefix": "sp_labels",
+        "output_prefix": "sp_loss",
+        "weight": 1.0
+      }
+    ],
+    "output_prefix": "loss"
+  },
+  "callback": {
+    "type": "composite",
+    "callbacks": [
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "loss"
+      }
+    ]
+  }
+}

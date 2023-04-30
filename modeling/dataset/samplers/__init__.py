@@ -1,3 +1,6 @@
 from .base import TrainSampler, EvalSampler
+from .cl4srec import Cl4SRecTrainSampler, Cl4SRecEvalSampler
+from .duorec import DuorecTrainSampler, DuoRecEvalSampler
 from .next_item_prediction import NextItemPredictionTrainSampler, NextItemPredictionEvalSampler
 from .masked_item_prediction import MaskedItemPredictionTrainSampler, MaskedItemPredictionEvalSampler
+from .s3rec import S3RecPretrainTrainSampler, S3RecPretrainEvalSampler
