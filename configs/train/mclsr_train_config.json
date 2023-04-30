@@ -1,20 +1,20 @@
 {
-  "experiment_name": "bert4rec_w_user2item_graph_0.0001",
-  "train_epochs_num": 20,
+  "experiment_name": "mclsr_beauty_test_0.001_0.001_0.001",
+  "train_epochs_num": 30,
   "dataset": {
     "type": "graph",
     "use_user_graph": false,
     "use_item_graph": false,
     "graph_dir_path": "../data/Beauty",
     "dataset": {
-      "type": "scientific",
+      "type": "sequence",
       "path_to_data_dir": "../data",
       "name": "Beauty",
-      "sample_length_threshold": 5,
       "max_sequence_length": 200,
       "samplers": {
-        "type": "masked_item_prediction",
-        "mask_prob": 0.4,
+        "num_negatives_train": 100,
+        "num_negatives_eval": 100,
+        "type": "next_item_prediction",
         "negative_sampler_type": "random"
       }
     }
@@ -40,10 +40,12 @@
     }
   },
   "model": {
-    "type": "bert4rec_mclsr",
+    "type": "mclsr",
+    "user_prefix": "user",
     "sequence_prefix": "item",
     "labels_prefix": "labels",
-    "user_prefix": "user",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
     "candidate_prefix": "candidates",
     "embedding_dim": 256,
     "num_encoder_heads": 2,
@@ -61,27 +63,41 @@
   "optimizer": {
     "type": "basic",
     "optimizer": {
-      "type": "adamw",
-      "lr": 3e-4,
-      "eps": 1e-8
-    },
-    "clip_grad_threshold": 5.0
+      "type": "adam",
+      "lr": 0.001
+    }
   },
   "loss": {
     "type": "composite",
     "losses": [
       {
-        "type": "ce",
-        "predictions_prefix": "logits",
-        "labels_prefix": "labels",
-        "output_prefix": "loss"
+        "type": "bce",
+        "predictions_prefix": "encoder_positive_scores",
+        "labels_prefix": "positive_labels.ids"
+      },
+      {
+        "type": "bce",
+        "predictions_prefix": "encoder_negative_scores",
+        "labels_prefix": "negative_labels.ids"
       },
       {
         "type": "fps",
         "fst_embeddings_prefix": "global_interest_embeddings",
         "snd_embeddings_prefix": "current_interest_embeddings",
-        "output_prefix": "interest_level_contrastive",
-        "weight": 0.0001
+        "output_prefix": "interest_level_contrastive_loss",
+        "weight": 0.001
+      },
+      {
+        "type": "bce",
+        "predictions_prefix": "graph_positive_scores",
+        "labels_prefix": "positive_labels.ids",
+        "weight": 0.001
+      },
+      {
+        "type": "bce",
+        "predictions_prefix": "graph_negative_scores",
+        "labels_prefix": "negative_labels.ids",
+        "weight": 0.001
       }
     ],
     "output_prefix": "loss"
@@ -95,8 +111,13 @@
         "loss_prefix": "loss"
       },
       {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "interest_level_contrastive_loss"
+      },
+      {
         "type": "validation",
-        "on_step": 32,
+        "on_step": 256,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {

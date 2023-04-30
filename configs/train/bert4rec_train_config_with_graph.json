@@ -1,6 +1,6 @@
 {
-  "experiment_name": "bert4rec_beauty_w_user2item_graph_0.05",
-  "train_epochs_num": 20,
+  "experiment_name": "bert4rec_beauty_with_graph_0.0001",
+  "train_epochs_num": 10,
   "dataset": {
     "type": "graph",
     "use_user_graph": false,
@@ -45,6 +45,7 @@
     "user_prefix": "user",
     "candidate_prefix": "candidates",
     "embedding_dim": 256,
+
     "num_encoder_heads": 2,
     "num_encoder_layers": 2,
     "dim_feedforward": 1024,
@@ -80,7 +81,7 @@
         "fst_embeddings_prefix": "global_interest_embeddings",
         "snd_embeddings_prefix": "current_interest_embeddings",
         "output_prefix": "interest_level_contrastive",
-        "weight": 0.05
+        "weight": 0.0001
       }
     ],
     "output_prefix": "loss"

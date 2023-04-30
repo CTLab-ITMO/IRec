@@ -1,6 +1,6 @@
 {
-  "experiment_name": "sasrec_beauty_test_new",
-  "train_epochs_num": 1,
+  "experiment_name": "sasrec_beauty_test",
+  "train_epochs_num": 10,
   "dataset": {
     "type": "sequence",
     "path_to_data_dir": "../data",
@@ -80,7 +80,7 @@
       },
       {
         "type": "validation",
-        "on_step": 32,
+        "on_step": 256,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {

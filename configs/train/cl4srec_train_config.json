@@ -1,5 +1,5 @@
 {
-  "experiment_name": "bert4rec_beauty_test",
+  "experiment_name": "cl4srec_beauty_test",
   "train_epochs_num": 10,
   "dataset": {
     "type": "sequence",
@@ -7,9 +7,12 @@
     "name": "Beauty",
     "max_sequence_length": 200,
     "samplers": {
-      "type": "masked_item_prediction",
-      "mask_prob": 0.3,
-      "negative_sampler_type": "random"
+      "num_negatives_eval": 100,
+      "type": "cl4srec",
+      "negative_sampler_type": "random",
+      "item_crop_portion": 0.6,
+      "item_mask_portion": 0.2,
+      "item_reorder_portion": 0.4
     }
   },
   "dataloader": {
@@ -33,13 +36,15 @@
     }
   },
   "model": {
-    "type": "bert4rec",
+    "type": "cl4srec",
     "sequence_prefix": "item",
-    "labels_prefix": "labels",
+    "fst_augmented_sequence_prefix": "fst_augmented_item",
+    "snd_augmented_sequence_prefix": "snd_augmented_item",
+    "labels_prefix": "target",
     "candidate_prefix": "candidates",
-    "embedding_dim": 256,
-    "num_heads": 2,
     "num_layers": 2,
+    "num_heads": 2,
+    "embedding_dim": 256,
     "dim_feedforward": 1024,
     "dropout": 0.0,
     "activation": "relu",
@@ -49,20 +54,28 @@
   "optimizer": {
     "type": "basic",
     "optimizer": {
-      "type": "adamw",
-      "lr": 3e-4,
-      "eps": 1e-8
-    },
-    "clip_grad_threshold": 5.0
+      "type": "adam",
+      "lr": 0.001
+    }
   },
   "loss": {
     "type": "composite",
     "losses": [
       {
-        "type": "ce",
-        "predictions_prefix": "logits",
-        "labels_prefix": "labels",
-        "output_prefix": "loss"
+        "type": "fps",
+        "fst_embeddings_prefix": "sequence_representation",
+        "snd_embeddings_prefix": "labels_representation",
+        "tau": 1.0,
+        "weight": 1.0,
+        "output_prefix": "downstream_loss"
+      },
+      {
+        "type": "fps",
+        "fst_embeddings_prefix": "fst_aug_sequence_representation",
+        "snd_embeddings_prefix": "snd_aug_sequence_representation",
+        "tau": 1.0,
+        "weight": 1.0,
+        "output_prefix": "contrastive_loss"
       }
     ],
     "output_prefix": "loss"

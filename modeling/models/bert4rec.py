@@ -1,4 +1,4 @@
-from models.base import TorchModel
+from models.base import TorchModel, SequentialTorchModel
 
 import torch
 import torch.nn as nn
@@ -6,7 +6,7 @@ import torch.nn as nn
 from utils import create_masked_tensor, get_activation_function
 
 
-class Bert4RecModel(TorchModel, config_name='bert4rec'):
+class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
 
     def __init__(
             self,
@@ -14,6 +14,7 @@ class Bert4RecModel(TorchModel, config_name='bert4rec'):
             labels_prefix,
             candidate_prefix,
             num_items,
+            max_sequence_length,
             embedding_dim,
             num_heads,
             num_layers,
@@ -23,29 +24,21 @@ class Bert4RecModel(TorchModel, config_name='bert4rec'):
             layer_norm_eps=1e-5,
             initializer_range=0.02
     ):
-        super().__init__()
+        super().__init__(
+            num_items=num_items,
+            max_sequence_length=max_sequence_length,
+            embedding_dim=embedding_dim,
+            num_heads=num_heads,
+            num_layers=num_layers,
+            dim_feedforward=dim_feedforward,
+            dropout=dropout,
+            activation=activation,
+            layer_norm_eps=layer_norm_eps,
+            is_causal=False
+        )
         self._sequence_prefix = sequence_prefix
         self._labels_prefix = labels_prefix
         self._candidate_prefix = candidate_prefix
-
-        self._num_items = num_items
-        self._embedding_dim = embedding_dim
-
-        self._item_embeddings = nn.Embedding(
-            num_embeddings=num_items + 2,  # add zero embedding + mask embedding
-            embedding_dim=embedding_dim
-        )
-
-        transformer_encoder_layer = nn.TransformerEncoderLayer(
-            d_model=embedding_dim,
-            nhead=num_heads,
-            dim_feedforward=dim_feedforward,
-            dropout=dropout,
-            activation=get_activation_function(activation),
-            layer_norm_eps=layer_norm_eps,
-            batch_first=True
-        )
-        self._encoder = nn.TransformerEncoder(transformer_encoder_layer, num_layers)
 
         self._output_projection = nn.Linear(
             in_features=embedding_dim,
@@ -61,6 +54,7 @@ class Bert4RecModel(TorchModel, config_name='bert4rec'):
             labels_prefix=config['labels_prefix'],
             candidate_prefix=config['candidate_prefix'],
             num_items=kwargs['num_items'],
+            max_sequence_length=kwargs['max_sequence_length'],
             embedding_dim=config['embedding_dim'],
             num_heads=config.get('num_heads', int(config['embedding_dim'] // 64)),
             num_layers=config['num_layers'],
@@ -69,38 +63,13 @@ class Bert4RecModel(TorchModel, config_name='bert4rec'):
             initializer_range=config.get('initializer_range', 0.02)
         )
 
-    @torch.no_grad()
-    def _init_weights(self, initializer_range):
-        for key, value in self.named_parameters():
-            if 'weight' in key:
-                if 'norm' in key:
-                    nn.init.ones_(value.data)
-                else:
-                    nn.init.trunc_normal_(
-                        value.data,
-                        std=initializer_range,
-                        a=-2 * initializer_range,
-                        b=2 * initializer_range
-                    )
-            elif 'bias' in key:
-                nn.init.zeros_(value.data)
-            else:
-                raise ValueError(f'Unknown transformer weight: {key}')
-
     def forward(self, inputs):
         all_sample_events = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
         all_sample_lengths = inputs['{}.length'.format(self._sequence_prefix)]  # (batch_size)
 
-        all_sample_embeddings = self._item_embeddings(all_sample_events)  # (all_batch_events, embedding_dim)
-        embeddings, mask = create_masked_tensor(
-            data=all_sample_embeddings,
-            lengths=all_sample_lengths
-        )  # (batch_size, seq_len, embedding_dim)
-
-        embeddings = self._encoder(
-            src=embeddings,
-            src_key_padding_mask=~mask
-        )  # (batch_size, seq_len, embedding_dim)
+        embeddings, mask = self._apply_sequential_encoder(
+            all_sample_events, all_sample_lengths
+        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)+
 
         embeddings = self._output_projection(embeddings)  # (batch_size, seq_len, num_items)
 
@@ -116,26 +85,18 @@ class Bert4RecModel(TorchModel, config_name='bert4rec'):
             candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
             candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
 
-            embeddings[~mask] = 0
+            last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
 
-            lengths = torch.sum(mask, dim=-1)  # (batch_size)
-            lengths = (lengths - 1).unsqueeze(-1)  # (batch_size, 1)
-            last_masks = mask.gather(dim=1, index=lengths)  # (batch_size, 1)
-
-            lengths = lengths.unsqueeze(-1)  # (batch_size, 1, 1)
-            lengths = torch.tile(lengths, (1, 1, embeddings.shape[-1]))  # (batch_size, 1, emb_dim)
-            last_embeddings = embeddings.gather(dim=1, index=lengths)  # (batch_size, 1, emb_dim)
-
-            last_embeddings = last_embeddings[last_masks]  # (batch_size, emb_dim)
-            candidate_ids = torch.reshape(candidate_events,
-                                          (candidate_lengths.shape[0], -1))  # (batch_size, num_candidates)
+            candidate_ids = torch.reshape(
+                candidate_events,
+                (candidate_lengths.shape[0], -1)
+            )  # (batch_size, num_candidates)
             candidate_scores = last_embeddings.gather(dim=1, index=candidate_ids)  # (batch_size, num_candidates)
 
             return candidate_scores
 
 
 class Bert4RecMCLSRModel(TorchModel, config_name='bert4rec_mclsr'):
-    INF = 1e9
 
     def __init__(
             self,
@@ -374,19 +335,20 @@ class Bert4RecMCLSRModel(TorchModel, config_name='bert4rec_mclsr'):
         return torch.mean(torch.stack(embeddings, dim=1), dim=1)
 
     def forward(self, inputs):
-        sequence_ids = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
-        sequence_length = inputs['{}.length'.format(self._sequence_prefix)]  # (batch_size)
+        all_sample_events = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
+        all_sample_lengths = inputs['{}.length'.format(self._sequence_prefix)]  # (batch_size)
 
-        sequence_embeddings = self._item_embeddings(sequence_ids)  # (all_batch_events, embedding_dim)
-        sequence_embeddings, sequence_mask = create_masked_tensor(
-            data=sequence_embeddings,
-            lengths=sequence_length
-        )  # (batch_size, max_seq_len, embedding_dim), (batch_size, max_seq_len)
+        all_sample_embeddings = self._item_embeddings(all_sample_events)  # (all_batch_events, embedding_dim)
+
+        embeddings, mask = create_masked_tensor(
+            data=all_sample_embeddings,
+            lengths=all_sample_lengths
+        )  # (batch_size, seq_len, embedding_dim)
 
         # encoder part
         embeddings = self._encoder(
-            src=sequence_embeddings,
-            src_key_padding_mask=~sequence_mask
+            src=embeddings,
+            src_key_padding_mask=~mask
         )  # (batch_size, seq_len, embedding_dim)
 
         item_scores = self._output_projection(embeddings)  # (batch_size, seq_len, num_items)
@@ -398,8 +360,7 @@ class Bert4RecMCLSRModel(TorchModel, config_name='bert4rec_mclsr'):
             torch.tanh(torch.einsum('nd,bsd->bsn', self._weights_1, embeddings))
         )  # (batch_size, max_seq_len)
 
-        # TODO ask
-        sequence_logits[~sequence_mask] = -Bert4RecMCLSRModel.INF
+        sequence_logits[~mask] = -torch.inf
         attention_probits = torch.softmax(sequence_logits, dim=1)  # (batch_size, max_seq_len)
 
         current_interest_embedding = torch.einsum(
@@ -410,7 +371,7 @@ class Bert4RecMCLSRModel(TorchModel, config_name='bert4rec_mclsr'):
             training_output = {'current_interest_embeddings': current_interest_embedding}
 
             all_sample_labels = inputs['{}.ids'.format(self._labels_prefix)]  # (all_batch_events)
-            item_scores = item_scores[sequence_mask]  # (all_batch_events, num_items)
+            item_scores = item_scores[mask]  # (all_batch_events, num_items)
             labels_mask = (all_sample_labels != 0).bool()  # (all_batch_events)
             needed_logits = item_scores[labels_mask]  # (non_zero_events)
             needed_labels = all_sample_labels[labels_mask]  # (non_zero_events)
@@ -420,9 +381,9 @@ class Bert4RecMCLSRModel(TorchModel, config_name='bert4rec_mclsr'):
 
             # General interest learning part
             user_ids = inputs['{}.ids'.format(self._user_prefix)]  # (batch_size)
-            user_final_embeddings, item_final_embeddings = self.computer()
-            user_final_embeddings = user_final_embeddings[user_ids]  # (batch_size, embedding_dim)
-            item_final_embeddings = item_final_embeddings[sequence_ids]  # (all_batch_events, embedding_dim)
+            all_user_final_embeddings, all_item_final_embeddings = self.computer()
+            user_embeddings = all_user_final_embeddings[user_ids]  # (batch_size, embedding_dim)
+            item_embeddings = all_item_final_embeddings[all_sample_events]  # (all_batch_events, embedding_dim)
 
             # Feature-level contrastive learning part
             # if self._user_graph is not None:
@@ -435,34 +396,27 @@ class Bert4RecMCLSRModel(TorchModel, config_name='bert4rec_mclsr'):
             #     training_output['item_graph_embeddings'] = self._item_sequential(item_final_embeddings)  # (all_batch_items, embedding_dim)
             #     training_output['item_graph_final_embeddings'] = self._item_sequential(item_graph_final_embeddings)  # (all_batch_items, embedding_dim)
 
-            item_final_embeddings, _ = create_masked_tensor(
-                data=item_final_embeddings, lengths=sequence_length
+            all_item_final_embeddings, _ = create_masked_tensor(
+                data=item_embeddings, lengths=all_sample_lengths
             )  # (batch_size, max_seq_len, embedding_dim)
 
             graph_logits = torch.einsum(
                 'bd,bsd->bs',
-                torch.tanh(torch.einsum('bd,da->ba', user_final_embeddings, self._weights_3)),
-                item_final_embeddings
+                torch.tanh(torch.einsum('bd,da->ba', user_embeddings, self._weights_3)),
+                all_item_final_embeddings
             )  # (batch_size, max_seq_len)
 
-            graph_logits[~sequence_mask] = -Bert4RecMCLSRModel.INF
+            graph_logits[~mask] = -torch.inf
             attention_graph_probits = torch.softmax(graph_logits, dim=1)  # (batch_size, max_seq_len)
 
             global_interest_embedding = torch.einsum(
-                'bs,bsd->bd', attention_graph_probits, item_final_embeddings
+                'bs,bsd->bd', attention_graph_probits, all_item_final_embeddings
             )  # (batch_size, embedding_dim)
             training_output['global_interest_embeddings'] = global_interest_embedding
 
             # Training part
-            # combined_embedding = self._alpha * current_interest_embedding + (1 - self._alpha) * global_interest_embedding
-            # training_output['combined_embedding'] = combined_embedding  # (batch_size, embedding_dim)
-
-            # (in-batch setting) TODO make random
-            # positive_events = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_candidates)
-            # positive_lengths = inputs['{}.length'.format(self._positive_prefix)]  # (batch_size)
-            # next_events = positive_events[torch.cumsum(positive_lengths, dim=0).long() - 1]  # (batch_size)
-            # next_embeddings = self._item_embeddings(next_events)  # (batch_size, embedding_dim)
-            # training_output['next_item_embedding'] = next_embeddings  # (batch_size, embedding_dim)
+            combined_embedding = self._alpha * current_interest_embedding + (1 - self._alpha) * global_interest_embedding
+            training_output['combined_embedding'] = combined_embedding  # (batch_size, embedding_dim)
 
             return training_output
 
@@ -470,11 +424,11 @@ class Bert4RecMCLSRModel(TorchModel, config_name='bert4rec_mclsr'):
             candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
             candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
 
-            item_scores[~sequence_mask] = 0
+            item_scores[~mask] = 0
 
-            lengths = torch.sum(sequence_mask, dim=-1)  # (batch_size)
+            lengths = torch.sum(mask, dim=-1)  # (batch_size)
             lengths = (lengths - 1).unsqueeze(-1)  # (batch_size, 1)
-            last_masks = sequence_mask.gather(dim=1, index=lengths)  # (batch_size, 1)
+            last_masks = mask.gather(dim=1, index=lengths)  # (batch_size, 1)
 
             lengths = lengths.unsqueeze(-1)  # (batch_size, 1, 1)
             lengths = torch.tile(lengths, (1, 1, item_scores.shape[-1]))  # (batch_size, 1, emb_dim)

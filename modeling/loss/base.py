@@ -177,13 +177,59 @@ class FpsLoss(TorchLoss, config_name='fps'):
         mask = torch.eye(similarity_matrix.shape[0], dtype=torch.bool).to(DEVICE)  # (x, x)
 
         positive_scores = similarity_matrix[mask].squeeze()  # (x)
-        only_negatives = torch.sum(similarity_matrix[~mask].view(similarity_matrix.shape[0], -1), dim=1)  # (x)
+        only_negatives = torch.sum(similarity_matrix[~mask].view(
+            similarity_matrix.shape[0],
+            similarity_matrix.shape[1] - 1
+        ), dim=1)  # (x)
         all_scores = torch.sum(similarity_matrix, dim=1)  # (x)
 
         if self._add_negatives:
             loss = torch.sum(-torch.log(positive_scores / (only_negatives + all_scores)))  # (1)
         else:
-            loss = torch.sum(-torch.log(positive_scores / (all_scores)))  # (1)
+            loss = torch.sum(-torch.log(positive_scores / all_scores))  # (1)
+
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss
+
+
+class DuorecLoss(TorchLoss, config_name='duorec_ssl'):
+
+    def __init__(
+            self,
+            fst_embeddings_prefix,
+            snd_embeddings_prefix,
+            normalized=False,
+            tau=1.0,
+            output_prefix=None
+    ):
+        super().__init__()
+        self._fst_embeddings_prefix = fst_embeddings_prefix
+        self._snd_embeddings_prefix = snd_embeddings_prefix
+        self._normalized = normalized
+        self._tau = tau
+        self._output_prefix = output_prefix
+        self._loss_func = nn.CrossEntropyLoss()
+
+    def forward(self, inputs):
+        fst_embeddings = inputs[self._fst_embeddings_prefix]  # (x, embedding_dim)
+        snd_embeddings = inputs[self._snd_embeddings_prefix]  # (x, embedding_dim)
+
+        if self._normalized:
+            fst_norms = torch.norm(fst_embeddings, p=2, dim=1)  # (x)
+            snd_norms = torch.norm(snd_embeddings, p=2, dim=1)  # (x)
+            fst_embeddings /= fst_norms
+            snd_embeddings /= snd_norms
+
+        similarity_matrix = torch.matmul(fst_embeddings, snd_embeddings.T)  # (x, x)
+        similarity_matrix /= self._tau  # (x, x)
+        mask = torch.eye(similarity_matrix.shape[0], dtype=torch.bool).to(DEVICE)  # (x, x)
+
+        logits = similarity_matrix.reshape(-1).float()  # (x^2)
+        labels = mask.reshape(-1).float()  # (x^2)
+
+        loss = self._loss_func(logits, labels)
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()

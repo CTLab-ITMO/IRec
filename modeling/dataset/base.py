@@ -23,140 +23,6 @@ class BaseDataset(metaclass=MetaParent):
         raise NotImplementedError
 
 
-# TODO implement
-class CompositeDataset(BaseDataset, config_name='composite'):
-
-    def __init__(self):
-        pass
-
-    def get_samplers(self):
-        raise NotImplementedError
-
-
-# It has leaks in the test dataset
-class InteractionsDataset(BaseDataset, config_name='interactions'):
-
-    def __init__(
-            self,
-            train_sampler,
-            test_sampler,
-            num_users,
-            num_items
-    ):
-        self._train_sampler = train_sampler
-        self._test_sampler = test_sampler
-        self._num_users = num_users
-        self._num_items = num_items
-
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
-        max_user_idx, max_item_idx = 0, 0
-
-        train_dataset, train_num_interactions, train_max_user_idx, train_max_item_idx = cls._create_dataset(data_dir_path, 'train_new')
-        max_user_idx, max_item_idx = max(max_user_idx, train_max_user_idx), max(max_item_idx, train_max_item_idx)
-
-        test_dataset, test_num_interactions, test_max_user_idx, test_max_item_idx = cls._create_dataset(data_dir_path, 'test_new')
-        max_user_idx, max_item_idx = max(max_user_idx, test_max_user_idx), max(max_item_idx, test_max_item_idx)
-
-        # Add zero user/item
-        max_user_idx += 1
-        max_item_idx += 1
-
-        logger.info('Max user idx: {}'.format(max_user_idx))
-        logger.info('Max item idx: {}'.format(max_item_idx))
-        logger.info('{} dataset sparsity: {}'.format(
-            config['name'], (train_num_interactions + test_num_interactions) / max_user_idx / max_item_idx
-        ))
-
-        train_sampler = TrainSampler.create_from_config(
-            config['samplers'],
-            dataset=train_dataset,
-            num_users=max_user_idx,
-            num_items=max_item_idx
-        )
-        test_sampler = EvalSampler.create_from_config(
-            config['samplers'],
-            dataset=test_dataset,
-            num_users=max_user_idx,
-            num_items=max_item_idx
-        )  # TODO sanity check
-
-        return cls(
-            train_sampler=train_sampler,
-            test_sampler=test_sampler,
-            num_users=max_user_idx,
-            num_items=max_item_idx
-        )
-
-    @staticmethod
-    def _create_dataset(dir_path, part):
-        max_user_idx = 0
-        max_item_idx = 0
-
-        dataset_path = os.path.join(dir_path, '{}.txt'.format(part))
-        with open(dataset_path, 'r') as f:
-            data = f.readlines()
-
-        interactions_info = InteractionsDataset._create_interactions(data)
-        user_interactions, item_interactions, num_interactions, _, _ = interactions_info
-        max_user_idx = max(max_user_idx, interactions_info[3])
-        max_item_idx = max(max_item_idx, interactions_info[4])
-
-        dataset = []
-        for user_id, item_id in zip(user_interactions, item_interactions):
-            dataset.append({
-                'user.ids': [user_id], 'user.length': 1,
-                'item.ids': [item_id], 'item.length': 1
-            })
-        logger.info('{} dataset size: {}'.format(part, len(dataset)))
-
-        return dataset, num_interactions, max_user_idx, max_item_idx
-
-    @staticmethod
-    def _create_interactions(data):
-        user_interactions = []
-        item_interactions = []
-        num_interactions = 0
-
-        max_user_id = 0
-        max_item_id = 0
-
-        for sample in data:
-            sample = sample.strip('\n').split(' ')
-            item_ids = [int(item_id) for item_id in sample[1:]]
-            user_id = int(sample[0])
-
-            max_user_id = max(max_user_id, user_id)
-            max_item_id = max(max_item_id, max(item_ids))
-
-            user_interactions.extend([user_id] * len(item_ids))
-            item_interactions.extend(item_ids)
-
-            num_interactions += len(item_ids)
-
-        return user_interactions, item_interactions, num_interactions, max_user_id, max_item_id
-
-    def get_samplers(self):
-        return self._train_sampler, self._test_sampler
-
-    @property
-    def num_users(self):
-        return self._num_users
-
-    @property
-    def num_items(self):
-        return self._num_items
-
-    @property
-    def meta(self):
-        return {
-            'num_users': self.num_users,
-            'num_items': self.num_items,
-            'max_sequence_length': 1  # TODO ????
-        }
-
-
 class SequenceDataset(BaseDataset, config_name='sequence'):
 
     def __init__(
@@ -300,8 +166,8 @@ class GraphDataset(BaseDataset, config_name='graph'):
         self._use_user_graph = use_user_graph
         self._use_item_graph = use_item_graph
 
-        self._num_users = dataset._num_users + 2
-        self._num_items = dataset._num_items + 2
+        self._num_users = dataset.num_users + 2
+        self._num_items = dataset.num_items + 2
 
         train_sampler, test_sampler = self._dataset.get_samplers()
 
@@ -378,7 +244,8 @@ class GraphDataset(BaseDataset, config_name='graph'):
                 # (users, user) graph
                 user2user_connections = csr_matrix(
                     (
-                    np.ones(len(user2user_interactions_fst)), (user2user_interactions_fst, user2user_interactions_snd)),
+                        np.ones(len(user2user_interactions_fst)),
+                        (user2user_interactions_fst, user2user_interactions_snd)),
                     shape=(self._num_users, self._num_users)
                 )
 
@@ -406,7 +273,8 @@ class GraphDataset(BaseDataset, config_name='graph'):
                 # (item, item) graph
                 item2item_connections = csr_matrix(
                     (
-                    np.ones(len(item2item_interactions_fst)), (item2item_interactions_fst, item2item_interactions_snd)),
+                        np.ones(len(item2item_interactions_fst)),
+                        (item2item_interactions_fst, item2item_interactions_snd)),
                     shape=(self._num_items, self._num_items)
                 )
                 self._item_graph = self.get_sparse_graph_layer(item2item_connections, self._num_items, self._num_items)
@@ -491,100 +359,42 @@ class GraphDataset(BaseDataset, config_name='graph'):
         return meta
 
 
-class ScientificDataset(BaseDataset, config_name='scientific'):
+class DuorecDataset(BaseDataset, config_name='duorec'):
 
-    def __init__(
-            self,
-            train_sampler,
-            test_sampler,
-            num_users,
-            num_items,
-            max_sequence_length
-    ):
-        self._train_sampler = train_sampler
-        self._test_sampler = test_sampler
-        self._num_users = num_users
-        self._num_items = num_items
-        self._max_sequence_length = max_sequence_length
+    def __init__(self, dataset):
+        self._dataset = dataset
+        self._num_users = dataset.num_users
+        self._num_items = dataset.num_items
+
+        train_sampler, _ = self._dataset.get_samplers()
+
+        self.target_2_sequences = defaultdict(list)
+        for sample in train_sampler.dataset:
+            item_ids = sample['item.ids']
+
+            target_item = item_ids[-1]
+            semantic_similar_item_ids = item_ids[:-1]
+
+            self.target_2_sequences[target_item].append(semantic_similar_item_ids)
+
+        train_sampler._target_2_sequences = self.target_2_sequences
 
     @classmethod
-    def create_from_config(cls, config, **kwargs):
-        data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
-        max_user_idx, max_item_idx, max_sequence_length = 0, 0, 0
-        train_dataset, test_dataset = [], []
-
-        dataset_path = os.path.join(data_dir_path, '{}.txt'.format('all_data'))
-        with open(dataset_path, 'r') as f:
-            data = f.readlines()
-
-        for sample in data:
-            sample = sample.strip('\n').split(' ')
-            item_ids = [int(item_id) for item_id in sample[1:]][-max_sequence_length:]
-            user_idx = int(sample[0])
-
-            max_user_idx = max(max_user_idx, user_idx)
-            max_item_idx = max(max_item_idx, max(item_ids))
-            max_sequence_length = max(max_sequence_length, len(item_ids))
-
-            train_dataset.append({
-                'user.ids': [user_idx], 'user.length': 1,
-                'item.ids': item_ids[:-1], 'item.length': len(item_ids[:-1])
-            })
-
-            test_dataset.append({
-                'user.ids': [user_idx], 'user.length': 1,
-                'item.ids': item_ids, 'item.length': len(item_ids)
-            })
-
-        logger.info('Train dataset size: {}'.format(len(train_dataset)))
-        logger.info('Test dataset size: {}'.format(len(test_dataset)))
-        logger.info('Max user idx: {}'.format(max_user_idx))
-        logger.info('Max item idx: {}'.format(max_item_idx))
-        logger.info('Max sequence length: {}'.format(max_sequence_length))
-        logger.info('{} dataset sparsity: {}'.format(
-            config['name'], (len(train_dataset) + len(test_dataset)) / max_user_idx / max_item_idx
-        ))
-
-        train_sampler = TrainSampler.create_from_config(
-            config['samplers'],
-            dataset=train_dataset,
-            num_users=max_user_idx,
-            num_items=max_item_idx
-        )
-        test_sampler = EvalSampler.create_from_config(
-            config['samplers'],
-            dataset=test_dataset,
-            num_users=max_user_idx,
-            num_items=max_item_idx
-        )  # TODO sanity check
-
-        return cls(
-            train_sampler=train_sampler,
-            test_sampler=test_sampler,
-            num_users=max_user_idx,
-            num_items=max_item_idx,
-            max_sequence_length=max_sequence_length
-        )
-
-    def get_samplers(self):
-        return self._train_sampler, self._test_sampler
+    def create_from_config(cls, config):
+        dataset = BaseDataset.create_from_config(config['dataset'])
+        return cls(dataset)
 
     @property
     def num_users(self):
-        return self._num_users
+        return self._dataset.num_users
 
     @property
     def num_items(self):
-        return self._num_items
+        return self._dataset.num_items
 
-    @property
-    def max_sequence_length(self):
-        return self._max_sequence_length
+    def get_samplers(self):
+        return self._dataset.get_samplers()
 
     @property
     def meta(self):
-        return {
-            'num_users': self.num_users,
-            'num_items': self.num_items,
-            'max_sequence_length': self.max_sequence_length
-        }
+        return self._dataset.meta
