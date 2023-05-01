@@ -23,6 +23,14 @@ class Params:
             if initial_field_value:
                 if params_fields_value is None:  # We don't want to iterate through this field
                     values.append([initial_field_value])
+                elif isinstance(initial_field_value, list) and isinstance(initial_field_value, list):
+                    assert len(initial_field_value) == len(params_fields_value)
+                    list_values = []
+                    for i in range(len(initial_field_value)):
+                        field_variations = list(Params(initial_field_value[i], params_fields_value[i]))
+                        list_values.append(field_variations)
+                    list_values = [p for p in product(*list_values)]
+                    values.append(list_values)
                 elif isinstance(initial_field_value, dict):  # It is composite param, need to go inside
                     field_variations = list(Params(initial_field_value, params_fields_value))
                     values.append(field_variations)
@@ -34,14 +42,3 @@ class Params:
         yield from [dict(zip(keys, p)) for p in product(*values)]
 
         return StopIteration
-
-    @staticmethod
-    def dict_to_str(config):
-        str_parts = []
-        for key, value in config.items():
-            if isinstance(value, dict):
-                sub_string = Params.dict_to_str(value).split('_')
-                str_parts.append('_'.join(list(map(lambda x: '{}.{}'.format(key, x), sub_string))))
-            else:
-                str_parts.append('{}={}'.format(key, str(value)))
-        return '_'.join(str_parts)

@@ -75,8 +75,11 @@ def dict_to_str(x, params):
         if k in params:
             if isinstance(v, dict):
                 part = '_'.join([f'{k}-{sub_part}' for sub_part in dict_to_str(v, params[k]).split('_')])
-            elif isinstance(v, list):
-                continue
+            elif isinstance(v, tuple) or isinstance(v, list):
+                sub_strings = []
+                for i, sub_value in enumerate(v):
+                    sub_strings.append(f'({i})_{dict_to_str(v[i], params[k][i])}')
+                part = f'({"_".join(sub_strings)})'
             else:
                 part = f'{k}-{v}'
             parts.append(part)

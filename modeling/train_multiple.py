@@ -2,7 +2,7 @@ import itertools
 import random
 
 import utils
-from utils import parse_args, create_logger, fix_random_seed, DEVICE, Params, dict_to_str
+from utils import parse_args, create_logger, DEVICE, Params, dict_to_str
 from train import train
 
 from dataset import BaseDataset

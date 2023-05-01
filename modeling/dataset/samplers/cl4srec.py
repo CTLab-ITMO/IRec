@@ -38,8 +38,8 @@ class Cl4SRecTrainSampler(TrainSampler, config_name='cl4srec'):
         )
 
     def _apply_crop_augmentation(self, item_sequence):
-        num_elements_to_crop = int(self._item_crop_portion * len(item_sequence))
-        crop_start_index = int(np.random.choice(list(range(len(item_sequence) - num_elements_to_crop))))
+        num_elements_to_crop = max(1, int(self._item_crop_portion * len(item_sequence)))
+        crop_start_index = int(np.random.choice(list(range(max(1, len(item_sequence) - num_elements_to_crop)))))
         assert 0 <= crop_start_index < len(item_sequence) - num_elements_to_crop
         item_sequence = item_sequence[crop_start_index: crop_start_index + num_elements_to_crop]
         return item_sequence
