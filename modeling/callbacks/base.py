@@ -1,7 +1,7 @@
 from metric import BaseMetric
 
 import utils
-from utils import MetaParent, create_logger, maybe_to_list
+from utils import MetaParent, create_logger
 
 import os
 import torch
@@ -13,9 +13,18 @@ logger = create_logger(name=__name__)
 
 class BaseCallback(metaclass=MetaParent):
 
-    def __init__(self, model, dataloader, optimizer):
+    def __init__(
+            self,
+            model,
+            train_dataloader,
+            validation_dataloader,
+            eval_dataloader,
+            optimizer
+    ):
         self._model = model
-        self._dataloader = dataloader
+        self._train_dataloader = train_dataloader
+        self._validation_dataloader = validation_dataloader
+        self._eval_dataloader = eval_dataloader
         self._optimizer = optimizer
 
     def __call__(self, inputs, step_num):
@@ -27,13 +36,21 @@ class MetricCallback(BaseCallback, config_name='metric'):
     def __init__(
             self,
             model,
-            dataloader,
+            train_dataloader,
+            validation_dataloader,
+            eval_dataloader,
             optimizer,
             on_step,
             metrics,
             loss_prefix
     ):
-        super().__init__(model, dataloader, optimizer)
+        super().__init__(
+            model,
+            train_dataloader,
+            validation_dataloader,
+            eval_dataloader,
+            optimizer
+        )
         self._on_step = on_step
         self._loss_prefix = loss_prefix
         self._metrics = metrics if metrics is not None else {}
@@ -42,7 +59,9 @@ class MetricCallback(BaseCallback, config_name='metric'):
     def create_from_config(cls, config, **kwargs):
         return cls(
             model=kwargs['model'],
-            dataloader=kwargs['dataloader'],
+            train_dataloader=kwargs['train_dataloader'],
+            validation_dataloader=kwargs['validation_dataloader'],
+            eval_dataloader=kwargs['eval_dataloader'],
             optimizer=kwargs['optimizer'],
             on_step=config['on_step'],
             metrics=config.get('metrics', None),
@@ -72,8 +91,24 @@ class MetricCallback(BaseCallback, config_name='metric'):
 
 class CheckpointCallback(BaseCallback, config_name='checkpoint'):
 
-    def __init__(self, model, dataloader, optimizer, on_step, save_path, model_name):
-        super().__init__(model, dataloader, optimizer)
+    def __init__(
+            self,
+            model,
+            train_dataloader,
+            validation_dataloader,
+            eval_dataloader,
+            optimizer,
+            on_step,
+            save_path,
+            model_name
+    ):
+        super().__init__(
+            model,
+            train_dataloader,
+            validation_dataloader,
+            eval_dataloader,
+            optimizer
+        )
         self._on_step = on_step
         self._save_path = Path(os.path.join(save_path, model_name))
         if self._save_path.exists():
@@ -85,7 +120,9 @@ class CheckpointCallback(BaseCallback, config_name='checkpoint'):
     def create_from_config(cls, config, **kwargs):
         return cls(
             model=kwargs['model'],
-            dataloader=kwargs['dataloader'],
+            train_dataloader=kwargs['train_dataloader'],
+            validation_dataloader=kwargs['validation_dataloader'],
+            eval_dataloader=kwargs['eval_dataloader'],
             optimizer=kwargs['optimizer'],
             on_step=config['on_step'],
             save_path=config['save_path'],
@@ -106,19 +143,28 @@ class CheckpointCallback(BaseCallback, config_name='checkpoint'):
             logger.debug('Saving done!')
 
 
-class QualityCheckCallbackCheck(BaseCallback, config_name='validation'):
+class ValidationCallback(BaseCallback, config_name='validation'):
+
     def __init__(
             self,
             model,
-            dataloader,
+            train_dataloader,
+            validation_dataloader,
+            eval_dataloader,
             optimizer,
             on_step,
             pred_prefix,
             labels_prefix,
             metrics=None,
-            loss_prefix=None
+            loss_prefix=None,
     ):
-        super().__init__(model, dataloader, optimizer)
+        super().__init__(
+            model,
+            train_dataloader,
+            validation_dataloader,
+            eval_dataloader,
+            optimizer
+        )
         self._on_step = on_step
         self._metrics = metrics if metrics is not None else {}
         self._pred_prefix = pred_prefix
@@ -134,7 +180,9 @@ class QualityCheckCallbackCheck(BaseCallback, config_name='validation'):
 
         return cls(
             model=kwargs['model'],
-            dataloader=kwargs['dataloader'],
+            train_dataloader=kwargs['train_dataloader'],
+            validation_dataloader=kwargs['validation_dataloader'],
+            eval_dataloader=kwargs['eval_dataloader'],
             optimizer=kwargs['optimizer'],
             on_step=config['on_step'],
             metrics=metrics,
@@ -149,7 +197,7 @@ class QualityCheckCallbackCheck(BaseCallback, config_name='validation'):
 
             self._model.eval()
             with torch.no_grad():
-                for batch in self._dataloader:
+                for batch in self._validation_dataloader:
 
                     for key, value in batch.items():
                         batch[key] = value.to(utils.DEVICE)
@@ -170,10 +218,10 @@ class QualityCheckCallbackCheck(BaseCallback, config_name='validation'):
                         running_params[self._loss_prefix] += batch[self._loss_prefix].item()
 
             for label, value in running_params.items():
-                inputs[label] = value / len(self._dataloader)
+                inputs[label] = value / len(self._validation_dataloader)
                 utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
                     'validation/{}'.format(label),
-                    value / len(self._dataloader),
+                    value / len(self._validation_dataloader),
                     step_num
                 )
             utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.flush()
@@ -181,22 +229,119 @@ class QualityCheckCallbackCheck(BaseCallback, config_name='validation'):
             logger.debug('Validation on step {} is done!'.format(step_num))
 
 
+# TODO put into validation
+class EvalCallback(BaseCallback, config_name='eval'):
+
+    def __init__(
+            self,
+            model,
+            train_dataloader,
+            validation_dataloader,
+            eval_dataloader,
+            optimizer,
+            on_step,
+            pred_prefix,
+            labels_prefix,
+            metrics=None,
+            loss_prefix=None,
+    ):
+        super().__init__(
+            model,
+            train_dataloader,
+            validation_dataloader,
+            eval_dataloader,
+            optimizer
+        )
+        self._on_step = on_step
+        self._metrics = metrics if metrics is not None else {}
+        self._pred_prefix = pred_prefix
+        self._labels_prefix = labels_prefix
+        self._loss_prefix = loss_prefix
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        metrics = {
+            metric_name: BaseMetric.create_from_config(metric_cfg, **kwargs)
+            for metric_name, metric_cfg in config['metrics'].items()
+        }
+
+        return cls(
+            model=kwargs['model'],
+            train_dataloader=kwargs['train_dataloader'],
+            validation_dataloader=kwargs['validation_dataloader'],
+            eval_dataloader=kwargs['eval_dataloader'],
+            optimizer=kwargs['optimizer'],
+            on_step=config['on_step'],
+            metrics=metrics,
+            pred_prefix=config['pred_prefix'],
+            labels_prefix=config['labels_prefix']
+        )
+
+    def __call__(self, inputs, step_num):
+        if step_num % self._on_step == 0:  # TODO Add time monitoring
+            logger.debug('Eval on step {}...'.format(step_num))
+            running_params = Counter()
+
+            self._model.eval()
+            with torch.no_grad():
+                for batch in self._eval_dataloader:
+
+                    for key, value in batch.items():
+                        batch[key] = value.to(utils.DEVICE)
+
+                    batch[self._pred_prefix] = self._model(batch)
+
+                    for key, values in batch.items():
+                        batch[key] = values.cpu()
+
+                    for metric_name, metric_function in self._metrics.items():
+                        running_params[metric_name] += metric_function(
+                            inputs=batch,
+                            pred_prefix=self._pred_prefix,
+                            labels_prefix=self._labels_prefix,
+                        )
+
+                    if self._loss_prefix is not None:
+                        running_params[self._loss_prefix] += batch[self._loss_prefix].item()
+
+            for label, value in running_params.items():
+                inputs[label] = value / len(self._eval_dataloader)
+                utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
+                    'eval/{}'.format(label),
+                    value / len(self._eval_dataloader),
+                    step_num
+                )
+            utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.flush()
+
+            logger.debug('Eval on step {} is done!'.format(step_num))
+
+
 class CompositeCallback(BaseCallback, config_name='composite'):
     def __init__(
             self,
             model,
-            dataloader,
+            train_dataloader,
+            validation_dataloader,
+            eval_dataloader,
             optimizer,
             callbacks
     ):
-        super().__init__(model, dataloader, optimizer)
+        super().__init__(
+            model,
+            train_dataloader,
+            validation_dataloader,
+            eval_dataloader,
+            optimizer
+        )
         self._callbacks = callbacks
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
             model=kwargs['model'],
-            dataloader=kwargs['dataloader'],
+            train_dataloader=kwargs['train_dataloader'],
+            validation_dataloader=kwargs['validation_dataloader'],
+            eval_dataloader=kwargs['eval_dataloader'],
             optimizer=kwargs['optimizer'],
             callbacks=[
                 BaseCallback.create_from_config(cfg, **kwargs)

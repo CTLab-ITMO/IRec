@@ -2,7 +2,7 @@ from collections import defaultdict
 
 from tqdm import tqdm
 
-from dataset.samplers import TrainSampler, EvalSampler
+from dataset.samplers import TrainSampler, ValidationSampler, EvalSampler
 
 from utils import MetaParent, DEVICE
 
@@ -28,12 +28,14 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
     def __init__(
             self,
             train_sampler,
+            validation_sampler,
             test_sampler,
             num_users,
             num_items,
             max_sequence_length
     ):
         self._train_sampler = train_sampler
+        self._validation_sampler = validation_sampler
         self._test_sampler = test_sampler
         self._num_users = num_users
         self._num_items = num_items
@@ -68,6 +70,12 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
             num_users=max_user_idx,
             num_items=max_item_idx
         )
+        validation_sampler = ValidationSampler.create_from_config(
+            config['samplers'],
+            dataset=train_dataset,
+            num_users=max_user_idx,
+            num_items=max_item_idx
+        )
         test_sampler = EvalSampler.create_from_config(
             config['samplers'],
             dataset=test_dataset,
@@ -77,6 +85,7 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
 
         return cls(
             train_sampler=train_sampler,
+            validation_sampler=validation_sampler,
             test_sampler=test_sampler,
             num_users=max_user_idx,
             num_items=max_item_idx,
@@ -135,7 +144,7 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
         return user_sequences, item_sequences, max_user_id, max_item_id, max_sequence_length
 
     def get_samplers(self):
-        return self._train_sampler, self._test_sampler
+        return self._train_sampler, self._validation_sampler, self._test_sampler
 
     @property
     def num_users(self):

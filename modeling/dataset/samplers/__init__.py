@@ -1,4 +1,4 @@
-from .base import TrainSampler, EvalSampler
+from .base import TrainSampler, ValidationSampler, EvalSampler
 from .cl4srec import Cl4SRecTrainSampler, Cl4SRecEvalSampler
 from .duorec import DuorecTrainSampler, DuoRecEvalSampler
 from .next_item_prediction import NextItemPredictionTrainSampler, NextItemPredictionEvalSampler

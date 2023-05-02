@@ -9,6 +9,7 @@ from loss import BaseLoss
 from callbacks import BaseCallback
 
 import copy
+import torch
 import json
 
 logger = create_logger(name=__name__)
@@ -61,7 +62,7 @@ def main():
 
     dataset = BaseDataset.create_from_config(config['dataset'])
 
-    train_sampler, test_sampler = dataset.get_samplers()
+    train_sampler, validation_sampler, test_sampler = dataset.get_samplers()
 
     train_dataloader = BaseDataloader.create_from_config(
         config['dataloader']['train'],
@@ -70,6 +71,12 @@ def main():
     )
 
     validation_dataloader = BaseDataloader.create_from_config(
+        config['dataloader']['validation'],
+        dataset=validation_sampler,
+        **dataset.meta
+    )
+
+    eval_dataloader = BaseDataloader.create_from_config(
         config['dataloader']['validation'],
         dataset=test_sampler,
         **dataset.meta
@@ -84,7 +91,9 @@ def main():
     callback = BaseCallback.create_from_config(
         config['callback'],
         model=model,
-        dataloader=validation_dataloader,
+        train_dataloader=train_dataloader,
+        validation_dataloader=validation_dataloader,
+        eval_dataloader=eval_dataloader,
         optimizer=optimizer
     )
 
@@ -104,9 +113,9 @@ def main():
     )
 
     # logger.debug('Saving model...')
-    # checkpoint_path = '../checkpoints/{}_final_state.pth'.format(config['experiment_name'])
-    # torch.save(model.state_dict(), checkpoint_path)
-    # logger.debug('Saved model as {}'.format(checkpoint_path))
+    checkpoint_path = '../checkpoints/{}_final_state.pth'.format(config['experiment_name'])
+    torch.save(model.state_dict(), checkpoint_path)
+    logger.debug('Saved model as {}'.format(checkpoint_path))
 
 
 if __name__ == '__main__':

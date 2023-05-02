@@ -2,12 +2,12 @@
   "start_from": 0,
   "num_exps": 60,
   "experiment_name": "cl4srec_beauty_grid",
-  "train_epochs_num": 1,
+  "train_epochs_num": 20,
   "dataset": {
     "type": "sequence",
     "path_to_data_dir": "../data",
     "name": "Beauty",
-    "max_sequence_length": 200,
+    "max_sequence_length": 50,
     "samplers": {
       "num_negatives_eval": 100,
       "type": "cl4srec",
@@ -24,7 +24,7 @@
   "dataloader": {
     "train": {
       "type": "torch",
-      "batch_size": 128,
+      "batch_size": 256,
       "batch_processor": {
         "type": "basic"
       },
@@ -33,7 +33,7 @@
     },
     "validation": {
       "type": "torch",
-      "batch_size": 128,
+      "batch_size": 256,
       "batch_processor": {
         "type": "basic"
       },
@@ -50,12 +50,10 @@
     "candidate_prefix": "candidates",
     "num_layers": 2,
     "num_heads": 2,
-    "embedding_dim": 256,
-    "dim_feedforward": 1024,
-    "dropout": 0.0,
+    "embedding_dim": 64,
+    "dim_feedforward": 256,
     "activation": "relu",
-    "layer_norm_eps": 1e-5,
-    "initializer_range": 0.02
+    "layer_norm_eps": 1e-5
   },
   "model_params": {
     "dropout": [0.0, 0.1, 0.2],
@@ -95,13 +93,8 @@
   },
   "loss_params": {
     "losses": [
-      {
-        "tau": [0.2, 0.5, 1.0]
-      },
-      {
-        "tau": [0.2, 0.5, 1.0],
-        "weight": [0.01, 0.05, 0.1, 0.5]
-      }
+      {},
+      {"weight": [0.01, 0.05, 0.1, 0.5]}
     ]
   },
   "callback": {

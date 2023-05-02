@@ -1,6 +1,6 @@
 import random
 
-from dataset.samplers.base import TrainSampler, EvalSampler
+from dataset.samplers.base import TrainSampler, ValidationSampler, EvalSampler
 from dataset.negative_samplers.base import BaseNegativeSampler
 
 import copy
@@ -48,7 +48,7 @@ class DuorecTrainSampler(TrainSampler, config_name='duorec'):
         }
 
 
-class DuoRecEvalSampler(EvalSampler, config_name='duorec'):
+class DuoRecValidationSampler(ValidationSampler, config_name='duorec'):
 
     def __init__(self, dataset, num_users, num_items, negative_sampler, num_negatives=100):
         super().__init__()
@@ -95,3 +95,7 @@ class DuoRecEvalSampler(EvalSampler, config_name='duorec'):
             'labels.ids': labels,
             'labels.length': len(labels),
         }
+
+
+class DuoRecEvalSampler(EvalSampler, config_name='duorec'):
+    pass

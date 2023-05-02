@@ -1,4 +1,4 @@
-from dataset.samplers.base import TrainSampler, EvalSampler
+from dataset.samplers.base import TrainSampler, ValidationSampler, EvalSampler
 from dataset.negative_samplers.base import BaseNegativeSampler
 
 import copy
@@ -60,7 +60,7 @@ class MaskedItemPredictionTrainSampler(TrainSampler, config_name='masked_item_pr
         }
 
 
-class MaskedItemPredictionEvalSampler(EvalSampler, config_name='masked_item_prediction'):
+class MaskedItemPredictionValidationSampler(ValidationSampler, config_name='masked_item_prediction'):
 
     def __init__(self, dataset, num_users, num_items, negative_sampler, num_negatives=100):
         super().__init__()
@@ -105,4 +105,28 @@ class MaskedItemPredictionEvalSampler(EvalSampler, config_name='masked_item_pred
 
             'labels.ids': labels,
             'labels.length': len(labels),
+        }
+
+
+class MaskedItemPredictionEvalSampler(EvalSampler, config_name='masked_item_prediction'):
+
+    def __init__(self, dataset, num_users, num_items):
+        super().__init__(dataset, num_users, num_items)
+        self._mask_item_idx = self._num_items + 1
+
+    def __getitem__(self, index):
+        sample = copy.deepcopy(self._dataset[index])
+        item_sequence = sample['item.ids']
+        labels = [item_sequence[-1]]
+        sequence = item_sequence[:-1] + [self._mask_item_idx]
+
+        return {
+            'user.ids': sample['user.ids'],
+            'user.length': sample['user.length'],
+
+            'item.ids': sequence,
+            'item.length': len(sequence),
+
+            'labels.ids': labels,
+            'labels.length': len(labels)
         }

@@ -1,6 +1,6 @@
 import numpy as np
 
-from dataset.samplers.base import TrainSampler, EvalSampler
+from dataset.samplers.base import TrainSampler, ValidationSampler, EvalSampler
 from dataset.negative_samplers.base import BaseNegativeSampler
 
 import copy
@@ -98,7 +98,7 @@ class Cl4SRecTrainSampler(TrainSampler, config_name='cl4srec'):
         }
 
 
-class Cl4SRecEvalSampler(EvalSampler, config_name='cl4srec'):
+class Cl4SRecValidationSampler(ValidationSampler, config_name='cl4srec'):
 
     def __init__(self, dataset, num_users, num_items, negative_sampler, num_negatives=100):
         super().__init__()
@@ -145,3 +145,7 @@ class Cl4SRecEvalSampler(EvalSampler, config_name='cl4srec'):
             'labels.ids': labels,
             'labels.length': len(labels),
         }
+
+
+class Cl4SRecEvalSampler(EvalSampler, config_name='cl4srec'):
+    pass

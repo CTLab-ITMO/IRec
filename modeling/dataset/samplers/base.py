@@ -1,5 +1,7 @@
 from utils import MetaParent
 
+import copy
+
 
 class TrainSampler(metaclass=MetaParent):
 
@@ -17,7 +19,7 @@ class TrainSampler(metaclass=MetaParent):
         raise NotImplementedError
 
 
-class EvalSampler(metaclass=MetaParent):
+class ValidationSampler(metaclass=MetaParent):
 
     def __init__(self):
         self._dataset = None
@@ -31,3 +33,45 @@ class EvalSampler(metaclass=MetaParent):
 
     def __getitem__(self, index):
         raise NotImplementedError
+
+
+class EvalSampler(metaclass=MetaParent):
+
+    def __init__(self, dataset, num_users, num_items):
+        super().__init__()
+        self._dataset = dataset
+        self._num_users = num_users
+        self._num_items = num_items
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        return cls(
+            dataset=kwargs['dataset'],
+            num_users=kwargs['num_users'],
+            num_items=kwargs['num_items']
+        )
+
+    @property
+    def dataset(self):
+        return self._dataset
+
+    def __len__(self):
+        return len(self._dataset)
+
+    def __getitem__(self, index):
+        sample = copy.deepcopy(self._dataset[index])
+
+        item_sequence = sample['item.ids']
+        labels = [item_sequence[-1]]
+        item_sequence = item_sequence[:-1]
+
+        return {
+            'user.ids': sample['user.ids'],
+            'user.length': sample['user.length'],
+
+            'item.ids': item_sequence,
+            'item.length': len(item_sequence),
+
+            'labels.ids': labels,
+            'labels.length': len(labels),
+        }

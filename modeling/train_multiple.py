@@ -62,7 +62,7 @@ def main():
 
         dataset = BaseDataset.create_from_config(dataset_param)
 
-        train_sampler, test_sampler = dataset.get_samplers()
+        train_sampler, validation_sampler, eval_sampler = dataset.get_samplers()
 
         train_dataloader = BaseDataloader.create_from_config(
             config['dataloader']['train'],
@@ -72,7 +72,13 @@ def main():
 
         validation_dataloader = BaseDataloader.create_from_config(
             config['dataloader']['validation'],
-            dataset=test_sampler,
+            dataset=validation_sampler,
+            **dataset.meta
+        )
+
+        eval_dataloader = BaseDataloader.create_from_config(
+            config['dataloader']['validation'],
+            dataset=eval_sampler,
             **dataset.meta
         )
 
@@ -87,7 +93,9 @@ def main():
         callback = BaseCallback.create_from_config(
             config['callback'],
             model=model,
-            dataloader=validation_dataloader,
+            train_dataloader=train_dataloader,
+            validation_dataloader=validation_dataloader,
+            eval_dataloader=eval_dataloader,
             optimizer=optimizer
         )
 

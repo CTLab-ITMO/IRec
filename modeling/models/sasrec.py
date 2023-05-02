@@ -89,25 +89,33 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
 
             return {'positive_scores': positive_scores, 'negative_scores': negative_scores}
         else:  # eval mode
-            candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
-            candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
-
-            candidate_embeddings = self._item_embeddings(
-                candidate_events
-            )  # (batch_size, num_candidates, embedding_dim)
-
-            candidate_embeddings, candidate_mask = create_masked_tensor(
-                data=candidate_embeddings,
-                lengths=candidate_lengths
-            )
-
             last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
 
-            candidate_scores = torch.einsum(
-                'bd,bnd->bn',
-                last_embeddings,
-                candidate_embeddings
-            )  # (batch_size, num_candidates)
+            if '{}.ids'.format(self._candidate_prefix) in inputs:
+                candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
+                candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
+
+                candidate_embeddings = self._item_embeddings(
+                    candidate_events
+                )  # (batch_size, num_candidates, embedding_dim)
+
+                candidate_embeddings, candidate_mask = create_masked_tensor(
+                    data=candidate_embeddings,
+                    lengths=candidate_lengths
+                )
+
+                candidate_scores = torch.einsum(
+                    'bd,bnd->bn',
+                    last_embeddings,
+                    candidate_embeddings
+                )  # (batch_size, num_candidates)
+            else:
+                candidate_embeddings = self._item_embeddings.weight  # (num_items, embedding_dim)
+                candidate_scores = torch.einsum(
+                    'bd,nd->bn',
+                    last_embeddings,
+                    candidate_embeddings
+                )  # (batch_size, num_items)
 
             return candidate_scores
 

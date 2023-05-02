@@ -120,3 +120,37 @@ class SequentialTorchModel(TorchModel):
             )  # (batch_size, seq_len, embedding_dim)
 
         return embeddings, mask
+
+    @staticmethod
+    def _add_cls_token(items, lengths, cls_token_id=0):
+        num_items = items.shape[0]
+        batch_size = lengths.shape[0]
+        num_new_items = num_items + batch_size
+
+        new_items = torch.ones(
+            num_new_items,
+            dtype=items.dtype,
+            device=items.device
+        ) * cls_token_id  # (num_new_items)
+
+        old_items_mask = torch.zeros_like(new_items).bool()  # (num_new_items)
+        old_items_mask = ~old_items_mask.scatter(
+            src=torch.ones_like(lengths).bool(),
+            dim=0,
+            index=torch.cat([torch.LongTensor([0]).to(DEVICE), lengths + 1]).cumsum(dim=0)[:-1]
+        )  # (num_new_items)
+        new_items[old_items_mask] = items
+        new_length = lengths + 1
+
+        # TODO remove
+        assert new_items.shape[0] == torch.sum(new_length)
+        assert torch.allclose(
+            torch.ones_like(lengths) * cls_token_id,
+            torch.gather(
+                input=new_items,
+                dim=0,
+                index=torch.cat([torch.LongTensor([0]).to(DEVICE), new_length]).cumsum(dim=0)[:-1]
+            )
+        )
+
+        return new_items, new_length

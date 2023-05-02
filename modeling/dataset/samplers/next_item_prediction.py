@@ -1,4 +1,4 @@
-from dataset.samplers.base import TrainSampler, EvalSampler
+from dataset.samplers.base import TrainSampler, ValidationSampler, EvalSampler
 from dataset.negative_samplers.base import BaseNegativeSampler
 
 import copy
@@ -56,7 +56,7 @@ class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_predic
         }
 
 
-class NextItemPredictionEvalSampler(EvalSampler, config_name='next_item_prediction'):
+class NextItemPredictionValidationSampler(ValidationSampler, config_name='next_item_prediction'):
 
     def __init__(self, dataset, num_users, num_items, negative_sampler, num_negatives=100):
         super().__init__()
@@ -104,3 +104,7 @@ class NextItemPredictionEvalSampler(EvalSampler, config_name='next_item_predicti
             'labels.ids': labels,
             'labels.length': len(labels),
         }
+
+
+class NextItemPredictionEvalSampler(EvalSampler, config_name='next_item_prediction'):
+    pass
