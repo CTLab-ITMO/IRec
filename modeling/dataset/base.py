@@ -6,6 +6,7 @@ from dataset.samplers import TrainSampler, ValidationSampler, EvalSampler
 
 from utils import MetaParent, DEVICE
 
+import pickle
 import torch
 import numpy as np
 import scipy.sparse as sp
@@ -52,8 +53,14 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
         max_user_idx, max_item_idx = max(max_user_idx, train_max_user_idx), max(max_item_idx, train_max_item_idx)
         max_sequence_length = max(max_sequence_length, train_max_sequence_length)
 
-        test_dataset, test_max_user_idx, test_max_item_idx, test_max_sequence_length = cls._create_dataset(
+        validation_dataset, validation_max_user_idx, validation_max_item_idx, validation_max_sequence_length = cls._create_dataset(
             data_dir_path, 'validation_new', config['max_sequence_length']
+        )
+        max_user_idx, max_item_idx = max(max_user_idx, validation_max_user_idx), max(max_item_idx, validation_max_item_idx)
+        max_sequence_length = max(max_sequence_length, validation_max_sequence_length)
+
+        test_dataset, test_max_user_idx, test_max_item_idx, test_max_sequence_length = cls._create_dataset(
+            data_dir_path, 'test_new', config['max_sequence_length']
         )
         max_user_idx, max_item_idx = max(max_user_idx, test_max_user_idx), max(max_item_idx, test_max_item_idx)
         max_sequence_length = max(max_sequence_length, test_max_sequence_length)
@@ -64,6 +71,7 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
             config['name'], (len(train_dataset) + len(test_dataset)) / max_user_idx / max_item_idx
         ))
 
+        # TODO sanity check
         train_sampler = TrainSampler.create_from_config(
             config['samplers'],
             dataset=train_dataset,
@@ -72,7 +80,7 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
         )
         validation_sampler = ValidationSampler.create_from_config(
             config['samplers'],
-            dataset=train_dataset,
+            dataset=validation_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx
         )
@@ -81,7 +89,7 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
             dataset=test_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx
-        )  # TODO sanity check
+        )
 
         return cls(
             train_sampler=train_sampler,
@@ -98,25 +106,35 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
         max_item_idx = 0
         max_sequence_len = 0
 
-        dataset_path = os.path.join(dir_path, '{}.txt'.format(part))
-        with open(dataset_path, 'r') as f:
-            data = f.readlines()
+        if os.path.exists(os.path.join(dir_path, '{}.pkl'.format(part))):
+            with open(os.path.join(dir_path, '{}.pkl'.format(part)), 'rb') as dataset_file:
+                dataset, max_user_idx, max_item_idx, max_sequence_len = pickle.load(dataset_file)
+        else:
+            dataset_path = os.path.join(dir_path, '{}.txt'.format(part))
+            with open(dataset_path, 'r') as f:
+                data = f.readlines()
 
-        sequence_info = cls._create_sequences(data, max_sequence_length)
-        user_sequences, item_sequences, _, _, _ = sequence_info
-        max_user_idx = max(max_user_idx, sequence_info[2])
-        max_item_idx = max(max_item_idx, sequence_info[3])
-        max_sequence_len = max(max_sequence_len, sequence_info[4])
+            sequence_info = cls._create_sequences(data, max_sequence_length)
+            user_sequences, item_sequences, _, _, _ = sequence_info
+            max_user_idx = max(max_user_idx, sequence_info[2])
+            max_item_idx = max(max_item_idx, sequence_info[3])
+            max_sequence_len = max(max_sequence_len, sequence_info[4])
 
-        dataset = []
-        for user_idx, item_ids in zip(user_sequences, item_sequences):
-            dataset.append({
-                'user.ids': [user_idx], 'user.length': 1,
-                'item.ids': item_ids, 'item.length': len(item_ids)
-            })
+            dataset = []
+            for user_idx, item_ids in zip(user_sequences, item_sequences):
+                dataset.append({
+                    'user.ids': [user_idx], 'user.length': 1,
+                    'item.ids': item_ids, 'item.length': len(item_ids)
+                })
 
-        logger.info('{} dataset size: {}'.format(part, len(dataset)))
-        logger.info('{} dataset max sequence length: {}'.format(part, max_sequence_len))
+            logger.info('{} dataset size: {}'.format(part, len(dataset)))
+            logger.info('{} dataset max sequence length: {}'.format(part, max_sequence_len))
+
+            with open(os.path.join(dir_path, '{}.pkl'.format(part)), 'wb') as dataset_file:
+                pickle.dump(
+                    (dataset, max_user_idx, max_item_idx, max_sequence_len),
+                    dataset_file
+                )
 
         return dataset, max_user_idx, max_item_idx, max_sequence_len
 
