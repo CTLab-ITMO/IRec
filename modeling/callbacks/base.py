@@ -81,6 +81,8 @@ class MetricCallback(BaseCallback, config_name='metric'):
                     metric_value,
                     step_num
                 )
+
+            logger.debug('Train loss: {}'.format(inputs[self._loss_prefix]))
             utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
                 'train/{}'.format(self._loss_prefix),
                 inputs[self._loss_prefix],
