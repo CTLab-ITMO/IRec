@@ -5,14 +5,14 @@
     "type": "sequence",
     "path_to_data_dir": "../data",
     "name": "Beauty",
-    "max_sequence_length": 200,
+    "max_sequence_length": 50,
     "samplers": {
       "num_negatives_eval": 100,
       "type": "cl4srec",
       "negative_sampler_type": "random",
       "item_crop_portion": 0.5,
       "item_mask_portion": 0.5,
-      "item_reorder_portion": 0.8
+      "item_reorder_portion": 0.5
     }
   },
   "dataloader": {
@@ -67,6 +67,7 @@
         "snd_embeddings_prefix": "labels_representation",
         "tau": 1.0,
         "weight": 1.0,
+        "add_negatives": true,
         "output_prefix": "downstream_loss"
       },
       {
@@ -75,6 +76,7 @@
         "snd_embeddings_prefix": "snd_aug_sequence_representation",
         "tau": 1.0,
         "weight": 0.05,
+        "add_negatives": true,
         "output_prefix": "contrastive_loss"
       }
     ],

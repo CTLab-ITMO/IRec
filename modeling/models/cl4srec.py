@@ -69,18 +69,13 @@ class Cl4SRecModel(SequentialTorchModel, config_name='cl4srec'):
         all_sample_events = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
         all_sample_lengths = inputs['{}.length'.format(self._sequence_prefix)]  # (batch_size)
 
-        all_sample_events, all_sample_lengths = self._add_cls_token(
-            items=all_sample_events,
-            lengths=all_sample_lengths
-        )  # (all_batch_events + batch_size), (batch_size)
-
         embeddings, mask = self._apply_sequential_encoder(
             all_sample_events, all_sample_lengths
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
-        sequence_representation = embeddings[:, 0, :]  # (batch_size, embedding_dim)
+        last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
 
         if self.training:  # training mode
-            training_output = {'sequence_representation': sequence_representation}
+            training_output = {'sequence_representation': last_embeddings}
 
             all_fst_aug_sample_events = inputs[
                 '{}.ids'.format(self._fst_augmented_sequence_prefix)]  # (all_batch_events)
@@ -88,8 +83,10 @@ class Cl4SRecModel(SequentialTorchModel, config_name='cl4srec'):
             fst_aug_embeddings, fst_aug_mask = self._apply_sequential_encoder(
                 all_fst_aug_sample_events, all_fst_aug_sample_lengths
             )  # (batch_size, fst_aug_seq_len, embedding_dim), (batch_size, fst_aug_seq_len)
-            fst_aug_sequence_representation = fst_aug_embeddings[:, 0, :]  # (batch_size, embedding_dim)
-            training_output['fst_aug_sequence_representation'] = fst_aug_sequence_representation
+            last_fst_aug_embeddings = self._get_last_embedding(
+                fst_aug_embeddings, fst_aug_mask
+            )  # (batch_size, embedding_dim)
+            training_output['fst_aug_sequence_representation'] = last_fst_aug_embeddings
 
             all_snd_aug_sample_events = inputs[
                 '{}.ids'.format(self._snd_augmented_sequence_prefix)]  # (all_batch_events)
@@ -97,8 +94,10 @@ class Cl4SRecModel(SequentialTorchModel, config_name='cl4srec'):
             snd_aug_embeddings, snd_aug_mask = self._apply_sequential_encoder(
                 all_snd_aug_sample_events, all_snd_aug_sample_lengths
             )  # (batch_size, snd_aug_seq_len, embedding_dim), (batch_size, snd_aug_seq_len)
-            snd_aug_sequence_representation = snd_aug_embeddings[:, 0, :]  # (batch_size, embedding_dim)
-            training_output['snd_aug_sequence_representation'] = snd_aug_sequence_representation
+            last_snd_aug_embeddings = self._get_last_embedding(
+                snd_aug_embeddings, snd_aug_mask
+            )  # (batch_size, embedding_dim)
+            training_output['snd_aug_sequence_representation'] = last_snd_aug_embeddings
 
             labels = inputs['{}.ids'.format(self._labels_prefix)]  # (batch_size)
             labels_embeddings = self._item_embeddings(labels)  # (batch_size, embedding_dim)
@@ -121,15 +120,16 @@ class Cl4SRecModel(SequentialTorchModel, config_name='cl4srec'):
 
                 candidate_scores = torch.einsum(
                     'bd,bnd->bn',
-                    sequence_representation,
+                    last_embeddings,
                     candidate_embeddings
                 )  # (batch_size, num_candidates)
 
             else:
                 candidate_embeddings = self._item_embeddings.weight  # (num_items, embedding_dim)
+
                 candidate_scores = torch.einsum(
                     'bd,nd->bn',
-                    sequence_representation,
+                    last_embeddings,
                     candidate_embeddings
                 )  # (batch_size, num_items)
 
