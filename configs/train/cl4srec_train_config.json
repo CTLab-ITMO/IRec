@@ -1,6 +1,6 @@
 {
   "experiment_name": "cl4srec_beauty_test",
-  "train_epochs_num": 1,
+  "train_epochs_num": 20,
   "dataset": {
     "type": "sequence",
     "path_to_data_dir": "../data",
@@ -10,9 +10,9 @@
       "num_negatives_eval": 100,
       "type": "cl4srec",
       "negative_sampler_type": "random",
-      "item_crop_portion": 0.5,
-      "item_mask_portion": 0.5,
-      "item_reorder_portion": 0.5
+      "item_crop_portion": 0.7,
+      "item_mask_portion": 0.2,
+      "item_reorder_portion": 0.3
     }
   },
   "dataloader": {
@@ -67,7 +67,7 @@
         "snd_embeddings_prefix": "labels_representation",
         "tau": 1.0,
         "weight": 1.0,
-        "add_negatives": true,
+        "add_negatives": false,
         "output_prefix": "downstream_loss"
       },
       {
