@@ -199,7 +199,7 @@ class FpsLoss(TorchLoss, config_name='fps'):
                 dim=-1
             )  # (x)
 
-        loss = torch.mean(-torch.log(positive_score / (positive_score + negative_score)))  # (1)
+        loss = torch.mean(-torch.log(positive_score / (positive_score + negative_score + 1e-9)))  # (1)
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()
