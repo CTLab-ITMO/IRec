@@ -56,7 +56,8 @@
     "optimizer": {
       "type": "adam",
       "lr": 0.001
-    }
+    },
+    "clip_grad_threshold": 5.0
   },
   "loss": {
     "type": "composite",
@@ -68,6 +69,7 @@
         "tau": 1.0,
         "weight": 1.0,
         "add_negatives": false,
+        "normalize_embeddings": false,
         "output_prefix": "downstream_loss"
       },
       {
@@ -77,6 +79,7 @@
         "tau": 1.0,
         "weight": 0.05,
         "add_negatives": true,
+        "normalize_embeddings": false,
         "output_prefix": "contrastive_loss"
       }
     ],
