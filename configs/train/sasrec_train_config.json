@@ -1,8 +1,8 @@
 {
-  "experiment_name": "sasrec_beauty_test",
-  "train_epochs_num": 15,
+  "experiment_name": "sasrec_beauty_test_03",
+  "best_metric": "eval/ndcg@20",
   "dataset": {
-    "type": "sequence",
+    "type": "scientific",
     "path_to_data_dir": "../data",
     "name": "Beauty",
     "max_sequence_length": 50,
@@ -43,9 +43,9 @@
     "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
-    "dropout": 0.0,
+    "dropout": 0.3,
     "activation": "relu",
-    "layer_norm_eps": 1e-5,
+    "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },
   "optimizer": {

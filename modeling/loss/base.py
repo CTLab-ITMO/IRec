@@ -136,7 +136,7 @@ class BPRLoss(TorchLoss, config_name='bpr'):
         return loss
 
 
-class RegularizationLoss(TorchLoss, config_name='regularization_loss'):
+class RegularizationLoss(TorchLoss, config_name='regularization'):
 
     def __init__(self, prefix, output_prefix=None):
         super().__init__()
@@ -146,7 +146,7 @@ class RegularizationLoss(TorchLoss, config_name='regularization_loss'):
     def forward(self, inputs):
         loss = 0.0
         for prefix in self._prefix:
-            loss += inputs[prefix].norm(2).pow(2)
+            loss += torch.sum(inputs[prefix].norm(p=2, dim=-1))
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()
@@ -178,8 +178,8 @@ class FpsLoss(TorchLoss, config_name='fps'):
         snd_embeddings = inputs[self._snd_embeddings_prefix]  # (x, embedding_dim)
 
         if self._normalize_embeddings:
-            fst_embeddings = torch.nn.functional.normalize(fst_embeddings, dim=1)  # (x, embedding_dim)
-            snd_embeddings = torch.nn.functional.normalize(snd_embeddings, dim=1)  # (x, embedding_dim)
+            fst_embeddings = torch.nn.functional.normalize(fst_embeddings, p=2, dim=-1, eps=1e-6) * 2
+            snd_embeddings = torch.nn.functional.normalize(snd_embeddings, p=2, dim=-1, eps=1e-6) * 2
 
         similarity_matrix = torch.matmul(fst_embeddings, snd_embeddings.T)  # (x, x)
         similarity_matrix = torch.exp(similarity_matrix / self._tau)  # (x, x)
@@ -199,7 +199,7 @@ class FpsLoss(TorchLoss, config_name='fps'):
                 dim=-1
             )  # (x)
 
-        loss = torch.mean(-torch.log(positive_score / (positive_score + negative_score + 1e-9)))  # (1)
+        loss = torch.mean(-torch.log(positive_score / (positive_score + negative_score + 1e-3)))  # (1)
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()

@@ -220,7 +220,7 @@ class ValidationCallback(BaseCallback, config_name='validation'):
                         running_params[self._loss_prefix] += batch[self._loss_prefix].item()
 
             for label, value in running_params.items():
-                inputs[label] = value / len(self._validation_dataloader)
+                inputs['validation/{}'.format(label)] = value / len(self._validation_dataloader)
                 utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
                     'validation/{}'.format(label),
                     value / len(self._validation_dataloader),
@@ -307,7 +307,7 @@ class EvalCallback(BaseCallback, config_name='eval'):
                         running_params[self._loss_prefix] += batch[self._loss_prefix].item()
 
             for label, value in running_params.items():
-                inputs[label] = value / len(self._eval_dataloader)
+                inputs['eval/{}'.format(label)] = value / len(self._eval_dataloader)
                 utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
                     'eval/{}'.format(label),
                     value / len(self._eval_dataloader),

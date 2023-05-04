@@ -42,10 +42,15 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
 
         self._output_projection = nn.Linear(
             in_features=embedding_dim,
-            out_features=num_items + 1
+            out_features=embedding_dim
         )
 
         self._init_weights(initializer_range)
+
+        self._bias = nn.Parameter(
+            data=torch.zeros(num_items + 2),
+            requires_grad=True
+        )
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -69,29 +74,38 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
 
         embeddings, mask = self._apply_sequential_encoder(
             all_sample_events, all_sample_lengths
-        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)+
+        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
-        embeddings = self._output_projection(embeddings)  # (batch_size, seq_len, num_items)
+        embeddings = self._output_projection(embeddings)  # (batch_size, seq_len, embedding_dim
+        embeddings = torch.nn.functional.gelu(embeddings)  # (batch_size, seq_len, embedding_dim)
+        embeddings = torch.einsum(
+            'bsd,nd->bsn', embeddings, self._item_embeddings.weight
+        )  # (batch_size, seq_len, num_items)
+        embeddings += self._bias[None, None, :]  # (batch_size, seq_len, num_items)
 
         if self.training:  # training mode
             all_sample_labels = inputs['{}.ids'.format(self._labels_prefix)]  # (all_batch_events)
             embeddings = embeddings[mask]  # (all_batch_events, num_items)
             labels_mask = (all_sample_labels != 0).bool()  # (all_batch_events)
+
             needed_logits = embeddings[labels_mask]  # (non_zero_events)
             needed_labels = all_sample_labels[labels_mask]  # (non_zero_events)
 
             return {'logits': needed_logits, 'labels.ids': needed_labels}
         else:  # eval mode
-            candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
-            candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
+            last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, num_items + 2)
 
-            last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
+            if '{}.ids'.format(self._candidate_prefix) in inputs:
+                candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
+                candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
 
-            candidate_ids = torch.reshape(
-                candidate_events,
-                (candidate_lengths.shape[0], -1)
-            )  # (batch_size, num_candidates)
-            candidate_scores = last_embeddings.gather(dim=1, index=candidate_ids)  # (batch_size, num_candidates)
+                candidate_ids = torch.reshape(
+                    candidate_events,
+                    (candidate_lengths.shape[0], -1)
+                )  # (batch_size, num_candidates)
+                candidate_scores = last_embeddings.gather(dim=1, index=candidate_ids)  # (batch_size, num_candidates)
+            else:
+                candidate_scores = last_embeddings  # (batch_size, num_items + 2)
 
             return candidate_scores
 
@@ -415,7 +429,8 @@ class Bert4RecMCLSRModel(TorchModel, config_name='bert4rec_mclsr'):
             training_output['global_interest_embeddings'] = global_interest_embedding
 
             # Training part
-            combined_embedding = self._alpha * current_interest_embedding + (1 - self._alpha) * global_interest_embedding
+            combined_embedding = self._alpha * current_interest_embedding + (
+                        1 - self._alpha) * global_interest_embedding
             training_output['combined_embedding'] = combined_embedding  # (batch_size, embedding_dim)
 
             return training_output

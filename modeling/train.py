@@ -16,15 +16,24 @@ logger = create_logger(name=__name__)
 seed_val = 42
 
 
-def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt, best_metric=None):
+def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt=None, best_metric=None):
     step_num = 0
-    best_checkpoint = None
+    epoch_num = 0
     current_metric = 0
+
+    epochs_threshold = 20
+
+    best_epoch = 0
+    best_checkpoint = None
 
     logger.debug('Start training...')
 
-    for epoch in range(epoch_cnt):
-        logger.debug(f'Start epoch {epoch}')
+    while epoch_cnt is None or epoch_num < epoch_cnt:
+        if best_epoch + epochs_threshold < epoch_num:
+            logger.debug('There is no progress during {} epochs. Finish training'.format(epochs_threshold))
+            break
+
+        logger.debug(f'Start epoch {epoch_num}')
         for step, batch in enumerate(dataloader):
             model.train()
 
@@ -41,11 +50,14 @@ def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt, best
             if best_metric is None:
                 # Take the last model
                 best_checkpoint = copy.deepcopy(model.state_dict())
+                best_epoch = epoch_num
             elif best_checkpoint is None or best_metric in batch and current_metric <= batch[best_metric]:
                 # If it is the first checkpoint, or it is the best checkpoint
                 current_metric = batch[best_metric]
                 best_checkpoint = copy.deepcopy(model.state_dict())
+                best_epoch = epoch_num
 
+        epoch_num += 1
     logger.debug('Training procedure has been finished!')
     return best_checkpoint
 
@@ -108,7 +120,7 @@ def main():
         optimizer=optimizer,
         loss_function=loss_function,
         callback=callback,
-        epoch_cnt=config['train_epochs_num'],
+        epoch_cnt=config.get('train_epochs_num', None),
         best_metric=config.get('best_metric', None)
     )
 

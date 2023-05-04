@@ -94,11 +94,18 @@ class SequentialTorchModel(TorchModel):
         batch_size = mask.shape[0]
         seq_len = mask.shape[1]
 
-        positions = torch.tile(
-            torch.arange(start=seq_len - 1, end=-1, step=-1, device=mask.device).unsqueeze(0),
-            dims=[batch_size, 1]
-        ).long()  # (batch_size, seq_len)
-        position_embeddings = self._position_embeddings(positions)  # (batch_size, seq_len, embedding_dim)
+        positions = torch.arange(
+            start=seq_len - 1, end=-1, step=-1, device=mask.device
+        )[None].tile([batch_size, 1]).long()  # (batch_size, seq_len)
+        positions_mask = positions < lengths[:, None]  # (batch_size, max_seq_len)
+
+        positions = positions[positions_mask]  # (all_batch_events)
+        position_embeddings = self._position_embeddings(positions)  # (all_batch_events, embedding_dim)
+        position_embeddings, _ = create_masked_tensor(
+            data=position_embeddings,
+            lengths=lengths
+        )  # (batch_size, seq_len, embedding_dim)
+
         embeddings = embeddings + position_embeddings  # (batch_size, seq_len, embedding_dim)
 
         embeddings = self._layernorm(embeddings)  # (batch_size, seq_len, embedding_dim)

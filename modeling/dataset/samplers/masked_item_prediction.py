@@ -36,8 +36,6 @@ class MaskedItemPredictionTrainSampler(TrainSampler, config_name='masked_item_pr
             prob = np.random.rand()
 
             if prob < self._mask_prob:
-                prob /= self._mask_prob
-
                 masked_sequence.append(self._mask_item_idx)
                 labels.append(item)
             else:

@@ -1,14 +1,15 @@
 {
-  "experiment_name": "bert4rec_beauty_test",
-  "train_epochs_num": 10,
+  "experiment_name": "bert4rec_beauty_test_02_mask_01",
+  "best_metric": "eval/ndcg@20",
   "dataset": {
-    "type": "sequence",
+    "type": "scientific",
     "path_to_data_dir": "../data",
     "name": "Beauty",
-    "max_sequence_length": 200,
+    "max_sequence_length": 50,
     "samplers": {
+      "mask_prob": 0.1,
+      "num_negatives_eval": 100,
       "type": "masked_item_prediction",
-      "mask_prob": 0.3,
       "negative_sampler_type": "random"
     }
   },
@@ -37,21 +38,20 @@
     "sequence_prefix": "item",
     "labels_prefix": "labels",
     "candidate_prefix": "candidates",
-    "embedding_dim": 256,
+    "embedding_dim": 64,
     "num_heads": 2,
     "num_layers": 2,
-    "dim_feedforward": 1024,
-    "dropout": 0.0,
-    "activation": "relu",
-    "layer_norm_eps": 1e-5,
+    "dim_feedforward": 256,
+    "dropout": 0.2,
+    "activation": "gelu",
+    "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },
   "optimizer": {
     "type": "basic",
     "optimizer": {
-      "type": "adamw",
-      "lr": 3e-4,
-      "eps": 1e-8
+      "type": "adam",
+      "lr": 1e-4
     },
     "clip_grad_threshold": 5.0
   },
@@ -77,6 +77,38 @@
       },
       {
         "type": "validation",
+        "on_step": 64,
+        "pred_prefix": "logits",
+        "labels_prefix": "labels",
+        "metrics": {
+          "ndcg@5": {
+            "type": "ndcg",
+            "k": 5
+          },
+          "ndcg@10": {
+            "type": "ndcg",
+            "k": 10
+          },
+          "ndcg@20": {
+            "type": "ndcg",
+            "k": 20
+          },
+          "recall@5": {
+            "type": "recall",
+            "k": 5
+          },
+          "recall@10": {
+            "type": "recall",
+            "k": 10
+          },
+          "recall@20": {
+            "type": "recall",
+            "k": 20
+          }
+        }
+      },
+      {
+        "type": "eval",
         "on_step": 256,
         "pred_prefix": "logits",
         "labels_prefix": "labels",

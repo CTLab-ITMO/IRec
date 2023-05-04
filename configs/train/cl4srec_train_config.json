@@ -77,10 +77,21 @@
         "fst_embeddings_prefix": "fst_aug_sequence_representation",
         "snd_embeddings_prefix": "snd_aug_sequence_representation",
         "tau": 1.0,
-        "weight": 0.05,
+        "weight": 0.01,
         "add_negatives": true,
         "normalize_embeddings": false,
         "output_prefix": "contrastive_loss"
+      },
+      {
+        "type": "regularization",
+        "prefix": [
+          "sequence_representation",
+          "labels_representation",
+          "fst_aug_sequence_representation",
+          "snd_aug_sequence_representation"
+        ],
+        "weight": 0.0,
+        "output_prefix": "regularization_loss"
       }
     ],
     "output_prefix": "loss"
@@ -92,6 +103,21 @@
         "type": "metric",
         "on_step": 1,
         "loss_prefix": "loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "downstream_loss"
+      },
+       {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "contrastive_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "regularization_loss"
       },
       {
         "type": "validation",
