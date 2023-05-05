@@ -21,7 +21,7 @@ def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt=None,
     epoch_num = 0
     current_metric = 0
 
-    epochs_threshold = 20
+    epochs_threshold = 40
 
     best_epoch = 0
     best_checkpoint = None

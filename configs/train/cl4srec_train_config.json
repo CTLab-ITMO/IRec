@@ -1,5 +1,5 @@
 {
-  "experiment_name": "cl4srec_beauty_test_pos_layernorm",
+  "experiment_name": "cl4srec_beauty_test_full",
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "scientific",
@@ -10,9 +10,9 @@
       "num_negatives_eval": 100,
       "type": "cl4srec",
       "negative_sampler_type": "random",
-      "item_crop_portion": 0.7,
-      "item_mask_portion": 0.2,
-      "item_reorder_portion": 0.3
+      "item_crop_portion": 0.5,
+      "item_mask_portion": 0.5,
+      "item_reorder_portion": 0.2
     }
   },
   "dataloader": {
@@ -76,7 +76,8 @@
         "fst_embeddings_prefix": "fst_aug_sequence_representation",
         "snd_embeddings_prefix": "snd_aug_sequence_representation",
         "tau": 1.0,
-        "weight": 0.001,
+        "weight": 0.3,
+        "add_negatives": true,
         "normalize_embeddings": false,
         "output_prefix": "contrastive_loss"
       }

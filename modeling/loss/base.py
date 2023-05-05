@@ -183,10 +183,18 @@ class FpsLoss(TorchLoss, config_name='fps'):
             snd_embeddings = torch.nn.functional.normalize(snd_embeddings, p=2, dim=-1, eps=1e-6)
 
         similarity_matrix = torch.matmul(fst_embeddings, snd_embeddings.T) / self._tau  # (x, x)
-        similarity_matrix = self._activation(similarity_matrix)  # (x, x)
-
         num_samples = similarity_matrix.shape[0]
         mask = torch.eye(num_samples, dtype=torch.bool).to(DEVICE)  # (x, x)
+
+        if self._add_negatives:
+            identity_similarity_matrix = torch.matmul(fst_embeddings, fst_embeddings.T) / self._tau  # (x, x)
+            identity_similarity_matrix[mask] = -torch.inf
+
+            similarity_matrix = torch.cat([similarity_matrix, identity_similarity_matrix], dim=1)
+
+            mask = torch.eye(num_samples, 2 * num_samples, dtype=torch.bool).to(DEVICE)  # (x, x)
+
+        similarity_matrix = self._activation(similarity_matrix)  # (x, x)
 
         loss = torch.mean(-similarity_matrix[mask])
 
