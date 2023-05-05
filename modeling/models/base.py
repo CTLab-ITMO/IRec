@@ -68,7 +68,7 @@ class SequentialTorchModel(TorchModel):
             embedding_dim=embedding_dim
         )
 
-        # self._layernorm = nn.LayerNorm(embedding_dim, eps=layer_norm_eps)
+        self._layernorm = nn.LayerNorm(embedding_dim, eps=layer_norm_eps)
         self._dropout = nn.Dropout(dropout)
 
         transformer_encoder_layer = nn.TransformerEncoderLayer(
@@ -107,7 +107,7 @@ class SequentialTorchModel(TorchModel):
 
         embeddings = embeddings + position_embeddings  # (batch_size, seq_len, embedding_dim)
 
-        # embeddings = self._layernorm(embeddings)  # (batch_size, seq_len, embedding_dim)
+        embeddings = self._layernorm(embeddings)  # (batch_size, seq_len, embedding_dim)
         embeddings = self._dropout(embeddings)  # (batch_size, seq_len, embedding_dim)
 
         embeddings[~mask] = 0

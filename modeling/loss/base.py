@@ -182,7 +182,6 @@ class FpsLoss(TorchLoss, config_name='fps'):
             fst_embeddings = torch.nn.functional.normalize(fst_embeddings, p=2, dim=-1, eps=1e-6)
             snd_embeddings = torch.nn.functional.normalize(snd_embeddings, p=2, dim=-1, eps=1e-6)
 
-        # TODO check
         similarity_matrix = torch.matmul(fst_embeddings, snd_embeddings.T) / self._tau  # (x, x)
         similarity_matrix = self._activation(similarity_matrix)  # (x, x)
 
