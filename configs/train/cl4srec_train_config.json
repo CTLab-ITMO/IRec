@@ -1,5 +1,5 @@
 {
-  "experiment_name": "cl4srec_beauty_test",
+  "experiment_name": "cl4srec_beauty_test_min",
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "scientific",
@@ -46,9 +46,9 @@
     "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
-    "dropout": 0.1,
+    "dropout": 0.3,
     "activation": "relu",
-    "layer_norm_eps": 1e-6,
+    "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },
   "optimizer": {
@@ -71,27 +71,6 @@
         "add_negatives": false,
         "normalize_embeddings": false,
         "output_prefix": "downstream_loss"
-      },
-      {
-        "type": "fps",
-        "fst_embeddings_prefix": "fst_aug_sequence_representation",
-        "snd_embeddings_prefix": "snd_aug_sequence_representation",
-        "tau": 1.0,
-        "weight": 0.01,
-        "add_negatives": true,
-        "normalize_embeddings": false,
-        "output_prefix": "contrastive_loss"
-      },
-      {
-        "type": "regularization",
-        "prefix": [
-          "sequence_representation",
-          "labels_representation",
-          "fst_aug_sequence_representation",
-          "snd_aug_sequence_representation"
-        ],
-        "weight": 0.0,
-        "output_prefix": "regularization_loss"
       }
     ],
     "output_prefix": "loss"
@@ -99,21 +78,6 @@
   "callback": {
     "type": "composite",
     "callbacks": [
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "loss"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "downstream_loss"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "contrastive_loss"
-      },
       {
         "type": "metric",
         "on_step": 1,

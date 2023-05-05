@@ -1,5 +1,5 @@
 {
-  "experiment_name": "sasrec_beauty_test_03",
+  "experiment_name": "sasrec_beauty_test_min",
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "scientific",
@@ -53,20 +53,18 @@
     "optimizer": {
       "type": "adam",
       "lr": 0.001
-    }
+    },
+    "clip_grad_threshold": 5.0
   },
   "loss": {
     "type": "composite",
     "losses": [
       {
-        "type": "bce",
-        "predictions_prefix": "positive_scores",
-        "labels_prefix": "positive_labels.ids"
-      },
-      {
-        "type": "bce",
-        "predictions_prefix": "negative_scores",
-        "labels_prefix": "negative_labels.ids"
+        "type": "sasrec",
+        "positive_prefix": "positive_embeddings",
+        "negative_prefix": "negative_embeddings",
+        "representation_prefix": "current_embeddings",
+        "output_prefix": "downstream_loss"
       }
     ],
     "output_prefix": "loss"

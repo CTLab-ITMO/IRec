@@ -199,8 +199,51 @@ class FpsLoss(TorchLoss, config_name='fps'):
                 dim=-1
             )  # (x)
 
-        loss = torch.mean(-torch.log(positive_score / (positive_score + negative_score + 1e-3)))  # (1)
+        loss = torch.mean(-torch.log(positive_score / (positive_score + negative_score + 1e-9)))  # (1)
 
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss
+
+
+class SASRecLoss(TorchLoss, config_name='sasrec'):
+
+    def __init__(
+            self,
+            positive_prefix,
+            negative_prefix,
+            representation_prefix,
+            output_prefix=None
+    ):
+        super().__init__()
+        self._positive_prefix = positive_prefix
+        self._negative_prefix = negative_prefix
+        self._representation_prefix = representation_prefix
+        self._output_prefix = output_prefix
+        self._loss = nn.BCEWithLogitsLoss()
+
+    def forward(self, inputs):
+        positive_embeddings = inputs[self._positive_prefix]  # (x, embedding_dim)
+        negative_embeddings = inputs[self._negative_prefix]  # (x, embedding_dim)
+        current_embeddings = inputs[self._representation_prefix]  # (x, embedding_dim)
+        assert positive_embeddings.shape[0] == negative_embeddings.shape[0] == current_embeddings.shape[0]
+
+        positive_scores = torch.einsum(
+            'bd,bd->b',
+            positive_embeddings,
+            current_embeddings
+        )  # (x)
+        positive_labels = torch.ones_like(positive_scores)  # (x)
+
+        negative_scores = torch.einsum(
+            'bd,bd->b',
+            negative_embeddings,
+            current_embeddings
+        )  # (x)
+        negative_labels = torch.zeros_like(positive_scores)  # (x)
+
+        loss = self._loss(positive_scores, positive_labels) + self._loss(negative_scores, negative_labels)  # (1)
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()
 

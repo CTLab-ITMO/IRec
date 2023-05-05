@@ -35,25 +35,27 @@ def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt=None,
 
         logger.debug(f'Start epoch {epoch_num}')
         for step, batch in enumerate(dataloader):
+            batch_ = copy.deepcopy(batch)
+
             model.train()
 
-            for key, values in batch.items():
-                batch[key] = batch[key].to(DEVICE)
+            for key, values in batch_.items():
+                batch_[key] = batch_[key].to(DEVICE)
 
-            batch.update(model(batch))
-            loss = loss_function(batch)
+            batch_.update(model(batch_))
+            loss = loss_function(batch_)
 
             optimizer.step(loss)
-            callback(batch, step_num)
+            callback(batch_, step_num)
             step_num += 1
 
             if best_metric is None:
                 # Take the last model
                 best_checkpoint = copy.deepcopy(model.state_dict())
                 best_epoch = epoch_num
-            elif best_checkpoint is None or best_metric in batch and current_metric <= batch[best_metric]:
+            elif best_checkpoint is None or best_metric in batch_ and current_metric <= batch_[best_metric]:
                 # If it is the first checkpoint, or it is the best checkpoint
-                current_metric = batch[best_metric]
+                current_metric = batch_[best_metric]
                 best_checkpoint = copy.deepcopy(model.state_dict())
                 best_epoch = epoch_num
 

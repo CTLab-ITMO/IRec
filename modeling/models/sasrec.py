@@ -43,7 +43,6 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
         self._negative_prefix = negative_prefix
         self._labels_prefix = labels_prefix
         self._candidate_prefix = candidate_prefix
-
         self._init_weights(initializer_range)
 
     @classmethod
@@ -71,6 +70,7 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
         embeddings, mask = self._apply_sequential_encoder(
             all_sample_events, all_sample_lengths
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
+        last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
 
         if self.training:  # training mode
             all_positive_sample_events = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
@@ -78,31 +78,30 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
 
             all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
             all_positive_sample_embeddings = self._item_embeddings(
-                all_positive_sample_events)  # (all_batch_events, embedding_dim)
+                all_positive_sample_events
+            )  # (all_batch_events, embedding_dim)
             all_negative_sample_embeddings = self._item_embeddings(
-                all_negative_sample_events)  # (all_batch_events, embedding_dim)
+                all_negative_sample_events
+            )  # (all_batch_events, embedding_dim)
 
-            positive_scores = torch.einsum('bd,bd->b', all_sample_embeddings,
-                                           all_positive_sample_embeddings)  # (all_batch_events)
-            negative_scores = torch.einsum('bd,bd->b', all_sample_embeddings,
-                                           all_negative_sample_embeddings)  # (all_batch_events)
-
-            return {'positive_scores': positive_scores, 'negative_scores': negative_scores}
+            return {
+                'current_embeddings': all_sample_embeddings,
+                'positive_embeddings': all_positive_sample_embeddings,
+                'negative_embeddings': all_negative_sample_embeddings
+            }
         else:  # eval mode
-            last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
-
             if '{}.ids'.format(self._candidate_prefix) in inputs:
                 candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
                 candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
 
                 candidate_embeddings = self._item_embeddings(
                     candidate_events
-                )  # (batch_size, num_candidates, embedding_dim)
+                )  # (all_batch_candidates, embedding_dim)
 
-                candidate_embeddings, candidate_mask = create_masked_tensor(
+                candidate_embeddings, _ = create_masked_tensor(
                     data=candidate_embeddings,
                     lengths=candidate_lengths
-                )
+                )  # (batch_size, num_candidates, embedding_dim)
 
                 candidate_scores = torch.einsum(
                     'bd,bnd->bn',
@@ -486,7 +485,7 @@ class SasRecMCLSRModel(TorchModel, config_name='sasrec_mclsr'):
 
             # Training part
             combined_embedding = self._alpha * current_interest_embedding + (
-                        1 - self._alpha) * global_interest_embedding
+                    1 - self._alpha) * global_interest_embedding
             training_output['combined_embedding'] = combined_embedding  # (batch_size, embedding_dim)
 
             return training_output
