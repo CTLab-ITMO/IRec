@@ -63,10 +63,8 @@ class Cl4SRecTrainSampler(TrainSampler, config_name='cl4srec'):
     def __getitem__(self, index):
         sample = copy.deepcopy(self._dataset[index])
 
-        item_sequence = sample['item.ids']
-
-        target_item = item_sequence[-1]
-        item_sequence = item_sequence[:-1]
+        item_sequence = sample['item.ids'][:-1]
+        next_item = sample['item.ids'][-1]
 
         augmentation_list = [
             self._apply_crop_augmentation,
@@ -93,7 +91,7 @@ class Cl4SRecTrainSampler(TrainSampler, config_name='cl4srec'):
             'snd_augmented_item.ids': snd_augmented_sequence,
             'snd_augmented_item.length': len(snd_augmented_sequence),
 
-            'target.ids': [target_item],
+            'target.ids': [next_item],
             'target.length': 1
         }
 
@@ -117,17 +115,16 @@ class Cl4SRecValidationSampler(ValidationSampler, config_name='cl4srec'):
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
             negative_sampler=negative_sampler,
-            num_negatives=config.get('num_negatives', 100)
+            num_negatives=config.get('num_negatives_val', 100)
         )
 
     def __getitem__(self, index):
         sample = copy.deepcopy(self._dataset[index])
 
-        item_sequence = sample['item.ids']
+        item_sequence = sample['item.ids'][:-1]
 
-        positive = item_sequence[-1]
+        positive = sample['item.ids'][-1]
         negatives = self._negative_sampler.generate_negative_samples(sample, self._num_negatives)
-        item_sequence = item_sequence[:-1]
 
         candidates = [positive] + negatives
         labels = [1] + [0] * len(negatives)

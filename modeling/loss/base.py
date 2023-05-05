@@ -169,6 +169,7 @@ class FpsLoss(TorchLoss, config_name='fps'):
         self._fst_embeddings_prefix = fst_embeddings_prefix
         self._snd_embeddings_prefix = snd_embeddings_prefix
         self._tau = tau
+        self._activation = nn.LogSoftmax(dim=1)
         self._add_negatives = add_negatives
         self._normalize_embeddings = normalize_embeddings
         self._output_prefix = output_prefix
@@ -178,28 +179,17 @@ class FpsLoss(TorchLoss, config_name='fps'):
         snd_embeddings = inputs[self._snd_embeddings_prefix]  # (x, embedding_dim)
 
         if self._normalize_embeddings:
-            fst_embeddings = torch.nn.functional.normalize(fst_embeddings, p=2, dim=-1, eps=1e-6) * 2
-            snd_embeddings = torch.nn.functional.normalize(snd_embeddings, p=2, dim=-1, eps=1e-6) * 2
+            fst_embeddings = torch.nn.functional.normalize(fst_embeddings, p=2, dim=-1, eps=1e-6)
+            snd_embeddings = torch.nn.functional.normalize(snd_embeddings, p=2, dim=-1, eps=1e-6)
 
-        similarity_matrix = torch.matmul(fst_embeddings, snd_embeddings.T)  # (x, x)
-        similarity_matrix = torch.exp(similarity_matrix / self._tau)  # (x, x)
+        # TODO check
+        similarity_matrix = torch.matmul(fst_embeddings, snd_embeddings.T) / self._tau  # (x, x)
+        similarity_matrix = self._activation(similarity_matrix)  # (x, x)
 
         num_samples = similarity_matrix.shape[0]
         mask = torch.eye(num_samples, dtype=torch.bool).to(DEVICE)  # (x, x)
 
-        positive_score = similarity_matrix[mask]  # (x)
-        negative_score = torch.sum(similarity_matrix[~mask].reshape(num_samples, num_samples - 1), dim=-1)  # (x)
-
-        if self._add_negatives:
-            identity_similarity_matrix = torch.matmul(fst_embeddings, fst_embeddings.T)  # (x, x)
-            identity_similarity_matrix = torch.exp(identity_similarity_matrix / self._tau)  # (x, x)
-
-            negative_score += torch.sum(
-                identity_similarity_matrix[~mask].reshape(num_samples, num_samples - 1),
-                dim=-1
-            )  # (x)
-
-        loss = torch.mean(-torch.log(positive_score / (positive_score + negative_score + 1e-9)))  # (1)
+        loss = torch.mean(-similarity_matrix[mask])
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()

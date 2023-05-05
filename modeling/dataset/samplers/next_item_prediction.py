@@ -45,14 +45,8 @@ class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_predic
             'positive.ids': next_item_sequence,
             'positive.length': len(next_item_sequence),
 
-            'positive_labels.ids': [1] * len(next_item_sequence),
-            'positive_labels.length': len(next_item_sequence),
-
             'negative.ids': negative_sequence,
-            'negative.length': len(negative_sequence),
-
-            'negative_labels.ids': [0] * len(negative_sequence),
-            'negative_labels.length': len(negative_sequence),
+            'negative.length': len(negative_sequence)
         }
 
 
