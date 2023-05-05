@@ -81,8 +81,6 @@ class NextItemPredictionValidationSampler(ValidationSampler, config_name='next_i
     def __getitem__(self, index):
         sample = copy.deepcopy(self._dataset[index])
 
-        assert len(sample['user.ids']) == 1
-
         item_sequence = sample['item.ids'][:-1]
 
         positive = sample['item.ids'][-1]

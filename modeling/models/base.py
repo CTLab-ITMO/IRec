@@ -33,10 +33,9 @@ class TorchModel(nn.Module, BaseModel):
     @staticmethod
     def _get_last_embedding(embeddings, mask):
         lengths = torch.sum(mask, dim=-1)  # (batch_size)
-        lengths = (lengths - 1).unsqueeze(-1)  # (batch_size, 1)
-        last_masks = mask.gather(dim=1, index=lengths)  # (batch_size, 1)
-        lengths = lengths.unsqueeze(-1)  # (batch_size, 1, 1)
-        lengths = torch.tile(lengths, (1, 1, embeddings.shape[-1]))  # (batch_size, 1, emb_dim)
+        lengths = (lengths - 1)  # (batch_size)
+        last_masks = mask.gather(dim=1, index=lengths[:, None])  # (batch_size, 1)
+        lengths = torch.tile(lengths[:, None, None], (1, 1, embeddings.shape[-1]))  # (batch_size, 1, emb_dim)
         last_embeddings = embeddings.gather(dim=1, index=lengths)  # (batch_size, 1, emb_dim)
         last_embeddings = last_embeddings[last_masks]  # (batch_size, emb_dim)
         return last_embeddings
@@ -148,16 +147,5 @@ class SequentialTorchModel(TorchModel):
         )  # (num_new_items)
         new_items[old_items_mask] = items
         new_length = lengths + 1
-
-        # TODO remove
-        assert new_items.shape[0] == torch.sum(new_length)
-        assert torch.allclose(
-            torch.ones_like(lengths) * cls_token_id,
-            torch.gather(
-                input=new_items,
-                dim=0,
-                index=torch.cat([torch.LongTensor([0]).to(DEVICE), new_length]).cumsum(dim=0)[:-1]
-            )
-        )
 
         return new_items, new_length

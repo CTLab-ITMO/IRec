@@ -1,8 +1,8 @@
 {
   "experiment_name": "cl4srec_beauty_test",
-  "train_epochs_num": 20,
+  "best_metric": "eval/ndcg@20",
   "dataset": {
-    "type": "sequence",
+    "type": "scientific",
     "path_to_data_dir": "../data",
     "name": "Beauty",
     "max_sequence_length": 50,
@@ -46,9 +46,9 @@
     "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
-    "dropout": 0.0,
+    "dropout": 0.1,
     "activation": "relu",
-    "layer_norm_eps": 1e-5,
+    "layer_norm_eps": 1e-6,
     "initializer_range": 0.02
   },
   "optimizer": {
@@ -109,7 +109,7 @@
         "on_step": 1,
         "loss_prefix": "downstream_loss"
       },
-       {
+      {
         "type": "metric",
         "on_step": 1,
         "loss_prefix": "contrastive_loss"
@@ -117,7 +117,7 @@
       {
         "type": "metric",
         "on_step": 1,
-        "loss_prefix": "regularization_loss"
+        "loss_prefix": "loss"
       },
       {
         "type": "validation",
