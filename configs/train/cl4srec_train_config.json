@@ -1,5 +1,5 @@
 {
-  "experiment_name": "cl4srec_beauty_test_min_pos_layernorm",
+  "experiment_name": "cl4srec_beauty_test_pos_layernorm",
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "scientific",
@@ -68,9 +68,17 @@
         "snd_embeddings_prefix": "labels_representation",
         "tau": 1.0,
         "weight": 1.0,
-        "add_negatives": false,
         "normalize_embeddings": false,
         "output_prefix": "downstream_loss"
+      },
+      {
+        "type": "fps",
+        "fst_embeddings_prefix": "fst_aug_sequence_representation",
+        "snd_embeddings_prefix": "snd_aug_sequence_representation",
+        "tau": 1.0,
+        "weight": 0.001,
+        "normalize_embeddings": false,
+        "output_prefix": "contrastive_loss"
       }
     ],
     "output_prefix": "loss"
@@ -82,6 +90,16 @@
         "type": "metric",
         "on_step": 1,
         "loss_prefix": "loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "downstream_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "contrastive_loss"
       },
       {
         "type": "validation",
