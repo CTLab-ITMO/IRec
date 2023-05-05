@@ -1,5 +1,5 @@
 {
-  "experiment_name": "sasrec_beauty_test_min",
+  "experiment_name": "sasrec_beauty_test_min_pos",
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "scientific",
