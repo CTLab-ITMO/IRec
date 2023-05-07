@@ -58,6 +58,7 @@ class SequentialTorchModel(TorchModel):
     ):
         super().__init__()
         self._is_causal = is_causal
+        self._num_item = num_items
 
         self._item_embeddings = nn.Embedding(
             num_embeddings=num_items + 2,  # add zero embedding + mask embedding
