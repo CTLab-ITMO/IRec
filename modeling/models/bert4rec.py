@@ -106,6 +106,8 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
                 candidate_scores = last_embeddings.gather(dim=1, index=candidate_ids)  # (batch_size, num_candidates)
             else:
                 candidate_scores = last_embeddings  # (batch_size, num_items + 2)
+                candidate_scores[:, 0] = -torch.inf
+                candidate_scores[:, self._num_items + 1:] = -torch.inf
 
             return candidate_scores
 

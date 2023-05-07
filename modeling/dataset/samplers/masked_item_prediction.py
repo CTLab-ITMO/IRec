@@ -91,10 +91,8 @@ class MaskedItemPredictionValidationSampler(ValidationSampler, config_name='mask
 
     def __getitem__(self, index):
         sample = copy.deepcopy(self._dataset[index])
-
         item_sequence = sample['item.ids']
         negatives = self._negative_sampler.generate_negative_samples(sample, self._num_negatives)
-
         sequence = item_sequence[:-1] + [self._mask_item_idx]
         candidates = [item_sequence[-1]] + negatives
         labels = [1] + [0] * len(negatives)

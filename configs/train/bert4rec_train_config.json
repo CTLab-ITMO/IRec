@@ -1,5 +1,5 @@
 {
-  "experiment_name": "bert4rec_beauty_test_05_mask_06",
+  "experiment_name": "bert4rec_beauty_test_05_mask_06_small_fix",
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "scientific",
@@ -78,38 +78,6 @@
       {
         "type": "validation",
         "on_step": 64,
-        "pred_prefix": "logits",
-        "labels_prefix": "labels",
-        "metrics": {
-          "ndcg@5": {
-            "type": "ndcg",
-            "k": 5
-          },
-          "ndcg@10": {
-            "type": "ndcg",
-            "k": 10
-          },
-          "ndcg@20": {
-            "type": "ndcg",
-            "k": 20
-          },
-          "recall@5": {
-            "type": "recall",
-            "k": 5
-          },
-          "recall@10": {
-            "type": "recall",
-            "k": 10
-          },
-          "recall@20": {
-            "type": "recall",
-            "k": 20
-          }
-        }
-      },
-      {
-        "type": "eval",
-        "on_step": 256,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {
