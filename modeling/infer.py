@@ -2,44 +2,48 @@ from utils import parse_args, create_logger, fix_random_seed, DEVICE
 
 from dataset import BaseDataset
 from dataloader import BaseDataloader
-from models import BaseModel
+from models import BaseModel, TorchModel
 from metric import BaseMetric
 
 import json
+import numpy as np
 import torch
-from collections import Counter
 
 
 logger = create_logger(name=__name__)
 seed_val = 42
 
 
-def inference(dataloader, model, metrics, pred_prefix, labels_prefix):
-    model.eval()
-    running_metrics = Counter()
+def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_path=None):
+    running_metrics = {}
+    for metric_name, metric_function in metrics.items():
+        running_metrics[metric_name] = []
+
+    if isinstance(model, TorchModel):
+        model.eval()
 
     with torch.no_grad():
         for batch in dataloader:
-            for key, values in batch.items():
-                batch[key] = batch[key].to(DEVICE)
 
-            batch = model(batch)
+            for key, value in batch.items():
+                batch[key] = value.to(DEVICE)
+            batch[pred_prefix] = model(batch)
 
             for key, values in batch.items():
-                batch[key] = batch[key].cpu()
+                batch[key] = values.cpu()
 
             for metric_name, metric_function in metrics.items():
-                running_metrics[metric_name] += metric_function(
+                running_metrics[metric_name].extend(metric_function(
                     inputs=batch,
                     pred_prefix=pred_prefix,
                     labels_prefix=labels_prefix,
-                )
+                ))
 
     logger.debug('Inference procedure has been finished!')
     logger.debug('Metrics are the following:')
     # TODO add file inference option
     for metric_name, metric_value in running_metrics.items():
-        logger.info('{}: {}'.format(metric_name, metric_value / len(dataloader)))
+        logger.info('{}: {}'.format(metric_name, np.mean(metric_value)))
 
 
 def main():
@@ -57,17 +61,19 @@ def main():
         dataset=eval_dataset
     )
 
-    model = BaseModel.create_from_config(config['model'], **dataset.meta).to(DEVICE)
+    model = BaseModel.create_from_config(config['model'], **dataset.meta)
 
-    checkpoint_path = '../checkpoints/{}_final_state.pth'.format(config['experiment_name'])
-    model.load_state_dict(torch.load(checkpoint_path))
+    if isinstance(model, TorchModel):
+        model = model.to(DEVICE)
+        checkpoint_path = '../checkpoints/{}_final_state.pth'.format(config['experiment_name'])
+        model.load_state_dict(torch.load(checkpoint_path))
 
     metrics = {
         metric_name: BaseMetric.create_from_config(metric_cfg)
         for metric_name, metric_cfg in config['metrics'].items()
     }
 
-    inference(eval_dataloader, model, metrics, config['pred_prefix'], config['labels_prefix'])
+    inference(eval_dataloader, model, metrics, config['pred_prefix'], config['label_prefix'])
 
 
 if __name__ == '__main__':

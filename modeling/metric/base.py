@@ -69,7 +69,7 @@ class NDCGMetric(BaseMetric, config_name='ndcg'):
         ]).to(dcg.device)  # (batch_size)
         ndcg = (dcg / idcg)  # (batch_size)
 
-        return ndcg.mean().cpu().item()
+        return ndcg.cpu().tolist()
 
 
 class RecallMetric(BaseMetric, config_name='recall'):
@@ -100,4 +100,4 @@ class RecallMetric(BaseMetric, config_name='recall'):
                 hits.sum(dim=-1) / torch.minimum(labels.sum(dim=-1).float(), labels.new_ones(predictions.shape[0]).float() * self._k)
         )  # (batch_size)
 
-        return recall.mean().cpu().item()
+        return recall.cpu().tolist()

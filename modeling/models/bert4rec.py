@@ -20,7 +20,7 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
             num_layers,
             dim_feedforward,
             dropout=0.0,
-            activation='relu',
+            activation='gelu',
             layer_norm_eps=1e-5,
             initializer_range=0.02
     ):
@@ -45,12 +45,12 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
             out_features=embedding_dim
         )
 
-        self._init_weights(initializer_range)
-
         self._bias = nn.Parameter(
             data=torch.zeros(num_items + 2),
             requires_grad=True
         )
+
+        self._init_weights(initializer_range)
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -93,7 +93,7 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
 
             return {'logits': needed_logits, 'labels.ids': needed_labels}
         else:  # eval mode
-            last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, num_items + 2)
+            last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, num_items)
 
             if '{}.ids'.format(self._candidate_prefix) in inputs:
                 candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
@@ -101,7 +101,7 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
 
                 candidate_ids = torch.reshape(
                     candidate_events,
-                    (candidate_lengths.shape[0], -1)
+                    (candidate_lengths.shape[0], candidate_lengths[0])
                 )  # (batch_size, num_candidates)
                 candidate_scores = last_embeddings.gather(dim=1, index=candidate_ids)  # (batch_size, num_candidates)
             else:

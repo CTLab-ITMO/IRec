@@ -43,14 +43,6 @@ class EvalSampler(metaclass=MetaParent):
         self._num_users = num_users
         self._num_items = num_items
 
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        return cls(
-            dataset=kwargs['dataset'],
-            num_users=kwargs['num_users'],
-            num_items=kwargs['num_items']
-        )
-
     @property
     def dataset(self):
         return self._dataset

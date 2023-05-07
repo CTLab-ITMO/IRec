@@ -36,7 +36,15 @@ class MaskedItemPredictionTrainSampler(TrainSampler, config_name='masked_item_pr
             prob = np.random.rand()
 
             if prob < self._mask_prob:
-                masked_sequence.append(self._mask_item_idx)
+                prob /= self._mask_prob
+
+                if prob < 0.8:
+                    masked_sequence.append(self._mask_item_idx)
+                elif prob < 0.9:
+                    masked_sequence.append(np.random.randint(1, self._num_items + 1))
+                else:
+                    masked_sequence.append(item)
+
                 labels.append(item)
             else:
                 masked_sequence.append(item)
@@ -111,6 +119,14 @@ class MaskedItemPredictionEvalSampler(EvalSampler, config_name='masked_item_pred
     def __init__(self, dataset, num_users, num_items):
         super().__init__(dataset, num_users, num_items)
         self._mask_item_idx = self._num_items + 1
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        return cls(
+            dataset=kwargs['dataset'],
+            num_users=kwargs['num_users'],
+            num_items=kwargs['num_items']
+        )
 
     def __getitem__(self, index):
         sample = copy.deepcopy(self._dataset[index])

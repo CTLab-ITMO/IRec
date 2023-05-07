@@ -99,4 +99,11 @@ class NextItemPredictionValidationSampler(ValidationSampler, config_name='next_i
 
 
 class NextItemPredictionEvalSampler(EvalSampler, config_name='next_item_prediction'):
-    pass
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        return cls(
+            dataset=kwargs['dataset'],
+            num_users=kwargs['num_users'],
+            num_items=kwargs['num_items']
+        )

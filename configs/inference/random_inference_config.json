@@ -1,65 +1,57 @@
 {
+  "pred_prefix": "predictions",
+  "label_prefix": "labels",
   "dataset": {
-    "type": "amazon",
-    "path_to_data_dir": "../data/Beauty",
-    "dataset_prefix": "Beauty",
-    "min_sample_len": 5,
-    "max_sample_len": 200,
-    "validation_size": 0.1,
-    "test_size": 0.1,
+    "type": "scientific",
+    "path_to_data_dir": "../data",
+    "name": "Beauty",
+    "max_sequence_length": 50,
     "samplers": {
+      "num_negatives_eval": 100,
       "type": "next_item_prediction",
-      "negative_sampler": {
-        "type": "random",
-        "sample_size": 99
-      }
+      "negative_sampler_type": "random"
     }
   },
   "dataloader": {
-    "train": {
-      "type": "torch",
-      "batch_size": 256,
-      "batch_processor": {
-        "type": "amazon"
-      },
-      "drop_last": true,
-      "shuffle": true
-    },
     "validation": {
       "type": "torch",
       "batch_size": 256,
       "batch_processor": {
-        "type": "amazon"
+        "type": "basic"
       },
       "drop_last": false,
       "shuffle": false
     }
   },
   "model": {
-    "type": "sample",
-    "sequence_prefix": "sample.ids",
-    "sampler_type": "random",
-    "output_prefix": "scores"
+    "type": "random",
+    "label_prefix": "labels",
+    "candidate_prefix": "candidates"
   },
-  "callback": {
-    "type": "composite",
-    "callbacks": [
-      {
-        "type": "validation",
-        "on_step": 1,
-        "pred_prefix": "scores",
-        "labels_prefix": "labels",
-        "metrics": {
-          "ndcg@5": {
-            "type": "ndcg",
-            "k": 5
-          },
-          "recall@5": {
-            "type": "recall",
-            "k": 5
-          }
-        }
-      }
-    ]
+  "metrics": {
+    "ndcg@5": {
+      "type": "ndcg",
+      "k": 5
+    },
+    "ndcg@10": {
+      "type": "ndcg",
+      "k": 10
+    },
+    "ndcg@20": {
+      "type": "ndcg",
+      "k": 20
+    },
+    "recall@5": {
+      "type": "recall",
+      "k": 5
+    },
+    "recall@10": {
+      "type": "recall",
+      "k": 10
+    },
+    "recall@20": {
+      "type": "recall",
+      "k": 20
+    }
   }
 }

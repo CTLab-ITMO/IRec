@@ -3,10 +3,10 @@ from metric import BaseMetric
 import utils
 from utils import MetaParent, create_logger
 
+import numpy as np
 import os
 import torch
 from pathlib import Path
-from collections import Counter
 
 logger = create_logger(name=__name__)
 
@@ -195,7 +195,11 @@ class ValidationCallback(BaseCallback, config_name='validation'):
     def __call__(self, inputs, step_num):
         if step_num % self._on_step == 0:  # TODO Add time monitoring
             logger.debug('Validation on step {}...'.format(step_num))
-            running_params = Counter()
+            running_params = {}
+            for metric_name, metric_function in self._metrics.items():
+                running_params[metric_name] = []
+            if self._loss_prefix is not None:
+                running_params[self._loss_prefix] = []
 
             self._model.eval()
             with torch.no_grad():
@@ -210,20 +214,20 @@ class ValidationCallback(BaseCallback, config_name='validation'):
                         batch[key] = values.cpu()
 
                     for metric_name, metric_function in self._metrics.items():
-                        running_params[metric_name] += metric_function(
+                        running_params[metric_name].extend(metric_function(
                             inputs=batch,
                             pred_prefix=self._pred_prefix,
                             labels_prefix=self._labels_prefix,
-                        )
+                        ))
 
                     if self._loss_prefix is not None:
                         running_params[self._loss_prefix] += batch[self._loss_prefix].item()
 
             for label, value in running_params.items():
-                inputs['validation/{}'.format(label)] = value / len(self._validation_dataloader)
+                inputs['validation/{}'.format(label)] = np.mean(value)
                 utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
                     'validation/{}'.format(label),
-                    value / len(self._validation_dataloader),
+                    np.mean(value),
                     step_num
                 )
             utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.flush()
@@ -282,7 +286,11 @@ class EvalCallback(BaseCallback, config_name='eval'):
     def __call__(self, inputs, step_num):
         if step_num % self._on_step == 0:  # TODO Add time monitoring
             logger.debug('Eval on step {}...'.format(step_num))
-            running_params = Counter()
+            running_params = {}
+            for metric_name, metric_function in self._metrics.items():
+                running_params[metric_name] = []
+            if self._loss_prefix is not None:
+                running_params[self._loss_prefix] = []
 
             self._model.eval()
             with torch.no_grad():
@@ -297,20 +305,20 @@ class EvalCallback(BaseCallback, config_name='eval'):
                         batch[key] = values.cpu()
 
                     for metric_name, metric_function in self._metrics.items():
-                        running_params[metric_name] += metric_function(
+                        running_params[metric_name].extend(metric_function(
                             inputs=batch,
                             pred_prefix=self._pred_prefix,
                             labels_prefix=self._labels_prefix,
-                        )
+                        ))
 
                     if self._loss_prefix is not None:
                         running_params[self._loss_prefix] += batch[self._loss_prefix].item()
 
             for label, value in running_params.items():
-                inputs['eval/{}'.format(label)] = value / len(self._eval_dataloader)
+                inputs['eval/{}'.format(label)] = np.mean(value)
                 utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
                     'eval/{}'.format(label),
-                    value / len(self._eval_dataloader),
+                    np.mean(value),
                     step_num
                 )
             utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.flush()
