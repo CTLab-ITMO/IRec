@@ -23,7 +23,8 @@ def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_pat
         model.eval()
 
     with torch.no_grad():
-        for batch in dataloader:
+        for idx, batch in enumerate(dataloader):
+            print(idx, len(running_metrics['ndcg@20']))
 
             for key, value in batch.items():
                 batch[key] = value.to(DEVICE)

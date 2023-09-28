@@ -16,9 +16,11 @@ class RandomNegativeSampler(BaseNegativeSampler, config_name='random'):
     def generate_negative_samples(self, sample, num_negatives):
         user_id = sample['user.ids'][0]
         negatives = []
+        negatives_set = set()
         while len(negatives) < num_negatives:
-            negative_idx = np.random.randint(1, self._num_items)
-            if negative_idx not in self._seen_items[user_id]:
+            negative_idx = np.random.randint(1, self._num_items + 1)
+            if negative_idx not in self._seen_items[user_id] and negative_idx not in negatives_set:
                 negatives.append(negative_idx)
+                negatives_set.add(negative_idx)
 
         return negatives

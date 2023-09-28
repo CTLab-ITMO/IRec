@@ -39,10 +39,11 @@ def main():
         loss_function_params,
         optimizer_params
     ))
-    random.shuffle(list_of_params)
 
     if num is None:
         num = len(list_of_params)
+    else:
+        random.shuffle(list_of_params)
 
     cnt = 0
     for dataset_param, model_param, loss_param, optimizer_param in list_of_params[start_from:num]:
@@ -52,7 +53,7 @@ def main():
 
         model_name = '_'.join([
             config['experiment_name'],
-            dict_to_str(dataset_param, config['model_params']),
+            dict_to_str(dataset_param, config['dataset_params']),
             dict_to_str(model_param, config['model_params']),
             dict_to_str(loss_param, config['loss_params']),
             dict_to_str(optimizer_param, config['optimizer_params'])
@@ -84,7 +85,7 @@ def main():
 
         if utils.tensorboards.GLOBAL_TENSORBOARD_WRITER is not None:
             utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.close()
-        utils.tensorboards.GLOBAL_TENSORBOARD_WRITER = utils.tensorboards.TensorboardWriter(model_name)
+        utils.tensorboards.GLOBAL_TENSORBOARD_WRITER = utils.tensorboards.TensorboardWriter(model_name, use_time=False)
 
         model = BaseModel.create_from_config(model_param, **dataset.meta).to(DEVICE)
         loss_function = BaseLoss.create_from_config(loss_param)
@@ -105,7 +106,8 @@ def main():
             optimizer=optimizer,
             loss_function=loss_function,
             callback=callback,
-            epoch_cnt=config['train_epochs_num']
+            epoch_cnt=config.get('train_epochs_num'),
+            best_metric=config.get('best_metric')
         )
 
         logger.debug('Saving best model checkpoint...')

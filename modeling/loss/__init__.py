@@ -1,1 +1,1 @@
-from .base import BaseLoss, IdentityLoss
+from .base import *

@@ -53,9 +53,8 @@ class EvalSampler(metaclass=MetaParent):
     def __getitem__(self, index):
         sample = copy.deepcopy(self._dataset[index])
 
-        item_sequence = sample['item.ids']
-        labels = [item_sequence[-1]]
-        item_sequence = item_sequence[:-1]
+        item_sequence = sample['item.ids'][:-1]
+        next_item = sample['item.ids'][-1]
 
         return {
             'user.ids': sample['user.ids'],
@@ -64,6 +63,6 @@ class EvalSampler(metaclass=MetaParent):
             'item.ids': item_sequence,
             'item.length': len(item_sequence),
 
-            'labels.ids': labels,
-            'labels.length': len(labels),
+            'labels.ids': [next_item],
+            'labels.length': 1
         }

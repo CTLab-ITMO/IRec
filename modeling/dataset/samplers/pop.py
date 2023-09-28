@@ -17,6 +17,7 @@ class PopValidationSampler(ValidationSampler, config_name='pop'):
         self._num_negatives = num_negatives
 
         self._item_2_count = {}
+
         for sample in dataset:
             items = sample['item.ids'][:-1]
             for item in items:
@@ -75,6 +76,10 @@ class PopEvalSampler(EvalSampler, config_name='pop'):
             for item in items:
                 self._item_2_count[item] += 1
 
+        self._candidates_counts = [0] + [
+            self._item_2_count[item_id] for item_id in range(1, self._num_items + 1)
+        ]
+
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
@@ -86,9 +91,6 @@ class PopEvalSampler(EvalSampler, config_name='pop'):
     def __getitem__(self, index):
         sample = copy.deepcopy(self._dataset[index])
         labels = [sample['item.ids'][-1]]
-        candidates_counts = [0] + [
-            self._item_2_count[item_id] for item_id in range(1, self._num_items + 1)
-        ]
 
         return {
             'user.ids': sample['user.ids'],
@@ -97,6 +99,6 @@ class PopEvalSampler(EvalSampler, config_name='pop'):
             'labels.ids': labels,
             'labels.length': len(labels),
 
-            'candidates_counts.ids': candidates_counts,
-            'candidates_counts.length': len(candidates_counts)
+            'candidates_counts.ids': self._candidates_counts,
+            'candidates_counts.length': len(self._candidates_counts)
         }

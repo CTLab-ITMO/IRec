@@ -1,3 +1,4 @@
+import os
 import time
 
 from torch.utils.tensorboard import SummaryWriter
@@ -8,9 +9,9 @@ GLOBAL_TENSORBOARD_WRITER = None
 
 class TensorboardWriter(SummaryWriter):
 
-    def __init__(self, experiment_name):
+    def __init__(self, experiment_name, use_time=True):
         self._experiment_name = experiment_name
-        super().__init__(log_dir='{}/{}'.format(LOGS_DIR, experiment_name))
+        super().__init__(log_dir=os.path.join(LOGS_DIR, f'{experiment_name}_{time.time() if use_time else ""}'))
 
     def add_scalar(self, *args, **kwargs):
         super().add_scalar(*args, **kwargs)

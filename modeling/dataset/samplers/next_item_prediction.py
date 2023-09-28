@@ -6,13 +6,12 @@ import copy
 
 class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_prediction'):
 
-    def __init__(self, dataset, num_users, num_items, negative_sampler, num_negatives=100):
+    def __init__(self, dataset, num_users, num_items, negative_sampler):
         super().__init__()
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
         self._negative_sampler = negative_sampler
-        self._num_negatives = num_negatives
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -22,8 +21,7 @@ class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_predic
             dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
-            negative_sampler=negative_sampler,
-            num_negatives=config.get('num_negatives_train', 100)
+            negative_sampler=negative_sampler
         )
 
     def __getitem__(self, index):

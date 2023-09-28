@@ -1,5 +1,5 @@
 import utils
-from utils import parse_args, create_logger, fix_random_seed, DEVICE
+from utils import parse_args, create_logger, DEVICE
 
 from dataset import BaseDataset
 from dataloader import BaseDataloader
@@ -9,11 +9,11 @@ from loss import BaseLoss
 from callbacks import BaseCallback
 
 import copy
-import torch
 import json
+import os
+import torch
 
 logger = create_logger(name=__name__)
-seed_val = 42
 
 
 def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt=None, best_metric=None):
@@ -65,7 +65,6 @@ def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt=None,
 
 
 def main():
-    fix_random_seed(seed_val)
     config = parse_args()
 
     utils.tensorboards.GLOBAL_TENSORBOARD_WRITER = \
@@ -97,6 +96,12 @@ def main():
     )
 
     model = BaseModel.create_from_config(config['model'], **dataset.meta).to(DEVICE)
+    if 'checkpoint' in config:
+        checkpoint_path = os.path.join('../checkpoints', f'{config["checkpoint"]}.pth')
+        logger.debug('Loading checkpoint from {}'.format(checkpoint_path))
+        checkpoint = torch.load(checkpoint_path)
+        print(checkpoint.keys())
+        model.load_state_dict(checkpoint)
 
     loss_function = BaseLoss.create_from_config(config['loss'])
 
@@ -111,7 +116,7 @@ def main():
         optimizer=optimizer
     )
 
-    # TODO add verbose option for all callbacks, multiple optimizer options (???), create strong baseline
+    # TODO add verbose option for all callbacks, multiple optimizer options (???)
     # TODO create pre/post callbacks
     logger.debug('Everything is ready for training process!')
 
