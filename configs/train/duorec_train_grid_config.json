@@ -1,17 +1,23 @@
 {
-  "experiment_name": "bert4rec_beauty",
+  "start_from": 0,
+  "num_exps": 100,
+  "experiment_name": "duorec_ml_grid",
   "best_metric": "eval/ndcg@20",
   "dataset": {
-    "type": "scientific",
-    "path_to_data_dir": "../data",
-    "name": "Beauty",
-    "max_sequence_length": 50,
-    "samplers": {
-      "mask_prob": 0.3,
-      "num_negatives_eval": 100,
-      "type": "masked_item_prediction",
-      "negative_sampler_type": "random"
+    "type": "duorec",
+    "dataset": {
+      "type": "scientific",
+      "path_to_data_dir": "../data",
+      "name": "MovieLens1M",
+      "max_sequence_length": 50,
+      "samplers": {
+        "num_negatives_eval": 100,
+        "type": "duorec",
+        "negative_sampler_type": "random"
+      }
     }
+  },
+  "dataset_params": {
   },
   "dataloader": {
     "train": {
@@ -34,26 +40,30 @@
     }
   },
   "model": {
-    "type": "bert4rec",
+    "type": "duorec",
     "sequence_prefix": "item",
+    "augmented_sequence_prefix": "semantic_similar_item",
     "labels_prefix": "labels",
     "candidate_prefix": "candidates",
     "embedding_dim": 64,
     "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
-    "dropout": 0.1,
-    "activation": "gelu",
+    "activation": "relu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
+  },
+  "model_params": {
+    "dropout": [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
   },
   "optimizer": {
     "type": "basic",
     "optimizer": {
       "type": "adam",
-      "lr": 1e-4
-    },
-    "clip_grad_threshold": 5.0
+      "lr": 0.001
+    }
+  },
+  "optimizer_params": {
   },
   "loss": {
     "type": "composite",
@@ -62,10 +72,37 @@
         "type": "ce",
         "predictions_prefix": "logits",
         "labels_prefix": "labels",
-        "output_prefix": "downstream_loss"
+        "output_prefix": "duorec_ml_downstream_loss"
+      },
+      {
+        "type": "duorec_ssl",
+        "fst_embeddings_prefix": "sequence_representation",
+        "snd_embeddings_prefix": "similar_sequence_representation",
+        "output_prefix": "duorec_ml_ssl_droupout"
+      },
+      {
+        "type": "duorec_ssl",
+        "fst_embeddings_prefix": "similar_sequence_representation",
+        "snd_embeddings_prefix": "augmented_sequence_representation",
+        "output_prefix": "duorec_ml_ssl_augmented"
       }
     ],
-    "output_prefix": "loss"
+    "output_prefix": "duorec_ml_loss"
+  },
+  "loss_params": {
+    "losses": [
+      {},
+      {
+        "tau": [0.1, 1.0, 10.0],
+        "weight": [0.1, 0.2, 0.3, 0.4, 0.5, 1.0],
+        "normalize_embeddings": [false, true]
+      },
+      {
+        "tau": [0.1, 1.0, 10.0],
+        "weight": [0.1, 0.2, 0.3, 0.4, 0.5, 1.0],
+        "normalize_embeddings": [false, true]
+      }
+    ]
   },
   "callback": {
     "type": "composite",
@@ -73,12 +110,22 @@
       {
         "type": "metric",
         "on_step": 1,
-        "loss_prefix": "loss"
+        "loss_prefix": "duorec_ml_loss"
       },
       {
         "type": "metric",
         "on_step": 1,
-        "loss_prefix": "downstream_loss"
+        "loss_prefix": "duorec_ml_downstream_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "duorec_ml_ssl_droupout"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "duorec_ml_ssl_augmented"
       },
       {
         "type": "validation",

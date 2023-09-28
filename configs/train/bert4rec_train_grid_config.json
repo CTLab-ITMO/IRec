@@ -1,11 +1,12 @@
 {
-  "experiment_name": "bert4rec_beauty",
-  "train_epochs_num": 15,
+  "start_from": 0,
+  "experiment_name": "bert4rec_ml_grid",
+  "best_metric": "eval/ndcg@20",
   "dataset": {
-    "type": "sequence",
+    "type": "scientific",
     "path_to_data_dir": "../data",
-    "name": "Beauty",
-    "max_sequence_length": 200,
+    "name": "MovieLens1M",
+    "max_sequence_length": 50,
     "samplers": {
       "type": "masked_item_prediction",
       "negative_sampler_type": "random"
@@ -13,7 +14,7 @@
   },
   "dataset_params": {
     "samplers": {
-      "mask_prob": [0.0, 0.2, 0.4]
+      "mask_prob": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
     }
   },
   "dataloader": {
@@ -41,29 +42,25 @@
     "sequence_prefix": "item",
     "labels_prefix": "labels",
     "candidate_prefix": "candidates",
-    "activation": "relu"
+    "embedding_dim": 64,
+    "num_heads": 2,
+    "num_layers": 2,
+    "dim_feedforward": 256,
+    "activation": "relu",
+    "layer_norm_eps": 1e-9,
+    "initializer_range": 0.02
   },
   "model_params": {
-    "embedding_dim": [128, 256, 512],
-    "num_heads": [2, 4],
-    "num_layers": [1, 2, 3],
-    "dim_feedforward": [512, 1024],
-    "dropout": [0.0, 0.1, 0.2],
-    "initializer_range": [0.01, 0.02, 0.05],
-    "layer_norm_eps": [1e-12, 1e-5]
+    "dropout": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
   },
   "optimizer": {
     "type": "basic",
     "optimizer": {
-      "type": "adamw",
-      "eps": 1e-8
+      "type": "adam",
+      "lr": 0.001
     }
   },
   "optimizer_params": {
-    "optimizer": {
-      "lr": [0.001, 0.005]
-    },
-    "clip_grad_threshold": [5.0, 100.0]
   },
   "loss": {
     "type": "composite",
@@ -72,13 +69,12 @@
         "type": "ce",
         "predictions_prefix": "logits",
         "labels_prefix": "labels",
-        "output_prefix": "loss"
+        "output_prefix": "downstream_loss"
       }
     ],
     "output_prefix": "loss"
   },
   "loss_params": {
-
   },
   "callback": {
     "type": "composite",
@@ -90,7 +86,39 @@
       },
       {
         "type": "validation",
-        "on_step": 128,
+        "on_step": 64,
+        "pred_prefix": "logits",
+        "labels_prefix": "labels",
+        "metrics": {
+          "ndcg@5": {
+            "type": "ndcg",
+            "k": 5
+          },
+          "ndcg@10": {
+            "type": "ndcg",
+            "k": 10
+          },
+          "ndcg@20": {
+            "type": "ndcg",
+            "k": 20
+          },
+          "recall@5": {
+            "type": "recall",
+            "k": 5
+          },
+          "recall@10": {
+            "type": "recall",
+            "k": 10
+          },
+          "recall@20": {
+            "type": "recall",
+            "k": 20
+          }
+        }
+      },
+      {
+        "type": "eval",
+        "on_step": 256,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {

@@ -1,13 +1,13 @@
 {
-  "experiment_name": "s3rec_beauty_test_new",
-  "train_epochs_num": 1,
+  "experiment_name": "s3rec_beauty_train",
+  "checkpoint": "pretrain_s3rec_beauty_test_new_final_state",
+  "best_metric": "eval/ndcg@20",
   "dataset": {
-    "type": "sequence",
+    "type": "scientific",
     "path_to_data_dir": "../data",
-    "name": "Gowalla",
-    "max_sequence_length": 200,
+    "name": "Beauty",
+    "max_sequence_length": 50,
     "samplers": {
-      "num_negatives_train": 100,
       "num_negatives_eval": 100,
       "type": "next_item_prediction",
       "negative_sampler_type": "random"
@@ -35,19 +35,21 @@
   },
   "model": {
     "type": "s3rec",
+    "is_training": true,
     "sequence_prefix": "item",
-    "labels_prefix": "labels",
     "positive_prefix": "positive",
     "negative_prefix": "negative",
     "sequence_segment_prefix": "item_segment",
     "positive_segment_prefix": "positive_segment",
     "negative_segment_prefix": "negative_segment",
     "candidate_prefix": "candidates",
-    "embedding_dim": 256,
+    "embedding_dim": 64,
     "num_heads": 2,
     "num_layers": 2,
-    "dim_feedforward": 1024,
-    "dropout": 0.0,
+    "dim_feedforward": 256,
+    "dropout": 0.6,
+    "activation": "relu",
+    "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },
   "optimizer": {
@@ -55,20 +57,18 @@
     "optimizer": {
       "type": "adam",
       "lr": 0.001
-    }
+    },
+    "clip_grad_threshold": 5.0
   },
   "loss": {
     "type": "composite",
     "losses": [
       {
-        "type": "bce",
-        "predictions_prefix": "positive_scores",
-        "labels_prefix": "positive_labels.ids"
-      },
-      {
-        "type": "bce",
-        "predictions_prefix": "negative_scores",
-        "labels_prefix": "negative_labels.ids"
+        "type": "sasrec",
+        "positive_prefix": "positive_embeddings",
+        "negative_prefix": "negative_embeddings",
+        "representation_prefix": "current_embeddings",
+        "output_prefix": "downstream_loss"
       }
     ],
     "output_prefix": "loss"
@@ -83,7 +83,39 @@
       },
       {
         "type": "validation",
-        "on_step": 32,
+        "on_step": 64,
+        "pred_prefix": "logits",
+        "labels_prefix": "labels",
+        "metrics": {
+          "ndcg@5": {
+            "type": "ndcg",
+            "k": 5
+          },
+          "ndcg@10": {
+            "type": "ndcg",
+            "k": 10
+          },
+          "ndcg@20": {
+            "type": "ndcg",
+            "k": 20
+          },
+          "recall@5": {
+            "type": "recall",
+            "k": 5
+          },
+          "recall@10": {
+            "type": "recall",
+            "k": 10
+          },
+          "recall@20": {
+            "type": "recall",
+            "k": 20
+          }
+        }
+      },
+      {
+        "type": "eval",
+        "on_step": 256,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {

@@ -1,16 +1,15 @@
 {
-  "experiment_name": "light_gcn_beauty_test_old",
-  "train_epochs_num": 20,
+  "experiment_name": "light_gcn_beauty_test",
+  "train_epochs_num": 50,
   "dataset": {
     "type": "graph",
     "graph_dir_path": "../data/Beauty",
     "dataset": {
-      "type": "sequence",
-      "name": "Beauty",
+      "type": "scientific",
       "path_to_data_dir": "../data",
-      "max_sequence_length": 200,
+      "name": "Beauty",
+      "max_sequence_length": 50,
       "samplers": {
-        "num_negatives_train": 100,
         "num_negatives_eval": 100,
         "type": "next_item_prediction",
         "negative_sampler_type": "random"
@@ -43,7 +42,7 @@
     "positive_prefix": "positive",
     "negative_prefix": "negative",
     "candidates_prefix": "candidates",
-    "embedding_dim": 256,
+    "embedding_dim": 64,
     "num_layers": 3,
     "keep_prob": 1.0,
     "dropout": 0.0,
@@ -63,11 +62,16 @@
         "type": "bpr",
         "positive_prefix": "positive_scores",
         "negative_prefix": "negative_scores",
-        "output_prefix": "bpr_loss",
-        "weight": 1.0
+        "output_prefix": "lightgcn_downstream_loss"
+      },
+      {
+        "type": "regularization",
+        "prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
+        "weight": 0.5,
+        "output_prefix": "lightgcn_regularization_loss"
       }
     ],
-    "output_prefix": "loss"
+    "output_prefix": "lightgcn_loss"
   },
   "callback": {
     "type": "composite",
@@ -75,16 +79,53 @@
       {
         "type": "metric",
         "on_step": 1,
-        "loss_prefix": "loss"
+        "loss_prefix": "lightgcn_loss"
       },
       {
         "type": "metric",
         "on_step": 1,
-        "loss_prefix": "bpr_loss"
+        "loss_prefix": "lightgcn_downstream_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "lightgcn_regularization_loss"
       },
       {
         "type": "validation",
-        "on_step": 32,
+        "on_step": 64,
+        "pred_prefix": "logits",
+        "labels_prefix": "labels",
+        "metrics": {
+          "ndcg@5": {
+            "type": "ndcg",
+            "k": 5
+          },
+          "ndcg@10": {
+            "type": "ndcg",
+            "k": 10
+          },
+          "ndcg@20": {
+            "type": "ndcg",
+            "k": 20
+          },
+          "recall@5": {
+            "type": "recall",
+            "k": 5
+          },
+          "recall@10": {
+            "type": "recall",
+            "k": 10
+          },
+          "recall@20": {
+            "type": "recall",
+            "k": 20
+          }
+        }
+      },
+      {
+        "type": "eval",
+        "on_step": 256,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {

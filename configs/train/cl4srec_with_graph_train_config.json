@@ -1,5 +1,7 @@
 {
-  "experiment_name": "bert4rec_beauty",
+  "start_from": 0,
+  "num_exps": 72,
+  "experiment_name": "cl4srec_beauty_test_new_loss",
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "scientific",
@@ -7,10 +9,16 @@
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
-      "mask_prob": 0.3,
       "num_negatives_eval": 100,
-      "type": "masked_item_prediction",
+      "type": "cl4srec",
       "negative_sampler_type": "random"
+    }
+  },
+  "dataset_params": {
+    "samplers": {
+      "item_crop_portion": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+      "item_mask_portion": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+      "item_reorder_portion": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     }
   },
   "dataloader": {
@@ -34,38 +42,68 @@
     }
   },
   "model": {
-    "type": "bert4rec",
+    "type": "cl4srec",
     "sequence_prefix": "item",
-    "labels_prefix": "labels",
+    "fst_augmented_sequence_prefix": "fst_augmented_item",
+    "snd_augmented_sequence_prefix": "snd_augmented_item",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
     "candidate_prefix": "candidates",
     "embedding_dim": 64,
     "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
-    "dropout": 0.1,
-    "activation": "gelu",
-    "layer_norm_eps": 1e-9,
-    "initializer_range": 0.02
+    "activation": "relu",
+    "layer_norm_eps": 1e-9
+  },
+  "model_params": {
+    "dropout": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+    "initializer_range": [0.02, 0.05]
   },
   "optimizer": {
     "type": "basic",
     "optimizer": {
       "type": "adam",
-      "lr": 1e-4
+      "lr": 0.001
     },
     "clip_grad_threshold": 5.0
+  },
+  "optimizer_params": {
   },
   "loss": {
     "type": "composite",
     "losses": [
       {
-        "type": "ce",
-        "predictions_prefix": "logits",
-        "labels_prefix": "labels",
-        "output_prefix": "downstream_loss"
+        "type": "cl4srec",
+        "current_representation": "sequence_representation",
+        "all_items_representation": "all_items_representation",
+        "tau": 1.0,
+        "weight": 1.0,
+        "output_prefix": "cl4srec_downstream_loss"
+      },
+      {
+        "type": "fps",
+        "fst_embeddings_prefix": "fst_aug_sequence_representation",
+        "snd_embeddings_prefix": "snd_aug_sequence_representation",
+        "tau": 1.0,
+        "weight": 0.5,
+        "add_negatives": true,
+        "normalize_embeddings": false,
+        "output_prefix": "cl4srec_contrastive_loss"
       }
     ],
     "output_prefix": "loss"
+  },
+  "loss_params": {
+    "losses": [
+      {},
+      {
+        "tau": [0.01, 0.1, 1.0, 10.0],
+        "weight": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 1.5, 2.0, 5.0, 7.5, 10.0],
+        "normalize_embeddings": [false, true],
+        "add_negatives": [false, true]
+      }
+    ]
   },
   "callback": {
     "type": "composite",
@@ -74,11 +112,6 @@
         "type": "metric",
         "on_step": 1,
         "loss_prefix": "loss"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "downstream_loss"
       },
       {
         "type": "validation",

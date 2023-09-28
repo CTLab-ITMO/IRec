@@ -1,12 +1,12 @@
 {
   "start_from": 0,
-  "num_exps": 60,
-  "experiment_name": "cl4srec_beauty_grid",
-  "train_epochs_num": 20,
+  "num_exps": 100,
+  "experiment_name": "cl4srec_ml_grid",
+  "best_metric": "eval/ndcg@20",
   "dataset": {
-    "type": "sequence",
+    "type": "scientific",
     "path_to_data_dir": "../data",
-    "name": "Beauty",
+    "name": "MovieLens1M",
     "max_sequence_length": 50,
     "samplers": {
       "num_negatives_eval": 100,
@@ -16,9 +16,9 @@
   },
   "dataset_params": {
     "samplers": {
-      "item_crop_portion": [0.3, 0.5, 0.7],
-      "item_mask_portion": [0.1, 0.3, 0.5, 0.7],
-      "item_reorder_portion": [0.1, 0.3, 0.5, 0.7]
+      "item_crop_portion": [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+      "item_mask_portion": [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+      "item_reorder_portion": [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
     }
   },
   "dataloader": {
@@ -46,18 +46,19 @@
     "sequence_prefix": "item",
     "fst_augmented_sequence_prefix": "fst_augmented_item",
     "snd_augmented_sequence_prefix": "snd_augmented_item",
-    "labels_prefix": "target",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
     "candidate_prefix": "candidates",
     "num_layers": 2,
     "num_heads": 2,
     "embedding_dim": 64,
     "dim_feedforward": 256,
     "activation": "relu",
-    "layer_norm_eps": 1e-5
+    "layer_norm_eps": 1e-9,
+    "initializer_range": 0.02
   },
   "model_params": {
-    "dropout": [0.0, 0.1, 0.2],
-    "initializer_range": [0.01, 0.02, 0.05]
+    "dropout": [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
   },
   "optimizer": {
     "type": "basic",
@@ -67,34 +68,36 @@
     }
   },
   "optimizer_params": {
-    "optimizer": {
-      "lr": [0.001, 0.003, 0.005]
-    }
   },
   "loss": {
     "type": "composite",
     "losses": [
       {
-        "type": "fps",
-        "fst_embeddings_prefix": "sequence_representation",
-        "snd_embeddings_prefix": "labels_representation",
+        "type": "cl4srec",
+        "current_representation": "sequence_representation",
+        "all_items_representation": "all_items_representation",
         "tau": 1.0,
-        "output_prefix": "downstream_loss"
+        "weight": 1.0,
+        "output_prefix": "cl4srec_ml_downstream_loss"
       },
       {
         "type": "fps",
         "fst_embeddings_prefix": "fst_aug_sequence_representation",
         "snd_embeddings_prefix": "snd_aug_sequence_representation",
         "tau": 1.0,
-        "output_prefix": "contrastive_loss"
+        "output_prefix": "cl4srec_ml_contrastive_loss"
       }
     ],
-    "output_prefix": "loss"
+    "output_prefix": "cl4srec_ml_loss"
   },
   "loss_params": {
     "losses": [
       {},
-      {"weight": [0.01, 0.05, 0.1, 0.5]}
+      {
+        "weight": [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+        "normalize_embeddings": [true, false],
+        "add_negatives": [false, true]
+      }
     ]
   },
   "callback": {
@@ -103,10 +106,52 @@
       {
         "type": "metric",
         "on_step": 1,
-        "loss_prefix": "loss"
+        "loss_prefix": "cl4srec_ml_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "cl4srec_ml_downstream_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "cl4srec_ml_contrastive_loss"
       },
       {
         "type": "validation",
+        "on_step": 64,
+        "pred_prefix": "logits",
+        "labels_prefix": "labels",
+        "metrics": {
+          "ndcg@5": {
+            "type": "ndcg",
+            "k": 5
+          },
+          "ndcg@10": {
+            "type": "ndcg",
+            "k": 10
+          },
+          "ndcg@20": {
+            "type": "ndcg",
+            "k": 20
+          },
+          "recall@5": {
+            "type": "recall",
+            "k": 5
+          },
+          "recall@10": {
+            "type": "recall",
+            "k": 10
+          },
+          "recall@20": {
+            "type": "recall",
+            "k": 20
+          }
+        }
+      },
+      {
+        "type": "eval",
         "on_step": 256,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
