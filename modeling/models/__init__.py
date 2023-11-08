@@ -2,6 +2,7 @@ from .base import BaseModel, TorchModel
 from .bert4rec import Bert4RecModel, Bert4RecMCLSRModel
 from .cl4srec import Cl4SRecModel, Cl4SRecMCLSRModel
 from .duorec import DuoRecModel
+from .graph_seq_rec import GraphSeqRecModel
 from .gru4rec import GRU4RecModel, Gru4RecMCLSRModel
 from .lightGCN import LightGCNModel
 from .mclsr import MCLSRModel

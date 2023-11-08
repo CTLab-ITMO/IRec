@@ -71,7 +71,6 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
             config['name'], (len(train_dataset) + len(test_dataset)) / max_user_idx / max_item_idx
         ))
 
-        # TODO sanity check
         train_sampler = TrainSampler.create_from_config(
             config['samplers'],
             dataset=train_dataset,
@@ -187,73 +186,101 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
 
 class GraphDataset(BaseDataset, config_name='graph'):
 
-    def __init__(self, dataset, graph_dir_path, use_user_graph=False, use_item_graph=False):
+    def __init__(
+            self,
+            dataset,
+            graph_dir_path,
+            use_train_data_only=True,
+            use_user_graph=False,
+            use_item_graph=False
+    ):
         self._dataset = dataset
         self._graph_dir_path = graph_dir_path
+        self._use_train_data_only = use_train_data_only
         self._use_user_graph = use_user_graph
         self._use_item_graph = use_item_graph
 
-        self._num_users = dataset.num_users + 2
-        self._num_items = dataset.num_items + 2
+        self._num_users = dataset.num_users
+        self._num_items = dataset.num_items
 
-        train_sampler, test_sampler = self._dataset.get_samplers()
+        train_sampler, validation_sampler, test_sampler = dataset.get_samplers()
 
         train_interactions, train_user_interactions, train_item_interactions = [], [], []
-        test_interactions, test_user_interactions, test_item_interactions = [], [], []
-        train_data_size, test_data_size = 0, 0
 
         train_user_2_items = defaultdict(set)
         train_item_2_users = defaultdict(set)
+        visited_user_item_pairs = set()
 
         for sample in train_sampler.dataset:
             user_id = sample['user.ids'][0]
             item_ids = sample['item.ids']
 
             for item_id in item_ids:
-                train_interactions.append((user_id, item_id))
-                train_user_interactions.append(user_id)
-                train_item_interactions.append(item_id)
+                if (user_id, item_id) not in visited_user_item_pairs:
+                    train_interactions.append((user_id, item_id))
+                    train_user_interactions.append(user_id)
+                    train_item_interactions.append(item_id)
 
-                train_user_2_items[user_id].add(item_id)
-                train_item_2_users[item_id].add(user_id)
+                    train_user_2_items[user_id].add(item_id)
+                    train_item_2_users[item_id].add(user_id)
 
-            train_data_size += len(item_ids)
+                    visited_user_item_pairs.add((user_id, item_id))
 
-        for sample in test_sampler.dataset:
-            user_id = sample['user.ids'][0]
-            item_ids = sample['item.ids']
+        # TODO create separated function
+        if not self._use_train_data_only:
+            for sample in validation_sampler.dataset:
+                user_id = sample['user.ids'][0]
+                item_ids = sample['item.ids']
 
-            for item_id in item_ids:
-                test_interactions.append((user_id, item_id))
-                test_user_interactions.append(user_id)
-                test_item_interactions.append(item_id)
+                for item_id in item_ids:
+                    if (user_id, item_id) not in visited_user_item_pairs:
+                        train_interactions.append((user_id, item_id))
+                        train_user_interactions.append(user_id)
+                        train_item_interactions.append(item_id)
 
-            test_data_size += len(item_ids)
+                        train_user_2_items[user_id].add(item_id)
+                        train_item_2_users[item_id].add(user_id)
+
+                        visited_user_item_pairs.add((user_id, item_id))
+
+            for sample in test_sampler.dataset:
+                user_id = sample['user.ids'][0]
+                item_ids = sample['item.ids']
+
+                for item_id in item_ids:
+                    if (user_id, item_id) not in visited_user_item_pairs:
+                        train_interactions.append((user_id, item_id))
+                        train_user_interactions.append(user_id)
+                        train_item_interactions.append(item_id)
+
+                        train_user_2_items[user_id].add(item_id)
+                        train_item_2_users[item_id].add(user_id)
+
+                        visited_user_item_pairs.add((user_id, item_id))
 
         self._train_interactions = np.array(train_interactions)
         self._train_user_interactions = np.array(train_user_interactions)
         self._train_item_interactions = np.array(train_item_interactions)
 
-        self._test_interactions = np.array(test_interactions)
-        self._test_user_interactions = np.array(test_user_interactions)
-        self._test_item_interactions = np.array(test_item_interactions)
-
         path_to_graph = os.path.join(graph_dir_path, 'general_graph.npz')
         if os.path.exists(path_to_graph):
             self._graph = sp.load_npz(path_to_graph)
         else:
-            # (users, items), bipartite graph
+            # place ones only when co-occurrence happens
             user2item_connections = csr_matrix(
                 (np.ones(len(train_user_interactions)), (train_user_interactions, train_item_interactions)),
-                shape=(self._num_users, self._num_items)
+                shape=(self._num_users + 2, self._num_items + 2)
+            )  # (num_users + 2, num_items + 2), bipartite graph
+            self._graph = self.get_sparse_graph_layer(
+                user2item_connections,
+                self._num_users + 2,
+                self._num_items + 2,
+                biparite=True
             )
-            self._graph = self.get_sparse_graph_layer(user2item_connections, self._num_users, self._num_items,
-                                                      biparite=True)
             sp.save_npz(path_to_graph, self._graph)
 
         self._graph = self._convert_sp_mat_to_sp_tensor(self._graph).coalesce().to(DEVICE)
 
-        # TODO fix
         if self._use_user_graph:
             path_to_user_graph = os.path.join(graph_dir_path, 'user_graph.npz')
             if os.path.exists(path_to_user_graph):
@@ -261,22 +288,35 @@ class GraphDataset(BaseDataset, config_name='graph'):
             else:
                 user2user_interactions_fst = []
                 user2user_interactions_snd = []
+                visited_user_item_pairs = set()
+                visited_user_user_pairs = set()
 
                 for user_id, item_id in tqdm(zip(self._train_user_interactions, self._train_item_interactions)):
-                    for connected_user_id in train_item_2_users[item_id]:
-                        if user_id != connected_user_id:
-                            user2user_interactions_fst.append(user_id)
-                            user2user_interactions_snd.append(connected_user_id)
+                    if (user_id, item_id) in visited_user_item_pairs:
+                        continue  # process (user, item) pair only once
+                    visited_user_item_pairs.add((user_id, item_id))
 
-                # (users, user) graph
+                    for connected_user_id in train_item_2_users[item_id]:
+                        if (user_id, connected_user_id) in visited_user_user_pairs or user_id == connected_user_id:
+                            continue  # add (user, user) to graph connections pair only once
+                        visited_user_user_pairs.add((user_id, connected_user_id))
+
+                        user2user_interactions_fst.append(user_id)
+                        user2user_interactions_snd.append(connected_user_id)
+
+                # (user, user) graph
                 user2user_connections = csr_matrix(
                     (
-                        np.ones(len(user2user_interactions_fst)),
-                        (user2user_interactions_fst, user2user_interactions_snd)),
-                    shape=(self._num_users, self._num_users)
+                    np.ones(len(user2user_interactions_fst)), (user2user_interactions_fst, user2user_interactions_snd)),
+                    shape=(self._num_users + 2, self._num_users + 2)
                 )
 
-                self._user_graph = self.get_sparse_graph_layer(user2user_connections, self._num_users, self._num_users)
+                self._user_graph = self.get_sparse_graph_layer(
+                    user2user_connections,
+                    self._num_users + 2,
+                    self._num_users + 2,
+                    biparite=False
+                )
                 sp.save_npz(path_to_user_graph, self._user_graph)
 
             self._user_graph = self._convert_sp_mat_to_sp_tensor(self._user_graph).coalesce().to(DEVICE)
@@ -290,21 +330,34 @@ class GraphDataset(BaseDataset, config_name='graph'):
             else:
                 item2item_interactions_fst = []
                 item2item_interactions_snd = []
+                visited_user_item_pairs = set()
+                visited_item_item_pairs = set()
 
                 for user_id, item_id in tqdm(zip(self._train_user_interactions, self._train_item_interactions)):
+                    if (user_id, item_id) in visited_user_item_pairs:
+                        continue  # process (user, item) pair only once
+                    visited_user_item_pairs.add((user_id, item_id))
+
                     for connected_item_id in train_user_2_items[user_id]:
-                        if item_id != connected_item_id:
-                            item2item_interactions_fst.append(item_id)
-                            item2item_interactions_snd.append(connected_item_id)
+                        if (item_id, connected_item_id) in visited_item_item_pairs or item_id == connected_item_id:
+                            continue  # add (item, item) to graph connections pair only once
+                        visited_item_item_pairs.add((item_id, connected_item_id))
+
+                        item2item_interactions_fst.append(item_id)
+                        item2item_interactions_snd.append(connected_item_id)
 
                 # (item, item) graph
                 item2item_connections = csr_matrix(
                     (
-                        np.ones(len(item2item_interactions_fst)),
-                        (item2item_interactions_fst, item2item_interactions_snd)),
-                    shape=(self._num_items, self._num_items)
+                    np.ones(len(item2item_interactions_fst)), (item2item_interactions_fst, item2item_interactions_snd)),
+                    shape=(self._num_items + 2, self._num_items + 2)
                 )
-                self._item_graph = self.get_sparse_graph_layer(item2item_connections, self._num_items, self._num_items)
+                self._item_graph = self.get_sparse_graph_layer(
+                    item2item_connections,
+                    self._num_items + 2,
+                    self._num_items + 2,
+                    biparite=False
+                )
                 sp.save_npz(path_to_item_graph, self._item_graph)
 
             self._item_graph = self._convert_sp_mat_to_sp_tensor(self._item_graph).coalesce().to(DEVICE)
@@ -336,24 +389,22 @@ class GraphDataset(BaseDataset, config_name='graph'):
         if biparite:
             adj_mat[:fst_dim, fst_dim:] = R  # (num_users, num_items)
             adj_mat[fst_dim:, :fst_dim] = R.T  # (num_items, num_users)
+        else:
+            adj_mat = R
 
         adj_mat = adj_mat.todok()
-        adj_mat = adj_mat + sp.eye(adj_mat.shape[0])  # TODO ????
+        # adj_mat += sp.eye(adj_mat.shape[0])  # remove division by zero issue
 
-        # TODO check next part of layer creation
         edges_degree = np.array(adj_mat.sum(axis=1))  # D
 
         d_inv = np.power(edges_degree, -0.5).flatten()  # D^(-0.5)
-        d_inv[np.isinf(d_inv)] = 0.0  # fix NaNs
+        d_inv[np.isinf(d_inv)] = 0.0  # fix NaNs in case if row with zero connections
         d_mat = sp.diags(d_inv)  # make it square matrix
 
         # D^(-0.5) @ A @ D^(-0.5)
-        norm_adj = d_mat.dot(adj_mat)
-        norm_adj = norm_adj.dot(d_mat)
+        norm_adj = d_mat.dot(adj_mat).dot(d_mat)
 
-        norm_adj = norm_adj.tocsr()
-
-        return norm_adj
+        return norm_adj.tocsr()
 
     @staticmethod
     def _convert_sp_mat_to_sp_tensor(X):
@@ -393,18 +444,18 @@ class DuorecDataset(BaseDataset, config_name='duorec'):
         self._num_users = dataset.num_users
         self._num_items = dataset.num_items
 
-        train_sampler, _ = self._dataset.get_samplers()
+        train_sampler, _, _ = self._dataset.get_samplers()
 
-        self.target_2_sequences = defaultdict(list)
+        target_2_sequences = defaultdict(list)
         for sample in train_sampler.dataset:
             item_ids = sample['item.ids']
 
             target_item = item_ids[-1]
             semantic_similar_item_ids = item_ids[:-1]
 
-            self.target_2_sequences[target_item].append(semantic_similar_item_ids)
+            target_2_sequences[target_item].append(semantic_similar_item_ids)
 
-        train_sampler._target_2_sequences = self.target_2_sequences
+        train_sampler._target_2_sequences = target_2_sequences
 
     @classmethod
     def create_from_config(cls, config):
@@ -472,20 +523,21 @@ class ScientificDataset(BaseDataset, config_name='scientific'):
                 'item.ids': item_ids[:-2][-max_sequence_length:],
                 'item.length': len(item_ids[:-2][-max_sequence_length:])
             })
-
+            assert len(item_ids[:-2][-max_sequence_length:]) == len(set(item_ids[:-2][-max_sequence_length:]))
             validation_dataset.append({
                 'user.ids': [user_idx],
                 'user.length': 1,
                 'item.ids': item_ids[:-1][-max_sequence_length:],
                 'item.length': len(item_ids[:-1][-max_sequence_length:])
             })
-
+            assert len(item_ids[:-1][-max_sequence_length:]) == len(set(item_ids[:-1][-max_sequence_length:]))
             test_dataset.append({
                 'user.ids': [user_idx],
                 'user.length': 1,
                 'item.ids': item_ids[-max_sequence_length:],
                 'item.length': len(item_ids[-max_sequence_length:])
             })
+            assert len(item_ids[-max_sequence_length:]) == len(set(item_ids[-max_sequence_length:]))
 
         logger.info('Train dataset size: {}'.format(len(train_dataset)))
         logger.info('Test dataset size: {}'.format(len(test_dataset)))

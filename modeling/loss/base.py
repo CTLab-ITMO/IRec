@@ -113,14 +113,12 @@ class BPRLoss(TorchLoss, config_name='bpr'):
             positive_prefix,
             negative_prefix,
             output_prefix=None,
-            use_regularization=False,
             activation='softplus'
     ):
         super().__init__()
         self._positive_prefix = positive_prefix
         self._negative_prefix = negative_prefix
         self._output_prefix = output_prefix
-        self._use_regularization = use_regularization
         self._activation = get_activation_function(activation)
 
     def forward(self, inputs):
@@ -146,7 +144,7 @@ class RegularizationLoss(TorchLoss, config_name='regularization'):
     def forward(self, inputs):
         loss = 0.0
         for prefix in self._prefix:
-            loss += torch.sum(inputs[prefix].norm(p=2, dim=-1))
+            loss += torch.mean(inputs[prefix].norm(p=2, dim=-1))
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()
@@ -161,16 +159,15 @@ class FpsLoss(TorchLoss, config_name='fps'):
             fst_embeddings_prefix,
             snd_embeddings_prefix,
             tau=1.0,
-            add_negatives=False,
             normalize_embeddings=False,
+            use_mean=True,
             output_prefix=None
     ):
         super().__init__()
         self._fst_embeddings_prefix = fst_embeddings_prefix
         self._snd_embeddings_prefix = snd_embeddings_prefix
         self._tau = tau
-        self._activation = nn.LogSoftmax(dim=1)
-        self._add_negatives = add_negatives
+        self._loss_function = nn.CrossEntropyLoss(reduction='mean' if use_mean else 'sum')
         self._normalize_embeddings = normalize_embeddings
         self._output_prefix = output_prefix
 
@@ -178,25 +175,38 @@ class FpsLoss(TorchLoss, config_name='fps'):
         fst_embeddings = inputs[self._fst_embeddings_prefix]  # (x, embedding_dim)
         snd_embeddings = inputs[self._snd_embeddings_prefix]  # (x, embedding_dim)
 
+        batch_size = fst_embeddings.shape[0]
+
+        combined_embeddings = torch.cat((fst_embeddings, snd_embeddings), dim=0)  # (2 * x, embedding_dim)
+
         if self._normalize_embeddings:
-            fst_embeddings = torch.nn.functional.normalize(fst_embeddings, p=2, dim=-1, eps=1e-6)
-            snd_embeddings = torch.nn.functional.normalize(snd_embeddings, p=2, dim=-1, eps=1e-6)
+            combined_embeddings = torch.nn.functional.normalize(
+                combined_embeddings, p=2, dim=-1, eps=1e-6
+            )  # (2 * x, embedding_dim)
 
-        similarity_matrix = torch.matmul(fst_embeddings, snd_embeddings.T) / self._tau  # (x, x)
-        num_samples = similarity_matrix.shape[0]
-        mask = torch.eye(num_samples, dtype=torch.bool).to(DEVICE)  # (x, x)
+        similarity_scores = torch.mm(
+            combined_embeddings,
+            combined_embeddings.T
+        ) / self._tau  # (2 * x, 2 * x)
 
-        if self._add_negatives:
-            identity_similarity_matrix = torch.matmul(fst_embeddings, fst_embeddings.T) / self._tau  # (x, x)
-            identity_similarity_matrix[mask] = -torch.inf
+        positive_samples = torch.cat(
+            (torch.diag(similarity_scores, batch_size), torch.diag(similarity_scores, -batch_size)),
+            dim=0
+        ).reshape(2 * batch_size, 1)  # (2 * x, 1)
+        assert torch.allclose(torch.diag(similarity_scores, batch_size), torch.diag(similarity_scores, -batch_size))
 
-            similarity_matrix = torch.cat([similarity_matrix, identity_similarity_matrix], dim=1)
+        mask = torch.ones(2 * batch_size, 2 * batch_size, dtype=torch.bool)  # (2 * x, 2 * x)
+        mask = mask.fill_diagonal_(0)  # Remove equal embeddings scores
+        for i in range(batch_size):  # Remove positives
+            mask[i, batch_size + i] = 0
+            mask[batch_size + i, i] = 0
 
-            mask = torch.eye(num_samples, 2 * num_samples, dtype=torch.bool).to(DEVICE)  # (x, x)
+        negative_samples = similarity_scores[mask].reshape(2 * batch_size, -1)  # (2 * x, 2 * x - 2)
 
-        similarity_matrix = self._activation(similarity_matrix)  # (x, x)
+        labels = torch.zeros(2 * batch_size).to(positive_samples.device).long()  # (2 * x)
+        logits = torch.cat((positive_samples, negative_samples), dim=1)  # (2 * x, 2 * x - 1)
 
-        loss = torch.mean(-similarity_matrix[mask])
+        loss = self._loss_function(logits, labels) / 2  # (1)
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()
@@ -247,42 +257,204 @@ class SASRecLoss(TorchLoss, config_name='sasrec'):
         return loss
 
 
-class DuorecLoss(TorchLoss, config_name='duorec_ssl'):
+class S3RecPretrainLoss(TorchLoss, config_name='s3rec_pretrain'):
 
     def __init__(
             self,
-            fst_embeddings_prefix,
-            snd_embeddings_prefix,
-            normalized=False,
+            positive_prefix,
+            negative_prefix,
+            representation_prefix,
+            output_prefix=None
+    ):
+        super().__init__()
+        self._positive_prefix = positive_prefix
+        self._negative_prefix = negative_prefix
+        self._representation_prefix = representation_prefix
+        self._criterion = nn.BCEWithLogitsLoss(reduction="none")
+        self._output_prefix = output_prefix
+
+    def forward(self, inputs):
+        positive_embeddings = inputs[self._positive_prefix]  # (x, embedding_dim)
+        negative_embeddings = inputs[self._negative_prefix]  # (x, embedding_dim)
+        current_embeddings = inputs[self._representation_prefix]  # (x, embedding_dim)
+        assert positive_embeddings.shape[0] == negative_embeddings.shape[0] == current_embeddings.shape[0]
+
+        positive_scores = torch.einsum(
+            'bd,bd->b',
+            positive_embeddings,
+            current_embeddings
+        )  # (x)
+
+        negative_scores = torch.einsum(
+            'bd,bd->b',
+            negative_embeddings,
+            current_embeddings
+        )  # (x)
+
+        distance = torch.sigmoid(positive_scores) - torch.sigmoid(negative_scores)  # (x)
+        loss = torch.sum(self._criterion(distance, torch.ones_like(distance, dtype=torch.float32)))  # (1)
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss
+
+
+class Cl4sRecLoss(TorchLoss, config_name='cl4srec'):
+
+    def __init__(
+            self,
+            current_representation,
+            all_items_representation,
             tau=1.0,
             output_prefix=None
     ):
         super().__init__()
-        self._fst_embeddings_prefix = fst_embeddings_prefix
-        self._snd_embeddings_prefix = snd_embeddings_prefix
-        self._normalized = normalized
+        self._current_representation = current_representation
+        self._all_items_representation = all_items_representation
+        self._loss_function = nn.CrossEntropyLoss()
         self._tau = tau
         self._output_prefix = output_prefix
-        self._loss_func = nn.CrossEntropyLoss()
 
     def forward(self, inputs):
-        fst_embeddings = inputs[self._fst_embeddings_prefix]  # (x, embedding_dim)
-        snd_embeddings = inputs[self._snd_embeddings_prefix]  # (x, embedding_dim)
+        current_representation = inputs[self._current_representation]  # (batch_size, embedding_dim)
+        all_items_representation = inputs[
+            self._all_items_representation
+        ]  # (batch_size, num_negatives + 1, embedding_dim)
 
-        if self._normalized:
-            fst_norms = torch.norm(fst_embeddings, p=2, dim=1)  # (x)
-            snd_norms = torch.norm(snd_embeddings, p=2, dim=1)  # (x)
-            fst_embeddings /= fst_norms
-            snd_embeddings /= snd_norms
+        batch_size = current_representation.shape[0]
 
-        similarity_matrix = torch.matmul(fst_embeddings, snd_embeddings.T)  # (x, x)
-        similarity_matrix /= self._tau  # (x, x)
-        mask = torch.eye(similarity_matrix.shape[0], dtype=torch.bool).to(DEVICE)  # (x, x)
+        logits = torch.einsum(
+            'bnd,bd->bn',
+            all_items_representation,
+            current_representation
+        )  # (batch_size, num_negatives + 1)
+        labels = logits.new_zeros(batch_size)  # (batch_size)
 
-        logits = similarity_matrix.reshape(-1).float()  # (x^2)
-        labels = mask.reshape(-1).float()  # (x^2)
+        loss = self._loss_function(logits, labels)
 
-        loss = self._loss_func(logits, labels)
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss
+
+
+class DuorecSSLLoss(TorchLoss, config_name='duorec_ssl'):
+
+    def __init__(
+            self,
+            original_embedding_prefix,
+            dropout_embedding_prefix,
+            similar_embedding_prefix,
+            normalize_embeddings=False,
+            tau=1.0,
+            output_prefix=None
+    ):
+        super().__init__()
+        self._original_embedding_prefix = original_embedding_prefix
+        self._dropout_embedding_prefix = dropout_embedding_prefix
+        self._similar_embedding_prefix = similar_embedding_prefix
+        self._normalize_embeddings = normalize_embeddings
+        self._output_prefix = output_prefix
+        self._tau = tau
+        self._loss_function = nn.CrossEntropyLoss(reduction='mean')
+
+    def _compute_partial_loss(self, fst_embeddings, snd_embeddings):
+        batch_size = fst_embeddings.shape[0]
+
+        combined_embeddings = torch.cat(
+            (fst_embeddings, snd_embeddings),
+            dim=0
+        )  # (2 * x, embedding_dim)
+
+        if self._normalize_embeddings:
+            combined_embeddings = torch.nn.functional.normalize(
+                combined_embeddings, p=2, dim=-1, eps=1e-6
+            )
+
+        similarity_scores = torch.mm(
+            combined_embeddings,
+            combined_embeddings.T
+        ) / self._tau  # (2 * x, 2 * x)
+
+        positive_samples = torch.cat(
+            (torch.diag(similarity_scores, batch_size), torch.diag(similarity_scores, -batch_size)),
+            dim=0
+        ).reshape(2 * batch_size, 1)  # (2 * x, 1)
+
+        # TODO optimize
+        mask = torch.ones(2 * batch_size, 2 * batch_size, dtype=torch.bool)  # (2 * x, 2 * x)
+        mask = mask.fill_diagonal_(0)  # Remove equal embeddings scores
+        for i in range(batch_size):  # Remove positives
+            mask[i, batch_size + i] = 0
+            mask[batch_size + i, i] = 0
+
+        negative_samples = similarity_scores[mask].reshape(2 * batch_size, -1)  # (2 * x, 2 * x - 2)
+
+        labels = torch.zeros(2 * batch_size).to(positive_samples.device).long()  # (2 * x)
+        logits = torch.cat((positive_samples, negative_samples), dim=1)  # (2 * x, 2 * x - 1)
+
+        loss = self._loss_function(logits, labels) / 2  # (1)
+
+        return loss
+
+    def forward(self, inputs):
+        original_embeddings = inputs[self._original_embedding_prefix]  # (x, embedding_dim)
+        dropout_embeddings = inputs[self._dropout_embedding_prefix]  # (x, embedding_dim)
+        similar_embeddings = inputs[self._similar_embedding_prefix]  # (x, embedding_dim)
+
+        dropout_loss = self._compute_partial_loss(original_embeddings, dropout_embeddings)
+        ssl_loss = self._compute_partial_loss(original_embeddings, similar_embeddings)
+
+        loss = dropout_loss + ssl_loss
+
+        if self._output_prefix is not None:
+            inputs[f'{self._output_prefix}_dropout'] = dropout_loss.cpu().item()
+            inputs[f'{self._output_prefix}_ssl'] = ssl_loss.cpu().item()
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss
+
+
+class MCLSRLoss(TorchLoss, config_name='mclsr'):
+
+    def __init__(
+            self,
+            all_scores_prefix,
+            mask_prefix,
+            normalize_embeddings=False,
+            tau=1.0,
+            output_prefix=None
+    ):
+        super().__init__()
+        self._all_scores_prefix = all_scores_prefix
+        self._mask_prefix = mask_prefix
+        self._normalize_embeddings = normalize_embeddings
+        self._output_prefix = output_prefix
+        self._tau = tau
+
+    def forward(self, inputs):
+        all_scores = inputs[self._all_scores_prefix]  # (batch_size, batch_size, seq_len)
+        mask = inputs[self._mask_prefix]  # (batch_size)
+
+        batch_size = mask.shape[0]
+        seq_len = mask.shape[1]
+
+        positive_mask = torch.eye(batch_size, device=mask.device).bool()
+
+        positive_scores = all_scores[positive_mask]  # (batch_size, seq_len)
+        negative_scores = torch.reshape(
+            all_scores[~positive_mask],
+            shape=(batch_size, batch_size - 1, seq_len)
+        )  # (batch_size, batch_size - 1, seq_len)
+        assert torch.allclose(all_scores[0, 1], negative_scores[0, 0])
+        assert torch.allclose(all_scores[-1, -2], negative_scores[-1, -1])
+        assert torch.allclose(all_scores[0, 0], positive_scores[0])
+        assert torch.allclose(all_scores[-1, -1], positive_scores[-1])
+
+        # Maybe try mean over sequence TODO
+        loss = torch.sum(
+            torch.log(torch.sigmoid(positive_scores.unsqueeze(1) - negative_scores))
+        )  # (1)
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()

@@ -38,6 +38,12 @@ class TorchModel(nn.Module, BaseModel):
         lengths = torch.tile(lengths[:, None, None], (1, 1, embeddings.shape[-1]))  # (batch_size, 1, emb_dim)
         last_embeddings = embeddings.gather(dim=1, index=lengths)  # (batch_size, 1, emb_dim)
         last_embeddings = last_embeddings[last_masks]  # (batch_size, emb_dim)
+        if not torch.allclose(embeddings[mask][-1], last_embeddings[-1]):
+            print(embeddings)
+            print(lengths, lengths.max(), lengths.min())
+            print(embeddings[mask][-1])
+            print(last_embeddings[-1])
+            assert False
         return last_embeddings
 
 
@@ -58,7 +64,9 @@ class SequentialTorchModel(TorchModel):
     ):
         super().__init__()
         self._is_causal = is_causal
-        self._num_item = num_items
+        self._num_items = num_items
+        self._num_heads = num_heads
+        self._embedding_dim = embedding_dim
 
         self._item_embeddings = nn.Embedding(
             num_embeddings=num_items + 2,  # add zero embedding + mask embedding
@@ -89,7 +97,7 @@ class SequentialTorchModel(TorchModel):
         embeddings, mask = create_masked_tensor(
             data=embeddings,
             lengths=lengths
-        )  # (batch_size, seq_len, embedding_dim)
+        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
         batch_size = mask.shape[0]
         seq_len = mask.shape[1]
@@ -105,6 +113,7 @@ class SequentialTorchModel(TorchModel):
             data=position_embeddings,
             lengths=lengths
         )  # (batch_size, seq_len, embedding_dim)
+        assert torch.allclose(position_embeddings[~mask], embeddings[~mask])
 
         embeddings = embeddings + position_embeddings  # (batch_size, seq_len, embedding_dim)
 
@@ -114,11 +123,10 @@ class SequentialTorchModel(TorchModel):
         embeddings[~mask] = 0
 
         if self._is_causal:
-            causal_mask = torch.tril(torch.ones(mask.shape[-1], mask.shape[-1])).bool().to(DEVICE)  # (seq_len, seq_len)
+            causal_mask = torch.tril(torch.tile(mask.unsqueeze(1), dims=[self._num_heads, seq_len, 1])).bool().to(DEVICE)  # (seq_len, seq_len)
             embeddings = self._encoder(
                 src=embeddings,
                 mask=~causal_mask,
-                src_key_padding_mask=~mask
             )  # (batch_size, seq_len, embedding_dim)
         else:
             embeddings = self._encoder(
