@@ -46,4 +46,4 @@ class PopModel(BaseModel, config_name='pop'):
             candidate_scores[:, 0] = -torch.inf  # zero (padding) token
             candidate_scores[:, self._num_items + 1:] = -torch.inf  # all not real items-related things
 
-        return candidate_scores
+        return candidate_scores  # (batch_size, num_candidates) / (batch_size, num_items)

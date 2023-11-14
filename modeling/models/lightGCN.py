@@ -83,19 +83,8 @@ class LightGCNModel(TorchModel, config_name='light_gcn'):
             b=2 * initializer_range
         )
 
-    def computer(self, use_users=True, use_items=True):
-        all_embeddings = []
-
-        if use_users:
-            users_embeddings = self._user_embeddings.weight
-            all_embeddings.append(users_embeddings)
-
-        if use_items:
-            items_embeddings = self._item_embeddings.weight
-            all_embeddings.append(items_embeddings)
-
-        all_embeddings = torch.cat(all_embeddings)
-
+    def _apply_graph_encoder(self):
+        all_embeddings = torch.cat([self._user_embeddings.weight, self._item_embeddings.weight], dim=0)
         embeddings = [all_embeddings]
 
         if self._dropout:  # drop some edges
@@ -118,7 +107,9 @@ class LightGCNModel(TorchModel, config_name='light_gcn'):
             embeddings.append(all_embeddings)
 
         light_out = torch.mean(torch.stack(embeddings, dim=1), dim=1)
-        user_final_embeddings, item_final_embeddings = torch.split(light_out, [self._num_users + 2, self._num_items + 2])
+        user_final_embeddings, item_final_embeddings = torch.split(
+            light_out, [self._num_users + 2, self._num_items + 2]
+        )
 
         return user_final_embeddings, item_final_embeddings
 
@@ -137,7 +128,8 @@ class LightGCNModel(TorchModel, config_name='light_gcn'):
         return padded_embeddings, padded_ego_embeddings, mask
 
     def forward(self, inputs):
-        all_final_user_embeddings, all_final_item_embeddings = self.computer()  # (user_num, emb_dim), (items_num, emb_dim)
+        all_final_user_embeddings, all_final_item_embeddings = \
+            self._apply_graph_encoder()  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
 
         user_embeddings, user_ego_embeddings, user_mask = self._get_embeddings(
             inputs, self._user_prefix, self._user_embeddings, all_final_user_embeddings
@@ -159,17 +151,39 @@ class LightGCNModel(TorchModel, config_name='light_gcn'):
             positive_scores = positive_scores[positive_mask]  # (all_batch_events)
             negative_scores = negative_scores[negative_mask]  # (all_batch_events)
 
-            return {'positive_scores': positive_scores, 'negative_scores': negative_scores}
+            return {
+                'positive_scores': positive_scores,
+                'negative_scores': negative_scores,
+                'positive_embeddings': positive_embeddings[positive_mask],
+                'negative_embeddings': negative_embeddings[negative_mask],
+                'user_embeddings': user_embeddings
+            }
 
         else:  # eval mode
-            candidates_embeddings, _, _ = self._get_embeddings(
-                inputs, self._candidates_prefix, self._item_embeddings, all_final_item_embeddings
-            )
+            if '{}.ids'.format(self._candidate_prefix) in inputs:
+                candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
+                candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
 
-            candidates_scores = torch.einsum(
-                'bd,bcd->bc',
-                user_embeddings,
-                candidates_embeddings
-            )  # (batch_size, num_candidates)
+                candidate_embeddings = self._item_embeddings(candidate_events)  # (all_batch_candidates, embedding_dim)
 
-            return candidates_scores
+                candidate_embeddings, _ = create_masked_tensor(
+                    data=candidate_embeddings,
+                    lengths=candidate_lengths
+                )  # (batch_size, num_candidates, embedding_dim)
+
+                candidate_scores = torch.einsum(
+                    'bd,bnd->bn',
+                    user_embeddings,
+                    candidate_embeddings
+                )  # (batch_size, num_candidates)
+            else:
+                candidate_embeddings = self._item_embeddings.weight  # (num_items, embedding_dim)
+                candidate_scores = torch.einsum(
+                    'bd,nd->bn',
+                    user_embeddings,
+                    candidate_embeddings
+                )  # (batch_size, num_items)
+                candidate_scores[:, 0] = -torch.inf
+                candidate_scores[:, self._num_items + 1:] = -torch.inf
+
+            return candidate_scores

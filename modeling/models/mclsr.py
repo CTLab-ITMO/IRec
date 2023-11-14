@@ -3,383 +3,317 @@ from models.base import TorchModel
 import torch
 import torch.nn as nn
 
-from utils import create_masked_tensor, DEVICE, get_activation_function
+from utils import create_masked_tensor
 
 
 class MCLSRModel(TorchModel, config_name='mclsr'):
-    INF = 1e9
 
     def __init__(
             self,
             sequence_prefix,
             user_prefix,
-            positive_prefix,
-            negative_prefix,
             labels_prefix,
             candidate_prefix,
+            num_users,
+            num_items,
+            max_sequence_length,
+            embedding_dim,
+            num_graph_layers,
             common_graph,
             user_graph,
             item_graph,
-            num_users,
-            num_items,
-            sequence_length,
-            embedding_dim,
-            num_encoder_heads,
-            num_encoder_layers,
-            num_graph_layers,
-            dim_feedforward,
-            encoder_dropout=0.0,
-            activation='relu',
+            dropout=0.0,
             layer_norm_eps=1e-5,
-            keep_prob=1.0,
             graph_dropout=0.0,
             alpha=0.5,
             initializer_range=0.02
     ):
         super().__init__()
         self._sequence_prefix = sequence_prefix
-        self._positive_prefix = positive_prefix
-        self._negative_prefix = negative_prefix  # unused
         self._user_prefix = user_prefix
         self._labels_prefix = labels_prefix
         self._candidate_prefix = candidate_prefix
 
         self._num_users = num_users
         self._num_items = num_items
-        self._sequence_length = sequence_length
 
         self._embedding_dim = embedding_dim
-        self._num_encoder_heads = num_encoder_heads
-        self._num_encoder_layers = num_encoder_layers
-        self._dim_feedforward = dim_feedforward
-        self._encoder_dropout = encoder_dropout
-        self._activation = activation
-        self._layer_norm_eps = layer_norm_eps
 
         self._num_graph_layers = num_graph_layers
-        self._keep_prob = keep_prob
         self._graph_dropout = graph_dropout
 
-        self._alpha = alpha  # TODO fix
+        self._alpha = alpha
 
         self._graph = common_graph
         self._user_graph = user_graph
         self._item_graph = item_graph
 
-        self._user_embeddings = nn.Embedding(
-            num_embeddings=num_users + 2,
-            embedding_dim=embedding_dim
-        )
-
         self._item_embeddings = nn.Embedding(
-            num_embeddings=num_items + 2,
+            num_embeddings=num_items + 2,  # add zero embedding + mask embedding
+            embedding_dim=embedding_dim
+        )
+        self._position_embeddings = nn.Embedding(
+            num_embeddings=max_sequence_length + 1,  # in order to include `max_sequence_length` value
             embedding_dim=embedding_dim
         )
 
-        self._positional_embeddings = nn.Embedding(
-            num_embeddings=sequence_length,
+        self._user_embeddings = nn.Embedding(
+            num_embeddings=num_users + 2,  # add zero embedding + mask embedding
             embedding_dim=embedding_dim
+        )
+
+        self._layernorm = nn.LayerNorm(embedding_dim, eps=layer_norm_eps)
+        self._dropout = nn.Dropout(dropout)
+
+        # Current interest learning
+        self._current_interest_learning_encoder = nn.Sequential(
+            nn.Linear(in_features=embedding_dim, out_features=4 * embedding_dim, bias=False),
+            nn.Tanh(),
+            nn.Linear(in_features=4 * embedding_dim, out_features=1, bias=False)
+        )
+
+        # General interest learning
+        self._general_interest_learning_encoder = nn.Sequential(
+            nn.Linear(in_features=embedding_dim, out_features=embedding_dim, bias=False),
+            nn.Tanh()
+        )
+
+        # Cross-view contrastive learning
+        self._sequential_projector = nn.Sequential(
+            nn.Linear(in_features=embedding_dim, out_features=embedding_dim, bias=True),
+            nn.ELU(),
+            nn.Linear(in_features=embedding_dim, out_features=embedding_dim, bias=True)
+        )
+        self._graph_projector = nn.Sequential(
+            nn.Linear(in_features=embedding_dim, out_features=embedding_dim, bias=True),
+            nn.ELU(),
+            nn.Linear(in_features=embedding_dim, out_features=embedding_dim, bias=True)
+        )
+
+        self._user_projection = nn.Sequential(
+            nn.Linear(in_features=embedding_dim, out_features=embedding_dim, bias=True),
+            nn.ELU(),
+            nn.Linear(in_features=embedding_dim, out_features=embedding_dim, bias=True)
+        )
+
+        self._item_projection = nn.Sequential(
+            nn.Linear(in_features=embedding_dim, out_features=embedding_dim, bias=True),
+            nn.ELU(),
+            nn.Linear(in_features=embedding_dim, out_features=embedding_dim, bias=True)
         )
 
         self._init_weights(initializer_range)
-
-        self._weights_1 = nn.Parameter(
-            data=torch.rand(4 * embedding_dim, embedding_dim), requires_grad=True
-        )
-
-        self._weights_2 = nn.Parameter(
-            data=torch.rand(4 * embedding_dim), requires_grad=True
-        )
-
-        self._weights_3 = nn.Parameter(
-            data=torch.rand(embedding_dim, embedding_dim), requires_grad=True
-        )
-
-        # Contrastive learning weights
-        self._user_sequential = nn.Sequential(
-            nn.Linear(in_features=embedding_dim, out_features=embedding_dim, bias=True),
-            nn.Sigmoid(),
-            nn.Linear(in_features=embedding_dim, out_features=embedding_dim, bias=True)
-        )
-
-        self._item_sequential = nn.Sequential(
-            nn.Linear(in_features=embedding_dim, out_features=embedding_dim, bias=True),
-            nn.Sigmoid(),
-            nn.Linear(in_features=embedding_dim, out_features=embedding_dim, bias=True)
-        )
-
-    @torch.no_grad()
-    def _init_weights(self, initializer_range):
-        for key, value in self.named_parameters():
-            if 'weight' in key:
-                if 'norm' in key:
-                    nn.init.ones_(value.data)
-                else:
-                    nn.init.trunc_normal_(
-                        value.data,
-                        std=initializer_range,
-                        a=-2 * initializer_range,
-                        b=2 * initializer_range
-                    )
-            elif 'bias' in key:
-                nn.init.zeros_(value.data)
-            else:
-                raise ValueError(f'Unknown transformer weight: {key}')
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
             sequence_prefix=config['sequence_prefix'],
             user_prefix=config['user_prefix'],
-            positive_prefix=config['positive_prefix'],
-            negative_prefix=config['negative_prefix'],
             labels_prefix=config['labels_prefix'],
             candidate_prefix=config['candidate_prefix'],
+            num_users=kwargs['num_users'],
+            num_items=kwargs['num_items'],
+            max_sequence_length=kwargs['max_sequence_length'],
+            embedding_dim=config['embedding_dim'],
+            num_graph_layers=config['num_graph_layers'],
             common_graph=kwargs['graph'],
             user_graph=kwargs['user_graph'],
             item_graph=kwargs['item_graph'],
-            num_users=kwargs['num_users'],
-            num_items=kwargs['num_items'],
-            sequence_length=kwargs['max_sequence_length'],
-            embedding_dim=config['embedding_dim'],
-            num_encoder_heads=config['num_encoder_heads'],
-            num_encoder_layers=config['num_encoder_layers'],
-            num_graph_layers=config['num_graph_layers'],
-            dim_feedforward=config.get('dim_feedforward', 4 * config['embedding_dim']),
-            encoder_dropout=config.get('encoder_dropout', 0.0),
-            activation=config.get('activation', 'relu'),
+            dropout=config.get('dropout', 0.0),
             layer_norm_eps=config.get('layer_norm_eps', 1e-5),
-            keep_prob=config.get('keep_prob', 1.0),
             graph_dropout=config.get('graph_dropout', 0.0),
             initializer_range=config.get('initializer_range', 0.02)
         )
 
-    def computer(self, use_users=True, use_items=True):
-        all_embeddings = []
+    def _apply_graph_encoder(self, embeddings, graph, use_mean=False):
+        assert self.training  # Here we use graph only in training_mode
 
-        if use_users:
-            users_embeddings = self._user_embeddings.weight
-            all_embeddings.append(users_embeddings)
+        size = graph.size()
+        index = graph.indices().t()
+        values = graph.values()
+        dropout_mask = torch.rand(len(values)) + self._graph_dropout
+        dropout_mask = dropout_mask.int().bool()
+        index = index[~dropout_mask]
+        values = values[~dropout_mask] / (1.0 - self._graph_dropout)
+        graph_dropped = torch.sparse.FloatTensor(index.t(), values, size)
 
-        if use_items:
-            items_embeddings = self._item_embeddings.weight
-            all_embeddings.append(items_embeddings)
+        all_embeddings = [embeddings]
+        for _ in range(self._num_graph_layers):
+            new_embeddings = torch.sparse.mm(graph_dropped, all_embeddings[-1])
+            all_embeddings.append(new_embeddings)
+        all_embeddings = torch.stack(all_embeddings, dim=1)
 
-        all_embeddings = torch.cat(all_embeddings)
-
-        embeddings = [all_embeddings]
-
-        if self._graph_dropout:  # drop some edges
-            if self.training:  # training_mode
-                size = self._graph.size()
-                index = self._graph.indices().t()
-                values = self._graph.values()
-                random_index = torch.rand(len(values)) + self._keep_prob
-                random_index = random_index.int().bool()
-                index = index[random_index]
-                values = values[random_index] / self._keep_prob
-                graph_dropped = torch.sparse.FloatTensor(index.t(), values, size)
-            else:  # eval mode
-                graph_dropped = self._graph
+        if use_mean:
+            return torch.mean(all_embeddings, dim=1)
         else:
-            graph_dropped = self._graph
-
-        for layer in range(self._num_graph_layers):
-            all_embeddings = torch.sparse.mm(graph_dropped, all_embeddings)
-            embeddings.append(all_embeddings)
-
-        light_out = torch.mean(torch.stack(embeddings, dim=1), dim=1)
-        user_final_embeddings, item_final_embeddings = torch.split(
-            light_out,
-            [self._num_users + 2, self._num_items + 2]
-        )
-
-        return user_final_embeddings, item_final_embeddings
-
-    def compute_user_graph_encoder(self):
-        all_embeddings = torch.cat([self._user_embeddings.weight])
-        embeddings = [all_embeddings]
-
-        if self._graph_dropout:  # drop some edges
-            if self.training:  # training_mode
-                size = self._user_graph.size()
-                index = self._user_graph.indices().t()
-                values = self._user_graph.values()
-                random_index = torch.rand(len(values)) + self._keep_prob
-                random_index = random_index.int().bool()
-                index = index[random_index]
-                values = values[random_index] / self._keep_prob
-                graph_dropped = torch.sparse.FloatTensor(index.t(), values, size)
-            else:  # eval mode
-                graph_dropped = self._user_graph
-        else:
-            graph_dropped = self._user_graph
-
-        for layer in range(self._num_graph_layers):
-            all_embeddings = torch.sparse.mm(graph_dropped, all_embeddings)
-            embeddings.append(all_embeddings)
-
-        return torch.mean(torch.stack(embeddings, dim=1), dim=1)
-
-    def compute_item_graph_encoder(self):
-        all_embeddings = torch.cat([self._item_embeddings.weight])
-        embeddings = [all_embeddings]
-
-        if self._graph_dropout:  # drop some edges
-            if self.training:  # training_mode
-                size = self._item_graph.size()
-                index = self._item_graph.indices().t()
-                values = self._item_graph.values()
-                random_index = torch.rand(len(values)) + self._keep_prob
-                random_index = random_index.int().bool()
-                index = index[random_index]
-                values = values[random_index] / self._keep_prob
-                graph_dropped = torch.sparse.FloatTensor(index.t(), values, size)
-            else:  # eval mode
-                graph_dropped = self._item_graph
-        else:
-            graph_dropped = self._item_graph
-
-        for layer in range(self._num_graph_layers):
-            all_embeddings = torch.sparse.mm(graph_dropped, all_embeddings)
-            embeddings.append(all_embeddings)
-
-        return torch.mean(torch.stack(embeddings, dim=1), dim=1)
-
-    def _get_embeddings(self, inputs, prefix, ego_embeddings, final_embeddings):
-        ids = inputs['{}.ids'.format(prefix)]  # (batch_size)
-        lengths = inputs['{}.length'.format(prefix)]  # (batch_size)
-
-        final_embeddings = final_embeddings[ids]  # (batch_size, emb_dim)
-        ego_embeddings = ego_embeddings(ids)  # (batch_size, emb_dim)
-
-        padded_embeddings, mask = create_masked_tensor(final_embeddings, lengths)
-        padded_ego_embeddings, ego_mask = create_masked_tensor(ego_embeddings, lengths)
-
-        assert torch.all(mask == ego_mask)
-
-        return padded_embeddings, padded_ego_embeddings, mask
+            return all_embeddings[-1]
 
     def forward(self, inputs):
         all_sample_events = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
         all_sample_lengths = inputs['{}.length'.format(self._sequence_prefix)]  # (batch_size)
+        user_ids = inputs['{}.ids'.format(self._user_prefix)]  # (batch_size)
 
-        all_sample_embeddings = self._item_embeddings(all_sample_events)  # (all_batch_events, embedding_dim)
-
+        embeddings = self._item_embeddings(all_sample_events)  # (all_batch_events, embedding_dim)
         embeddings, mask = create_masked_tensor(
-            data=all_sample_embeddings,
+            data=embeddings,
             lengths=all_sample_lengths
         )  # (batch_size, seq_len, embedding_dim)
-        embeddings[~mask] = 0
 
-        # Current interest learning part TODO try other options
-        sequence_logits = torch.einsum(
-            'n,bsn->bs',
-            self._weights_2,
-            torch.tanh(torch.einsum('nd,bsd->bsn', self._weights_1, embeddings))
-        )  # (batch_size, max_seq_len)
+        batch_size = mask.shape[0]
+        seq_len = mask.shape[1]
 
-        # TODO ask
-        sequence_logits[~mask] = -torch.inf
-        attention_probits = torch.softmax(sequence_logits, dim=1)  # (batch_size, max_seq_len)
+        # Current interest learning
+        # 1) get embeddings with positions
+        positions = torch.arange(
+            start=seq_len - 1, end=-1, step=-1, device=mask.device
+        )[None].tile([batch_size, 1]).long()  # (batch_size, seq_len)
+        positions_mask = positions < all_sample_lengths[:, None]  # (batch_size, max_seq_len)
 
-        current_interest_embedding = torch.einsum(
-            'bs,bsd->bd', attention_probits, embeddings
+        positions = positions[positions_mask]  # (all_batch_events)
+        position_embeddings = self._position_embeddings(positions)  # (all_batch_events, embedding_dim)
+        position_embeddings, _ = create_masked_tensor(
+            data=position_embeddings,
+            lengths=all_sample_lengths
+        )  # (batch_size, seq_len, embedding_dim)
+        assert torch.allclose(position_embeddings[~mask], embeddings[~mask])
+
+        positioned_embeddings = embeddings + position_embeddings  # (batch_size, seq_len, embedding_dim)
+        positioned_embeddings = self._layernorm(positioned_embeddings)  # (batch_size, seq_len, embedding_dim)
+        positioned_embeddings = self._dropout(positioned_embeddings)  # (batch_size, seq_len, embedding_dim)
+        positioned_embeddings[~mask] = 0
+
+        sequential_attention_matrix = self._current_interest_learning_encoder(
+            positioned_embeddings
+        ).squeeze()  # (batch_size, seq_len)
+        sequential_attention_matrix[~mask] = -torch.inf
+        sequential_attention_matrix = torch.softmax(sequential_attention_matrix, dim=1)  # (batch_size, seq_len)
+        sequential_representation = torch.einsum(
+            'bs,bsd->bd', sequential_attention_matrix, embeddings
         )  # (batch_size, embedding_dim)
 
         if self.training:  # training mode
-            training_output = {'current_interest_embeddings': current_interest_embedding}
+            # General interest learning
+            all_embeddings = torch.cat(
+                [self._user_embeddings.weight, self._item_embeddings.weight],
+                dim=0
+            )  # (num_users + 2 + num_items + 2, embedding_dim)
+            common_graph_embeddings = self._apply_graph_encoder(
+                embeddings=all_embeddings,
+                graph=self._graph
+            )  # (num_users + 2 + num_items + 2, embedding_dim)
+            common_graph_user_embeddings, common_graph_item_embeddings = torch.split(
+                common_graph_embeddings,
+                [self._num_users + 2, self._num_items + 2]
+            )  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
 
-            all_positive_sample_events = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
-            all_negative_sample_events = inputs['{}.ids'.format(self._negative_prefix)]  # (all_batch_events)
+            common_graph_user_embeddings = common_graph_user_embeddings[user_ids]  # (batch_size, embedding_dim)
+            common_graph_item_embeddings = common_graph_item_embeddings[all_sample_events]  # (all_batch_events, embedding_dim)
+            common_graph_item_embeddings, _ = create_masked_tensor(
+                data=common_graph_item_embeddings,
+                lengths=all_sample_lengths
+            )  # (batch_size, seq_len, embedding_dim)
 
-            all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
-            all_positive_sample_embeddings = self._item_embeddings(
-                all_positive_sample_events)  # (all_batch_events, embedding_dim)
-            all_negative_sample_embeddings = self._item_embeddings(
-                all_negative_sample_events)  # (all_batch_events, embedding_dim)
-
-            positive_scores = torch.einsum('bd,bd->b', all_sample_embeddings,
-                                           all_positive_sample_embeddings)  # (all_batch_events)
-            negative_scores = torch.einsum('bd,bd->b', all_sample_embeddings,
-                                           all_negative_sample_embeddings)  # (all_batch_events)
-
-            training_output['encoder_positive_scores'] = positive_scores  # (all_batch_events)
-            training_output['encoder_negative_scores'] = negative_scores  # (all_batch_events)
-
-            # General interest learning part
-            user_ids = inputs['{}.ids'.format(self._user_prefix)]  # (batch_size)
-            all_user_final_embeddings, all_item_final_embeddings = self.computer()
-            user_embeddings = all_user_final_embeddings[user_ids]  # (batch_size, embedding_dim)
-            item_embeddings = all_item_final_embeddings[all_sample_events]  # (all_batch_events, embedding_dim)
-
-            positive_embeddings, _, positive_mask = self._get_embeddings(
-                inputs, self._positive_prefix, self._item_embeddings, all_item_final_embeddings
-            )
-
-            negative_embeddings, _, negative_mask = self._get_embeddings(
-                inputs, self._negative_prefix, self._item_embeddings, all_item_final_embeddings
-            )
-
-            positive_scores = torch.einsum('bd,bsd->bs', user_embeddings, positive_embeddings)  # (batch_size, seq_len)
-            negative_scores = torch.einsum('bd,bsd->bs', user_embeddings, negative_embeddings)  # (batch_size, seq_len)
-
-            training_output['graph_positive_scores'] = positive_scores[positive_mask]  # (all_batch_events)
-            training_output['graph_negative_scores'] = negative_scores[negative_mask]  # (all_batch_events)
-
-            all_item_final_embeddings, _ = create_masked_tensor(
-                data=item_embeddings, lengths=all_sample_lengths
-            )  # (batch_size, max_seq_len, embedding_dim)
-
-            # TODO try linear layer
-            graph_logits = torch.einsum(
+            graph_attention_matrix = torch.einsum(
                 'bd,bsd->bs',
-                torch.tanh(torch.einsum('bd,da->ba', user_embeddings, self._weights_3)),
-                all_item_final_embeddings
-            )  # (batch_size, max_seq_len)
-
-            graph_logits[~mask] = -MCLSRModel.INF
-            attention_graph_probits = torch.softmax(graph_logits, dim=1)  # (batch_size, max_seq_len)
-
-            global_interest_embedding = torch.einsum(
-                'bs,bsd->bd', attention_graph_probits, all_item_final_embeddings
+                self._general_interest_learning_encoder(common_graph_user_embeddings),
+                common_graph_item_embeddings
+            )  # (batch_size, seq_len)
+            graph_attention_matrix[~mask] = -torch.inf
+            graph_attention_matrix = torch.softmax(graph_attention_matrix, dim=1)  # (batch_size, seq_len)
+            graph_representation = torch.einsum(
+                'bs,bsd->bd', graph_attention_matrix, common_graph_item_embeddings
             )  # (batch_size, embedding_dim)
-            training_output['global_interest_embeddings'] = global_interest_embedding
 
-            # Training part
-            combined_embedding = self._alpha * current_interest_embedding + (
-                        1 - self._alpha) * global_interest_embedding
-            training_output['combined_embedding'] = combined_embedding  # (batch_size, embedding_dim)
+            # Get final representation
+            combined_representation = \
+                self._alpha * sequential_representation + \
+                (1 - self._alpha) * graph_representation  # (batch_size, embedding_dim)
 
-            return training_output
+            labels = inputs['{}.ids'.format(self._labels_prefix)]  # (batch_size)
+            labels_embeddings = self._item_embeddings(labels)  # (batch_size, embedding_dim)
 
+            # Cross-view contrastive learning
+            sequential_representation = self._sequential_projector(
+                sequential_representation)  # (batch_size, embedding_dim)
+            graph_representation = self._graph_projector(graph_representation)  # (batch_size, embedding_dim)
+
+            # Feature-level Contrastive Learning
+            user_graph_user_embeddings = self._apply_graph_encoder(
+                embeddings=self._user_embeddings.weight,
+                graph=self._user_graph
+            )  # (num_users + 2, embedding_dim)
+            user_graph_user_embeddings = torch.gather(
+                user_graph_user_embeddings,
+                dim=0,
+                index=user_ids[..., None].tile(1, self._embedding_dim)
+            )  # (batch_size, embedding_dim)
+
+            user_graph_user_embeddings = self._user_projection(
+                user_graph_user_embeddings
+            )  # (batch_size, embedding_dim)
+            common_graph_user_embeddings = self._user_projection(
+                common_graph_user_embeddings
+            )  # (batch_size, embedding_dim)
+
+            item_graph_item_embeddings = self._apply_graph_encoder(
+                embeddings=self._item_embeddings.weight,
+                graph=self._item_graph
+            )  # (num_items + 2, embedding_dim)
+            item_graph_item_embeddings = torch.gather(
+                item_graph_item_embeddings,
+                dim=0,
+                index=all_sample_events[..., None].tile(1, self._embedding_dim)
+            )  # (all_sample_events, embedding_dim)
+
+            item_graph_item_embeddings = self._item_projection(
+                item_graph_item_embeddings
+            )  # (all_batch_events, embedding_dim)
+            common_graph_item_embeddings = self._item_projection(
+                common_graph_item_embeddings[mask]
+            )  # (all_batch_events, embedding_dim)
+
+            return {
+                # Downstream task
+                'combined_representation': combined_representation,
+                'label_representation': labels_embeddings,
+
+                # Interest-level Contrastive Learning
+                'sequential_representation': sequential_representation,
+                'graph_representation': graph_representation,
+
+                # Feature-level Contrastive Learning (users)
+                'user_graph_user_embeddings': user_graph_user_embeddings,
+                'common_graph_user_embeddings': common_graph_user_embeddings,
+
+                # Feature-level Contrastive Learning (items)
+                'item_graph_item_embeddings': item_graph_item_embeddings,
+                'common_graph_item_embeddings': common_graph_item_embeddings
+            }
         else:  # eval mode
-            candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
-            candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
+            if '{}.ids'.format(self._candidate_prefix) in inputs:
+                candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
+                candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
 
-            candidate_embeddings = self._item_embeddings(
-                candidate_events)  # (batch_size, num_candidates, embedding_dim)
+                candidate_embeddings = self._item_embeddings(candidate_events)  # (all_batch_candidates, embedding_dim)
 
-            candidate_embeddings, candidate_mask = create_masked_tensor(
-                data=candidate_embeddings,
-                lengths=candidate_lengths
-            )
+                candidate_embeddings, _ = create_masked_tensor(
+                    data=candidate_embeddings,
+                    lengths=candidate_lengths
+                )  # (batch_size, num_candidates, embedding_dim)
 
-            lengths = torch.sum(mask, dim=-1)  # (batch_size)
-
-            lengths = (lengths - 1).unsqueeze(-1)  # (batch_size, 1)
-            last_masks = mask.gather(dim=1, index=lengths)  # (batch_size, 1)
-
-            lengths = lengths.unsqueeze(-1)  # (batch_size, 1, 1)
-            lengths = torch.tile(lengths, (1, 1, embeddings.shape[-1]))  # (batch_size, 1, emb_dim)
-            last_embeddings = embeddings.gather(dim=1, index=lengths)  # (batch_size, 1, emb_dim)
-
-            last_embeddings = last_embeddings[last_masks]  # (batch_size, emb_dim)
-
-            candidate_scores = torch.einsum(
-                'bd,bnd->bn',
-                last_embeddings,
-                candidate_embeddings
-            )  # (batch_size, num_candidates)
+                candidate_scores = torch.einsum(
+                    'bd,bnd->bn',
+                    sequential_representation,
+                    candidate_embeddings
+                )  # (batch_size, num_candidates)
+            else:
+                candidate_embeddings = self._item_embeddings.weight  # (num_items, embedding_dim)
+                candidate_scores = torch.einsum(
+                    'bd,nd->bn',
+                    sequential_representation,
+                    candidate_embeddings
+                )  # (batch_size, num_items)
+                candidate_scores[:, 0] = -torch.inf
+                candidate_scores[:, self._num_items + 1:] = -torch.inf
 
             return candidate_scores
