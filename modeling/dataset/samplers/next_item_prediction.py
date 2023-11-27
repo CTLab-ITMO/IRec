@@ -1,7 +1,9 @@
 from dataset.samplers.base import TrainSampler, ValidationSampler, EvalSampler
+from dataset.samplers.base import MultiDomainTrainSampler, MultiDomainValidationSampler, MultiDomainEvalSampler
 from dataset.negative_samplers.base import BaseNegativeSampler
 
 import copy
+import ast
 
 
 class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_prediction'):
@@ -107,14 +109,14 @@ class NextItemPredictionEvalSampler(EvalSampler, config_name='next_item_predicti
         )
 
 
-class MultiDomainNextItemPredictionTrainSampler(TrainSampler, config_name='multi_domain_next_item_prediction'):
+class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_name='multi_domain_next_item_prediction'):
 
-    def __init__(self, dataset, num_users, num_items, target_domain, other_domains, negative_sampler):
+    def __init__(self, dataset, num_users, num_items, target_domain, other_domains, negative_samplers):
         super().__init__()
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
-        self._negative_sampler = negative_sampler
+        self._negative_samplers = negative_samplers
         self._target_domain = target_domain
         self._other_domains = other_domains
 
@@ -126,13 +128,17 @@ class MultiDomainNextItemPredictionTrainSampler(TrainSampler, config_name='multi
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        negative_sampler = BaseNegativeSampler.create_from_config({'type': config['negative_sampler_type']}, **kwargs)
+        negative_samplers = {}
+        domains = [config['target_domain']] + ast.literal_eval(config['other_domains'])
+
+        for domain in domains:
+            negative_samplers[domain] = BaseNegativeSampler.create_from_config({'type': config['negative_sampler_type']}, **kwargs)
 
         return cls(
             dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
-            negative_sampler=negative_sampler,
+            negative_samplers=negative_samplers,
             target_domain = kwargs['target_domain'],
             other_domains = kwargs['other_domains']
         )
@@ -158,9 +164,7 @@ class MultiDomainNextItemPredictionTrainSampler(TrainSampler, config_name='multi
             'positive.length': len(next_item_sequence),
 
             'negative.ids': negative_sequence,
-            'negative.length': len(negative_sequence),
-
-            'other_domains.parameters': {}
+            'negative.length': len(negative_sequence)
         }
 
         # other domains
@@ -170,35 +174,32 @@ class MultiDomainNextItemPredictionTrainSampler(TrainSampler, config_name='multi
 
             item_sequence = sample['item.ids']
             next_item_sequence = sample['item.ids'][1:]
-            negative_sequence = self._negative_sampler.generate_negative_samples(sample, len(next_item_sequence))
+            negative_sequence = self._negative_samplers[domain].generate_negative_samples(sample, len(next_item_sequence))
 
             assert len(next_item_sequence) == len(negative_sequence)
 
-            result['other_domains.parameters'][domain] = {
-                'user.ids': sample['user.ids'],
-                'user.length': sample['user.length'],
+            result.update({
+                'item.%s.ids'%(domain): item_sequence,
+                'item.%s.length'%(domain): len(item_sequence),
 
-                'item.ids': item_sequence,
-                'item.length': len(item_sequence),
+                'positive.%s.ids'%(domain): next_item_sequence,
+                'positive.%s.length'%(domain): len(next_item_sequence),
 
-                'positive.ids': next_item_sequence,
-                'positive.length': len(next_item_sequence),
-
-                'negative.ids': negative_sequence,
-                'negative.length': len(negative_sequence)
-            }
+                'negative.%s.ids'%(domain): negative_sequence,
+                'negative.%s.length'%(domain): len(negative_sequence)
+            })
 
         return result
 
 
-class MultiDomainNextItemPredictionValidationSampler(ValidationSampler, config_name='multi_domain_next_item_prediction'):
+class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSampler, config_name='multi_domain_next_item_prediction'):
 
-    def __init__(self, dataset, num_users, num_items, target_domain, other_domains, negative_sampler, num_negatives=100):
+    def __init__(self, dataset, num_users, num_items, target_domain, other_domains, negative_samplers, num_negatives=100):
         super().__init__()
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
-        self._negative_sampler = negative_sampler
+        self._negative_samplers = negative_samplers
         self._num_negatives = num_negatives
         self._target_domain = target_domain
         self._other_domains = other_domains
@@ -211,13 +212,17 @@ class MultiDomainNextItemPredictionValidationSampler(ValidationSampler, config_n
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        negative_sampler = BaseNegativeSampler.create_from_config({'type': config['negative_sampler_type']}, **kwargs)
+        negative_samplers = {}
+        domains = [config['target_domain']] + ast.literal_eval(config['other_domains'])
+
+        for domain in domains:
+            negative_samplers[domain] = BaseNegativeSampler.create_from_config({'type': config['negative_sampler_type']}, **kwargs)
 
         return cls(
             dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
-            negative_sampler=negative_sampler,
+            negative_samplers=negative_samplers,
             num_negatives=config.get('num_negatives_val', 100),
             target_domain = kwargs['target_domain'],
             other_domains = kwargs['other_domains']
@@ -246,9 +251,7 @@ class MultiDomainNextItemPredictionValidationSampler(ValidationSampler, config_n
             'candidates.length': len(candidates),
 
             'labels.ids': labels,
-            'labels.length': len(labels),
-
-            'other_domains.parameters': {}
+            'labels.length': len(labels)
         }
 
         # other domains
@@ -259,29 +262,26 @@ class MultiDomainNextItemPredictionValidationSampler(ValidationSampler, config_n
             item_sequence = sample['item.ids'][:-1]
 
             positive = sample['item.ids'][-1]
-            negatives = self._negative_sampler.generate_negative_samples(sample, self._num_negatives)
+            negatives = self._negative_samplers[domain].generate_negative_samples(sample, self._num_negatives)
 
             candidates = [positive] + negatives
             labels = [1] + [0] * len(negatives)
 
-            result['other_domains.parameters'][domain] = {
-                'user.ids': sample['user.ids'],
-                'user.length': sample['user.length'],
+            result.update({
+                'item.%s.ids'%(domain): item_sequence,
+                'item.%s.length'%(domain): len(item_sequence),
 
-                'item.ids': item_sequence,
-                'item.length': len(item_sequence),
+                'candidates.%s.ids'%(domain): candidates,
+                'candidates.%s.length'%(domain): len(candidates),
 
-                'candidates.ids': candidates,
-                'candidates.length': len(candidates),
-
-                'labels.ids': labels,
-                'labels.length': len(labels)
-                }
+                'labels.%s.ids'%(domain): labels,
+                'labels.%s.length'%(domain): len(labels)
+            })
 
         return result
 
 
-class MultiDomainNextItemPredictionEvalSampler(EvalSampler, config_name='multi_domain_next_item_prediction'):
+class MultiDomainNextItemPredictionEvalSampler(MultiDomainEvalSampler, config_name='multi_domain_next_item_prediction'):
 
     def __init__(self, dataset, num_users, num_items, target_domain, other_domains):
         super().__init__()
@@ -322,9 +322,7 @@ class MultiDomainNextItemPredictionEvalSampler(EvalSampler, config_name='multi_d
             'item.length': len(item_sequence),
 
             'labels.ids': [next_item],
-            'labels.length': 1,
-
-            'other_domains.parameters': {}
+            'labels.length': 1
         }
 
         # other domains
@@ -335,15 +333,12 @@ class MultiDomainNextItemPredictionEvalSampler(EvalSampler, config_name='multi_d
             item_sequence = sample['item.ids'][:-1]
             next_item = sample['item.ids'][-1]
 
-            result['other_domains.parameters'][domain] = {
-                'user.ids': sample['user.ids'],
-                'user.length': sample['user.length'],
+            result.update({
+                'item.%s.ids'%(domain): item_sequence,
+                'item.%s.length'%(domain): len(item_sequence),
 
-                'item.ids': item_sequence,
-                'item.length': len(item_sequence),
-
-                'labels.ids': [next_item],
-                'labels.length': 1
-            }
+                'labels.%s.ids'%(domain): [next_item],
+                'labels.%s.length'%(domain): 1
+            })
 
         return result

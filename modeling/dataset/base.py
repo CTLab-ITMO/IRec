@@ -3,9 +3,7 @@ from collections import defaultdict
 from tqdm import tqdm
 
 from dataset.samplers import TrainSampler, ValidationSampler, EvalSampler
-
-# Q: MultiDomainTrainSampler or MultiDomainNextItemPredictionTrainSampler ?
-#from dataset.samplers import MultiDomainTrainSampler, MultiDomainValidationSampler, MultiDomainEvalSampler
+from dataset.samplers import MultiDomainTrainSampler, MultiDomainValidationSampler, MultiDomainEvalSampler
 
 from utils import MetaParent, DEVICE
 
@@ -14,6 +12,7 @@ import torch
 import numpy as np
 import scipy.sparse as sp
 from scipy.sparse import csr_matrix
+import ast
 
 import os
 import logging
@@ -212,52 +211,54 @@ class MultiDomainSequenceDataset(BaseDataset, config_name='multi_domain_sequence
     @classmethod
     def create_from_config(cls, config, **kwargs):
         data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
-		
-		# Q: for each domain or target only?
+        domains = [config['target_domain']] + ast.literal_eval(config['other_domains'])
         max_user_idx, max_item_idx, max_sequence_length = 0, 0, 0
 
-		# TODO: depends on _create_dataset result type
-        train_dataset, train_max_user_idx, train_max_item_idx, train_max_sequence_length = cls._create_dataset(
-            data_dir_path, 'train_new', config['max_sequence_length']
-        )
-        max_user_idx, max_item_idx = max(max_user_idx, train_max_user_idx), max(max_item_idx, train_max_item_idx)
-        max_sequence_length = max(max_sequence_length, train_max_sequence_length)
-		
-		# TODO: depends on _create_dataset result type
-        validation_dataset, validation_max_user_idx, validation_max_item_idx, validation_max_sequence_length = cls._create_dataset(
-            data_dir_path, 'validation_new', config['max_sequence_length']
-        )
-        max_user_idx, max_item_idx = max(max_user_idx, validation_max_user_idx), max(max_item_idx, validation_max_item_idx)
-        max_sequence_length = max(max_sequence_length, validation_max_sequence_length)
-		
-		# TODO: depends on _create_dataset result type
-        test_dataset, test_max_user_idx, test_max_item_idx, test_max_sequence_length = cls._create_dataset(
-            data_dir_path, 'test_new', config['max_sequence_length']
-        )
-        max_user_idx, max_item_idx = max(max_user_idx, test_max_user_idx), max(max_item_idx, test_max_item_idx)
-        max_sequence_length = max(max_sequence_length, test_max_sequence_length)
+        train_dataset, validation_dataset, test_dataset = {}, {}, {}
+        max_user_idx_by_domain, max_item_idx_by_domain = {}, {}
 
-		for domain in [self._target_domain]+self._other_domains:
-			logger.info('Max user idx: {}'.format(max_user_idx))
-			logger.info('Max item idx: {}'.format(max_item_idx))
-			logger.info('{} dataset sparsity: {}'.format(
-				config['name'], (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx / max_item_idx
-			))
+        for domain in domains:
+            train_dataset[domain], train_max_user_idx, train_max_item_idx, train_max_sequence_length = cls._create_dataset(
+                data_dir_path+'/'+domain, 'train_new', config['max_sequence_length']
+            )
+            max_user_idx, max_item_idx = max(max_user_idx, train_max_user_idx), max(max_item_idx, train_max_item_idx)
+            max_sequence_length = max(max_sequence_length, train_max_sequence_length)
+            
+            validation_dataset[domain], validation_max_user_idx, validation_max_item_idx, validation_max_sequence_length = cls._create_dataset(
+                data_dir_path+'/'+domain, 'validation_new', config['max_sequence_length']
+            )
+            max_user_idx, max_item_idx = max(max_user_idx, validation_max_user_idx), max(max_item_idx, validation_max_item_idx)
+            max_sequence_length = max(max_sequence_length, validation_max_sequence_length)
+            
+            test_dataset[domain], test_max_user_idx, test_max_item_idx, test_max_sequence_length = cls._create_dataset(
+                data_dir_path+'/'+domain, 'test_new', config['max_sequence_length']
+            )
+            max_user_idx, max_item_idx = max(max_user_idx, test_max_user_idx), max(max_item_idx, test_max_item_idx)
+            max_sequence_length = max(max_sequence_length, test_max_sequence_length)
+
+            max_user_idx_by_domain[domain] = max_user_idx
+            max_item_idx_by_domain[domain] = max_item_idx
+            
+        logger.info('Max user idx: {}'.format(max_user_idx))
+        logger.info('Max item idx: {}'.format(max_item_idx))
+        for domain in domains:
+            logger.info('{} dataset sparsity: {}'.format(
+                    config['name'], (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx_by_domain[domain] / max_item_idx_by_domain[domain]
+            ))
 		
-		# Q: which sampler?
-        train_sampler = TrainSampler.create_from_config(
+        train_sampler = MultiDomainTrainSampler.create_from_config(
             config['samplers'],
             dataset=train_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx
         )
-        validation_sampler = ValidationSampler.create_from_config(
+        validation_sampler = MultiDomainValidationSampler.create_from_config(
             config['samplers'],
             dataset=validation_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx
         )
-        test_sampler = EvalSampler.create_from_config(
+        test_sampler = MultiDomainEvalSampler.create_from_config(
             config['samplers'],
             dataset=test_dataset,
             num_users=max_user_idx,
@@ -275,51 +276,41 @@ class MultiDomainSequenceDataset(BaseDataset, config_name='multi_domain_sequence
 
     @classmethod
     def _create_dataset(cls, dir_path, part, max_sequence_length=None):
-        # Q: for each domain or target only?
-		#max_user_idx = 0
-        #max_item_idx = 0
-        #max_sequence_len = 0
+        max_user_idx = 0
+        max_item_idx = 0
+        max_sequence_len = 0
 
-		result = {}
-		for domain if [self._target_domain]+self._other_domains:			
-			max_user_idx = 0
-			max_item_idx = 0
-			max_sequence_len = 0
-		
-			if os.path.exists(os.path.join(dir_path+'/%s'%(domain), '{}.pkl'.format(part))):
-				with open(os.path.join(dir_path, '/%'%(domain), '{}.pkl'.format(part)), 'rb') as dataset_file:
-					dataset, max_user_idx, max_item_idx, max_sequence_len = pickle.load(dataset_file)
-			else:
-				dataset_path = os.path.join(dir_path, '/%'%(domain), '{}.txt'.format(part))
-				with open(dataset_path, 'r') as f:
-					data = f.readlines()
+        if os.path.exists(os.path.join(dir_path, '{}.pkl'.format(part))):
+            with open(os.path.join(dir_path, '{}.pkl'.format(part)), 'rb') as dataset_file:
+                dataset, max_user_idx, max_item_idx, max_sequence_len = pickle.load(dataset_file)
+        else:
+            dataset_path = os.path.join(dir_path, '{}.txt'.format(part))
+            with open(dataset_path, 'r') as f:
+                data = f.readlines()
 
-				sequence_info = cls._create_sequences(data, max_sequence_length)
-				user_sequences, item_sequences, _, _, _ = sequence_info
-				max_user_idx = max(max_user_idx, sequence_info[2])
-				max_item_idx = max(max_item_idx, sequence_info[3])
-				max_sequence_len = max(max_sequence_len, sequence_info[4])
+            sequence_info = cls._create_sequences(data, max_sequence_length)
+            user_sequences, item_sequences, _, _, _ = sequence_info
+            max_user_idx = max(max_user_idx, sequence_info[2])
+            max_item_idx = max(max_item_idx, sequence_info[3])
+            max_sequence_len = max(max_sequence_len, sequence_info[4])
 
-				dataset = []
-				for user_idx, item_ids in zip(user_sequences, item_sequences):
-					dataset.append({
-						'user.ids': [user_idx], 'user.length': 1,
-						'item.ids': item_ids, 'item.length': len(item_ids)
-					})
+            dataset = []
+            for user_idx, item_ids in zip(user_sequences, item_sequences):
+                dataset.append({
+                    'user.ids': [user_idx], 'user.length': 1,
+                    'item.ids': item_ids, 'item.length': len(item_ids)
+                })
 
-				logger.info('{} dataset size: {}'.format(part, len(dataset)))
-				logger.info('{} dataset max sequence length: {}'.format(part, max_sequence_len))
+            logger.info('{} dataset size: {}'.format(part, len(dataset)))
+            logger.info('{} dataset max sequence length: {}'.format(part, max_sequence_len))
 
-				with open(os.path.join(dir_path, '/%'%(domain), '{}.pkl'.format(part)), 'wb') as dataset_file:
-					pickle.dump(
-						(dataset, max_user_idx, max_item_idx, max_sequence_len),
-						dataset_file
-					)
+            with open(os.path.join(dir_path, '{}.pkl'.format(part)), 'wb') as dataset_file:
+                pickle.dump(
+                    (dataset, max_user_idx, max_item_idx, max_sequence_len),
+                    dataset_file
+                )
 
-			result[domain] = dataset, max_user_idx, max_item_idx, max_sequence_len
-		
-		# Q: result as one dict or 4 dicts?
-		return result
+        return dataset, max_user_idx, max_item_idx, max_sequence_len
 
     @staticmethod
     def _create_sequences(data, max_sample_len):
