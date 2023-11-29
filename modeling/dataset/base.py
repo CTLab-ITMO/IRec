@@ -186,7 +186,7 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
         }
 
 
-class MultiDomainSequenceDataset(BaseDataset, config_name='multi_domain_sequence'):
+class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequence'):
 
     def __init__(
             self,
@@ -219,19 +219,19 @@ class MultiDomainSequenceDataset(BaseDataset, config_name='multi_domain_sequence
 
         for domain in domains:
             train_dataset[domain], train_max_user_idx, train_max_item_idx, train_max_sequence_length = cls._create_dataset(
-                data_dir_path+'/'+domain, 'train_new', config['max_sequence_length']
+                os.path.join(data_dir_path, domain), 'train_new', config['max_sequence_length']
             )
             max_user_idx, max_item_idx = max(max_user_idx, train_max_user_idx), max(max_item_idx, train_max_item_idx)
             max_sequence_length = max(max_sequence_length, train_max_sequence_length)
             
             validation_dataset[domain], validation_max_user_idx, validation_max_item_idx, validation_max_sequence_length = cls._create_dataset(
-                data_dir_path+'/'+domain, 'validation_new', config['max_sequence_length']
+                os.path.join(data_dir_path, domain), 'validation_new', config['max_sequence_length']
             )
             max_user_idx, max_item_idx = max(max_user_idx, validation_max_user_idx), max(max_item_idx, validation_max_item_idx)
             max_sequence_length = max(max_sequence_length, validation_max_sequence_length)
             
             test_dataset[domain], test_max_user_idx, test_max_item_idx, test_max_sequence_length = cls._create_dataset(
-                data_dir_path+'/'+domain, 'test_new', config['max_sequence_length']
+                os.path.join(data_dir_path, domain), 'test_new', config['max_sequence_length']
             )
             max_user_idx, max_item_idx = max(max_user_idx, test_max_user_idx), max(max_item_idx, test_max_item_idx)
             max_sequence_length = max(max_sequence_length, test_max_sequence_length)
@@ -273,90 +273,6 @@ class MultiDomainSequenceDataset(BaseDataset, config_name='multi_domain_sequence
             num_items=max_item_idx,
             max_sequence_length=max_sequence_length
         )
-
-    @classmethod
-    def _create_dataset(cls, dir_path, part, max_sequence_length=None):
-        max_user_idx = 0
-        max_item_idx = 0
-        max_sequence_len = 0
-
-        if os.path.exists(os.path.join(dir_path, '{}.pkl'.format(part))):
-            with open(os.path.join(dir_path, '{}.pkl'.format(part)), 'rb') as dataset_file:
-                dataset, max_user_idx, max_item_idx, max_sequence_len = pickle.load(dataset_file)
-        else:
-            dataset_path = os.path.join(dir_path, '{}.txt'.format(part))
-            with open(dataset_path, 'r') as f:
-                data = f.readlines()
-
-            sequence_info = cls._create_sequences(data, max_sequence_length)
-            user_sequences, item_sequences, _, _, _ = sequence_info
-            max_user_idx = max(max_user_idx, sequence_info[2])
-            max_item_idx = max(max_item_idx, sequence_info[3])
-            max_sequence_len = max(max_sequence_len, sequence_info[4])
-
-            dataset = []
-            for user_idx, item_ids in zip(user_sequences, item_sequences):
-                dataset.append({
-                    'user.ids': [user_idx], 'user.length': 1,
-                    'item.ids': item_ids, 'item.length': len(item_ids)
-                })
-
-            logger.info('{} dataset size: {}'.format(part, len(dataset)))
-            logger.info('{} dataset max sequence length: {}'.format(part, max_sequence_len))
-
-            with open(os.path.join(dir_path, '{}.pkl'.format(part)), 'wb') as dataset_file:
-                pickle.dump(
-                    (dataset, max_user_idx, max_item_idx, max_sequence_len),
-                    dataset_file
-                )
-
-        return dataset, max_user_idx, max_item_idx, max_sequence_len
-
-    @staticmethod
-    def _create_sequences(data, max_sample_len):
-        user_sequences = []
-        item_sequences = []
-
-        max_user_id = 0
-        max_item_id = 0
-        max_sequence_length = 0
-
-        for sample in data:
-            sample = sample.strip('\n').split(' ')
-            item_ids = [int(item_id) for item_id in sample[1:]][-max_sample_len:]
-            user_id = int(sample[0])
-
-            max_user_id = max(max_user_id, user_id)
-            max_item_id = max(max_item_id, max(item_ids))
-            max_sequence_length = max(max_sequence_length, len(item_ids))
-
-            user_sequences.append(user_id)
-            item_sequences.append(item_ids)
-
-        return user_sequences, item_sequences, max_user_id, max_item_id, max_sequence_length
-
-    def get_samplers(self):
-        return self._train_sampler, self._validation_sampler, self._test_sampler
-
-    @property
-    def num_users(self):
-        return self._num_users
-
-    @property
-    def num_items(self):
-        return self._num_items
-
-    @property
-    def max_sequence_length(self):
-        return self._max_sequence_length
-
-    @property
-    def meta(self):
-        return {
-            'num_users': self.num_users,
-            'num_items': self.num_items,
-            'max_sequence_length': self.max_sequence_length
-        }
 
 
 class GraphDataset(BaseDataset, config_name='graph'):

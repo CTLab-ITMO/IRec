@@ -111,7 +111,16 @@ class NextItemPredictionEvalSampler(EvalSampler, config_name='next_item_predicti
 
 class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_name='multi_domain_next_item_prediction'):
 
-    def __init__(self, dataset, num_users, num_items, target_domain, other_domains, negative_samplers):
+    def __init__(
+            self, 
+            dataset, 
+            num_users, 
+            num_items, 
+            target_domain, 
+            other_domains, 
+            negative_samplers
+        ):
+
         super().__init__()
         self._dataset = dataset
         self._num_users = num_users
@@ -119,28 +128,35 @@ class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_
         self._negative_samplers = negative_samplers
         self._target_domain = target_domain
         self._other_domains = other_domains
+        self._user_id_to_index_cross_domain_mapping = self.get_user_id_to_index_cross_domain_mapping()
 
-        self._user_id_to_idx_cross_domain_mapping = {domain:{} for domain in self._other_domains}
+    def get_user_id_to_index_cross_domain_mapping(self):
+        _user_id_to_index_cross_domain_mapping = {domain:{} for domain in self._other_domains}
         for domain in self._other_domains:
-            for idx, el in enumerate(self._dataset[domain]):
-                u_id = el['user.ids'][0]
-                self._user_id_to_idx_cross_domain_mapping[domain][u_id] = idx
+            for index, sample in enumerate(self._dataset[domain]):
+                user_id = sample['user.ids'][0]
+                _user_id_to_index_cross_domain_mapping[domain][user_id] = index
+
+        return _user_id_to_index_cross_domain_mapping
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        negative_samplers = {}
         domains = [config['target_domain']] + ast.literal_eval(config['other_domains'])
-
-        for domain in domains:
-            negative_samplers[domain] = BaseNegativeSampler.create_from_config({'type': config['negative_sampler_type']}, **kwargs)
+        negative_samplers = {
+            domain: BaseNegativeSampler.create_from_config(
+                        {'type': config['negative_sampler_type']}, 
+                        **kwargs
+                    )
+            for domain in domains
+        }
 
         return cls(
             dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
             negative_samplers=negative_samplers,
-            target_domain = kwargs['target_domain'],
-            other_domains = kwargs['other_domains']
+            target_domain=config['target_domain'],
+            other_domains=ast.literal_eval(config['other_domains'])
         )
 
     def __getitem__(self, index):
@@ -169,7 +185,7 @@ class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_
 
         # other domains
         for domain in self._other_domains:
-            domain_user_index = self._user_id_to_idx_cross_domain_mapping[domain][index]
+            domain_user_index = self._user_id_to_index_cross_domain_mapping[domain][index]
             sample = copy.deepcopy(self._dataset[domain][domain_user_index])
 
             item_sequence = sample['item.ids']
@@ -179,14 +195,14 @@ class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_
             assert len(next_item_sequence) == len(negative_sequence)
 
             result.update({
-                'item.%s.ids'%(domain): item_sequence,
-                'item.%s.length'%(domain): len(item_sequence),
+                'item.{}.ids'.format(domain): item_sequence,
+                'item.{}.length'.format(domain): len(item_sequence),
 
-                'positive.%s.ids'%(domain): next_item_sequence,
-                'positive.%s.length'%(domain): len(next_item_sequence),
+                'positive.{}.ids'.format(domain): next_item_sequence,
+                'positive.{}.length'.format(domain): len(next_item_sequence),
 
-                'negative.%s.ids'%(domain): negative_sequence,
-                'negative.%s.length'%(domain): len(negative_sequence)
+                'negative.{}.ids'.format(domain): negative_sequence,
+                'negative.{}.length'.format(domain): len(negative_sequence)
             })
 
         return result
@@ -194,7 +210,17 @@ class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_
 
 class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSampler, config_name='multi_domain_next_item_prediction'):
 
-    def __init__(self, dataset, num_users, num_items, target_domain, other_domains, negative_samplers, num_negatives=100):
+    def __init__(
+            self, 
+            dataset, 
+            num_users, 
+            num_items, 
+            target_domain, 
+            other_domains, 
+            negative_samplers, 
+            num_negatives=100
+        ):
+
         super().__init__()
         self._dataset = dataset
         self._num_users = num_users
@@ -203,20 +229,27 @@ class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSample
         self._num_negatives = num_negatives
         self._target_domain = target_domain
         self._other_domains = other_domains
+        self._user_id_to_index_cross_domain_mapping = self.get_user_id_to_index_cross_domain_mapping()
 
-        self._user_id_to_idx_cross_domain_mapping = {domain:{} for domain in self._other_domains}
+    def get_user_id_to_index_cross_domain_mapping(self):
+        _user_id_to_index_cross_domain_mapping = {domain:{} for domain in self._other_domains}
         for domain in self._other_domains:
-            for idx, el in enumerate(self._dataset[domain]):
-                u_id = el['user.ids'][0]
-                self._user_id_to_idx_cross_domain_mapping[domain][u_id] = idx
+            for index, sample in enumerate(self._dataset[domain]):
+                user_id = sample['user.ids'][0]
+                _user_id_to_index_cross_domain_mapping[domain][user_id] = index
+
+        return _user_id_to_index_cross_domain_mapping
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        negative_samplers = {}
         domains = [config['target_domain']] + ast.literal_eval(config['other_domains'])
-
-        for domain in domains:
-            negative_samplers[domain] = BaseNegativeSampler.create_from_config({'type': config['negative_sampler_type']}, **kwargs)
+        negative_samplers = {
+            domain: BaseNegativeSampler.create_from_config(
+                        {'type': config['negative_sampler_type']}, 
+                        **kwargs
+                    )
+            for domain in domains
+        }
 
         return cls(
             dataset=kwargs['dataset'],
@@ -224,8 +257,8 @@ class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSample
             num_items=kwargs['num_items'],
             negative_samplers=negative_samplers,
             num_negatives=config.get('num_negatives_val', 100),
-            target_domain = kwargs['target_domain'],
-            other_domains = kwargs['other_domains']
+            target_domain=config['target_domain'],
+            other_domains=ast.literal_eval(config['other_domains'])
         )
 
     def __getitem__(self, index):
@@ -256,7 +289,7 @@ class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSample
 
         # other domains
         for domain in self._other_domains:
-            domain_user_index = self._user_id_to_idx_cross_domain_mapping[domain][index]
+            domain_user_index = self._user_id_to_index_cross_domain_mapping[domain][index]
             sample = copy.deepcopy(self._dataset[domain][domain_user_index])
 
             item_sequence = sample['item.ids'][:-1]
@@ -268,14 +301,14 @@ class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSample
             labels = [1] + [0] * len(negatives)
 
             result.update({
-                'item.%s.ids'%(domain): item_sequence,
-                'item.%s.length'%(domain): len(item_sequence),
+                'item.{}.ids'.format(domain): item_sequence,
+                'item.{}.length'.format(domain): len(item_sequence),
 
-                'candidates.%s.ids'%(domain): candidates,
-                'candidates.%s.length'%(domain): len(candidates),
+                'candidates.{}.ids'.format(domain): candidates,
+                'candidates.{}.length'.format(domain): len(candidates),
 
-                'labels.%s.ids'%(domain): labels,
-                'labels.%s.length'%(domain): len(labels)
+                'labels.{}.ids'.format(domain): labels,
+                'labels.{}.length'.format(domain): len(labels)
             })
 
         return result
@@ -283,19 +316,31 @@ class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSample
 
 class MultiDomainNextItemPredictionEvalSampler(MultiDomainEvalSampler, config_name='multi_domain_next_item_prediction'):
 
-    def __init__(self, dataset, num_users, num_items, target_domain, other_domains):
+    def __init__(
+            self, 
+            dataset, 
+            num_users, 
+            num_items, 
+            target_domain, 
+            other_domains
+        ):
+        
         super().__init__()
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
         self._target_domain = target_domain
         self._other_domains = other_domains
+        self._user_id_to_index_cross_domain_mapping = self.get_user_id_to_index_cross_domain_mapping()
 
-        self._user_id_to_idx_cross_domain_mapping = {domain:{} for domain in self._other_domains}
+    def get_user_id_to_index_cross_domain_mapping(self):
+        _user_id_to_index_cross_domain_mapping = {domain:{} for domain in self._other_domains}
         for domain in self._other_domains:
-            for idx, el in enumerate(self._dataset[domain]):
-                u_id = el['user.ids'][0]
-                self._user_id_to_idx_cross_domain_mapping[domain][u_id] = idx
+            for index, sample in enumerate(self._dataset[domain]):
+                user_id = sample['user.ids'][0]
+                _user_id_to_index_cross_domain_mapping[domain][user_id] = index
+
+        return _user_id_to_index_cross_domain_mapping
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -303,8 +348,8 @@ class MultiDomainNextItemPredictionEvalSampler(MultiDomainEvalSampler, config_na
             dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
-            target_domain = kwargs['target_domain'],
-            other_domains = kwargs['other_domains']
+            target_domain=config['target_domain'],
+            other_domains=ast.literal_eval(config['other_domains'])
         )
 
     def __getitem__(self, index):
@@ -327,18 +372,18 @@ class MultiDomainNextItemPredictionEvalSampler(MultiDomainEvalSampler, config_na
 
         # other domains
         for domain in self._other_domains:
-            domain_user_index = self._user_id_to_idx_cross_domain_mapping[domain][index]
+            domain_user_index = self._user_id_to_index_cross_domain_mapping[domain][index]
             sample = copy.deepcopy(self._dataset[domain][domain_user_index])
 
             item_sequence = sample['item.ids'][:-1]
             next_item = sample['item.ids'][-1]
 
             result.update({
-                'item.%s.ids'%(domain): item_sequence,
-                'item.%s.length'%(domain): len(item_sequence),
+                'item.{}.ids'.format(domain): item_sequence,
+                'item.{}.length'.format(domain): len(item_sequence),
 
-                'labels.%s.ids'%(domain): [next_item],
-                'labels.%s.length'%(domain): 1
+                'labels.{}.ids'.format(domain): [next_item],
+                'labels.{}.length'.format(domain): 1
             })
 
         return result

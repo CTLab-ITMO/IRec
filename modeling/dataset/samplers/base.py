@@ -20,8 +20,9 @@ class TrainSampler(metaclass=MetaParent):
     
 
 class MultiDomainTrainSampler(TrainSampler):
+
     def __init__(self):
-        self._dataset = None
+        super().__init__()
         self._target_domain = None
         self._other_domains = None
 
@@ -53,8 +54,9 @@ class ValidationSampler(metaclass=MetaParent):
     
 
 class MultiDomainValidationSampler(ValidationSampler):
+
     def __init__(self):
-        self._dataset = None
+        super().__init__()
         self._target_domain = None
         self._other_domains = None
 
@@ -104,16 +106,13 @@ class EvalSampler(metaclass=MetaParent):
 
 class MultiDomainEvalSampler(EvalSampler):
 
-    def __init__(self, dataset, num_users, num_items, target_domain):
+    def __init__(self, dataset, num_users, num_items):
         super().__init__()
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
-        self._target_domain = target_domain
-
-    @property
-    def dataset(self):
-        return self._dataset
+        self._target_domain = None
+        self._other_domains = None
 
     def __len__(self, domain):
         return len(self._dataset[domain])
