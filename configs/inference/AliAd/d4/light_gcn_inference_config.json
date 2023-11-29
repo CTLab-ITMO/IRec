@@ -4,7 +4,7 @@
     "type": "graph",
     "dataset": {
       "type": "scientific",
-      "path_to_data_dir": "../data/AliAd",
+      "path_to_data_dir": "./drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/data/AliAd",
       "dataset_prefix": "d4",
       "min_sample_len": 5,
       "max_sample_len": 200,

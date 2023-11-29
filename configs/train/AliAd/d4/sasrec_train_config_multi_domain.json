@@ -3,7 +3,7 @@
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "scientific",
-    "path_to_data_dir": "../data/AliAd",
+    "path_to_data_dir": "./drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/data/AliAd",
     "name": "d4",
     "target_domain": "d4",
     "other_domains": ["d2", "d3", "d5", "d6", "d7", "d8", "d9"],
