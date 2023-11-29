@@ -1,4 +1,4 @@
-from .base import TrainSampler, ValidationSampler, EvalSampler
+from .base import TrainSampler, ValidationSampler, EvalSampler, MultiDomainTrainSampler, MultiDomainValidationSampler, MultiDomainEvalSampler
 from .cl4srec import Cl4SRecTrainSampler, Cl4SRecValidationSampler, Cl4SRecEvalSampler
 from .duorec import DuorecTrainSampler, DuoRecValidationSampler, DuoRecEvalSampler
 from .next_item_prediction import NextItemPredictionTrainSampler, NextItemPredictionValidationSampler, NextItemPredictionEvalSampler
