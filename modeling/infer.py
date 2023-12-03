@@ -66,7 +66,7 @@ def main():
 
     if isinstance(model, TorchModel):
         model = model.to(DEVICE)
-        checkpoint_path = '../checkpoints/{}_final_state.pth'.format(config['experiment_name'])
+        checkpoint_path = './drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/checkpoints/{}_final_state.pth'.format(config['experiment_name'])
         model.load_state_dict(torch.load(checkpoint_path))
 
     metrics = {
