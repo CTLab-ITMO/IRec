@@ -21,16 +21,18 @@ class TrainSampler(metaclass=MetaParent):
 
 class MultiDomainTrainSampler(TrainSampler):
 
-    def __init__(self):
+    def __init__(self, target_domain, other_domains):
         super().__init__()
-        self._target_domain = None
-        self._other_domains = None
+        self._target_domain = target_domain
+        self._other_domains = other_domains
 
     @property
     def dataset(self, domain):
         return self._dataset[domain]
 
-    def __len__(self, domain):
+    def __len__(self, domain=None):
+        if domain is None:
+            return len(self._dataset[self._target_domain])
         return len(self._dataset[domain])
 
     def __getitem__(self, index):
@@ -55,16 +57,18 @@ class ValidationSampler(metaclass=MetaParent):
 
 class MultiDomainValidationSampler(ValidationSampler):
 
-    def __init__(self):
+    def __init__(self, target_domain, other_domains):
         super().__init__()
-        self._target_domain = None
-        self._other_domains = None
+        self._target_domain = target_domain
+        self._other_domains = other_domains
 
     @property
     def dataset(self, domain):
         return self._dataset[domain]
 
-    def __len__(self, domain):
+    def __len__(self, domain=None):
+        if domain is None:
+            return len(self._dataset[self._target_domain])
         return len(self._dataset[domain])
 
     def __getitem__(self, index):
@@ -106,15 +110,14 @@ class EvalSampler(metaclass=MetaParent):
 
 class MultiDomainEvalSampler(EvalSampler):
 
-    def __init__(self, dataset, num_users, num_items):
-        super().__init__()
-        self._dataset = dataset
-        self._num_users = num_users
-        self._num_items = num_items
-        self._target_domain = None
-        self._other_domains = None
+    def __init__(self, dataset, num_users, num_items, target_domain, other_domains):
+        super().__init__(dataset, num_users, num_items)
+        self._target_domain = target_domain
+        self._other_domains = other_domains
 
-    def __len__(self, domain):
+    def __len__(self, domain=None):
+        if domain is None:
+            return len(self._dataset[self._target_domain])
         return len(self._dataset[domain])
 
     def __getitem__(self, index, domain):

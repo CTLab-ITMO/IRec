@@ -1,17 +1,19 @@
 {
-  "experiment_name": "sasrec_AliAd_d4",
-  "best_metric": "eval/ndcg@20",
+  "experiment_name": "light_gcn_AliAd_d4",
+  "train_epochs_num": 50,
   "dataset": {
-    "type": "scientific",
-    "path_to_data_dir": "./drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/data/AliAd",
-    "name": "d4",
-    "target_domain": "d4",
-    "other_domains": ["d2", "d3", "d5", "d6", "d7", "d8", "d9"],
-    "max_sequence_length": 50,
-    "samplers": {
-      "num_negatives_eval": 100,
-      "type": "multi_domain_next_item_prediction",
-      "negative_sampler_type": "random"
+    "type": "graph",
+    "graph_dir_path": "./drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/data/AliAd/d4",
+    "dataset": {
+      "type": "scientific",
+      "path_to_data_dir": "./drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/data/AliAd",
+      "name": "d4",
+      "max_sequence_length": 50,
+      "samplers": {
+        "num_negatives_eval": 100,
+        "type": "multi_domain_next_item_prediction",
+        "negative_sampler_type": "random"
+      }
     }
   },
   "dataloader": {
@@ -35,18 +37,15 @@
     }
   },
   "model": {
-    "type": "sasrec",
-    "sequence_prefix": "item",
+    "type": "light_gcn",
+    "user_prefix": "user",
     "positive_prefix": "positive",
     "negative_prefix": "negative",
-    "candidate_prefix": "candidates",
+    "candidates_prefix": "candidates",
     "embedding_dim": 64,
-    "num_heads": 2,
-    "num_layers": 2,
-    "dim_feedforward": 256,
-    "dropout": 0.3,
-    "activation": "relu",
-    "layer_norm_eps": 1e-9,
+    "num_layers": 3,
+    "keep_prob": 1.0,
+    "dropout": 0.0,
     "initializer_range": 0.02
   },
   "optimizer": {
@@ -54,21 +53,25 @@
     "optimizer": {
       "type": "adam",
       "lr": 0.001
-    },
-    "clip_grad_threshold": 5.0
+    }
   },
   "loss": {
     "type": "composite",
     "losses": [
       {
-        "type": "sasrec",
-        "positive_prefix": "positive_embeddings",
-        "negative_prefix": "negative_embeddings",
-        "representation_prefix": "current_embeddings",
-        "output_prefix": "downstream_loss"
+        "type": "bpr",
+        "positive_prefix": "positive_scores",
+        "negative_prefix": "negative_scores",
+        "output_prefix": "lightgcn_downstream_loss"
+      },
+      {
+        "type": "regularization",
+        "prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
+        "weight": 0.5,
+        "output_prefix": "lightgcn_regularization_loss"
       }
     ],
-    "output_prefix": "loss"
+    "output_prefix": "lightgcn_loss"
   },
   "callback": {
     "type": "composite",
@@ -76,7 +79,17 @@
       {
         "type": "metric",
         "on_step": 1,
-        "loss_prefix": "loss"
+        "loss_prefix": "lightgcn_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "lightgcn_downstream_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "lightgcn_regularization_loss"
       },
       {
         "type": "validation",

@@ -1,0 +1,134 @@
+{
+  "experiment_name": "light_gcn_sanity_check",
+  "dataset": {
+    "type": "graph",
+    "dataset": {
+      "type": "scientific",
+      "path_to_data_dir": "./drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/data/AliAd",
+      "dataset_prefix": "d4",
+      "min_sample_len": 5,
+      "max_sample_len": 200,
+      "validation_size": 0.1,
+      "test_size": 0.1,
+      "samplers": {
+        "type": "multi_domain_next_item_prediction",
+        "negative_sampler": {
+          "type": "random",
+          "sample_size": 99
+        }
+      }
+    }
+  },
+  "dataloader": {
+    "train": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "amazon"
+      },
+      "drop_last": true,
+      "shuffle": true
+    },
+    "validation": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "amazon"
+      },
+      "drop_last": false,
+      "shuffle": false
+    }
+  },
+  "model": {
+    "type": "feedforward",
+    "encoders": [
+      {
+        "type": "light_gcn",
+        "user_prefix": [
+          "user"
+        ],
+        "item_prefix": [
+          "positive",
+          "negative",
+          "candidates"
+        ],
+        "embedding_dim": 256,
+        "num_layers": 2,
+        "keep_prob": 0.8,
+        "dropout": 0.2
+      },
+      {
+        "type": "train/test",
+        "train": {
+          "type": "composite",
+          "encoders": [
+            {
+              "type": "einsum",
+              "fst_prefix": "user",
+              "snd_prefix": "positive",
+              "mask_prefix": "positive",
+              "operation": "bsd,bsd->bs",
+              "output_prefix": "positive_scores"
+            },
+            {
+              "type": "einsum",
+              "fst_prefix": "user",
+              "snd_prefix": "negative",
+              "mask_prefix": "negative",
+              "operation": "bsd,bsd->bs",
+              "output_prefix": "negative_scores"
+            },
+            {
+              "type": "unmask",
+              "prefix": [
+                "positive_scores",
+                "negative_scores"
+              ]
+            }
+          ]
+        },
+        "test": {
+          "type": "composite",
+          "encoders": [
+            {
+              "type": "einsum",
+              "fst_prefix": "user",
+              "snd_prefix": "candidates",
+              "mask_prefix": "candidates",
+              "operation": "bsd,bcd->bc",
+              "output_prefix": "logits"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "metrics": {
+    "ndcg@5": {
+      "type": "ndcg",
+      "k": 5
+    },
+    "ndcg@10": {
+      "type": "ndcg",
+      "k": 10
+    },
+    "ndcg@20": {
+      "type": "ndcg",
+      "k": 20
+    },
+    "recall@5": {
+      "type": "recall",
+      "k": 5
+    },
+    "recall@10": {
+      "type": "recall",
+      "k": 10
+    },
+    "recall@20": {
+      "type": "recall",
+      "k": 20
+    }
+  },
+  "pred_prefix": "logits",
+  "labels_prefix": "labels"
+}
