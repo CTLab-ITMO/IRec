@@ -211,7 +211,8 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
     @classmethod
     def create_from_config(cls, config, **kwargs):
         data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
-        domains = [config['target_domain']] + ast.literal_eval(config['other_domains'])
+        target_domain, other_domains = config['target_domain'], ast.literal_eval(config['other_domains'])
+        domains = [target_domain] + other_domains
         max_user_idx, max_item_idx, max_sequence_length = 0, 0, 0
 
         train_dataset, validation_dataset, test_dataset = {}, {}, {}
@@ -250,19 +251,25 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
             config['samplers'],
             dataset=train_dataset,
             num_users=max_user_idx,
-            num_items=max_item_idx
+            num_items=max_item_idx,
+            target_domain=target_domain, 
+            other_domains=other_domains
         )
         validation_sampler = MultiDomainValidationSampler.create_from_config(
             config['samplers'],
             dataset=validation_dataset,
             num_users=max_user_idx,
-            num_items=max_item_idx
+            num_items=max_item_idx,
+            target_domain=target_domain, 
+            other_domains=other_domains
         )
         test_sampler = MultiDomainEvalSampler.create_from_config(
             config['samplers'],
             dataset=test_dataset,
             num_users=max_user_idx,
-            num_items=max_item_idx
+            num_items=max_item_idx,
+            target_domain=target_domain, 
+            other_domains=other_domains
         )
 
         return cls(

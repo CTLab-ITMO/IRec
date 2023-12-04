@@ -121,13 +121,11 @@ class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_
             negative_samplers
         ):
 
-        super().__init__()
+        super().__init__(target_domain, other_domains)
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
         self._negative_samplers = negative_samplers
-        self._target_domain = target_domain
-        self._other_domains = other_domains
         self._user_id_to_index_cross_domain_mapping = self.get_user_id_to_index_cross_domain_mapping()
 
     def get_user_id_to_index_cross_domain_mapping(self):
@@ -141,7 +139,7 @@ class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        domains = [config['target_domain']] + ast.literal_eval(config['other_domains'])
+        domains = [kwargs['target_domain']] + kwargs['other_domains']
         negative_samplers = {
             domain: BaseNegativeSampler.create_from_config(
                         {'type': config['negative_sampler_type']}, 
@@ -155,8 +153,8 @@ class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
             negative_samplers=negative_samplers,
-            target_domain=config['target_domain'],
-            other_domains=ast.literal_eval(config['other_domains'])
+            target_domain=kwargs['target_domain'],
+            other_domains=kwargs['other_domains']
         )
 
     def __getitem__(self, index):
@@ -221,14 +219,12 @@ class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSample
             num_negatives=100
         ):
 
-        super().__init__()
+        super().__init__(target_domain, other_domains)
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
         self._negative_samplers = negative_samplers
         self._num_negatives = num_negatives
-        self._target_domain = target_domain
-        self._other_domains = other_domains
         self._user_id_to_index_cross_domain_mapping = self.get_user_id_to_index_cross_domain_mapping()
 
     def get_user_id_to_index_cross_domain_mapping(self):
@@ -242,7 +238,7 @@ class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSample
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        domains = [config['target_domain']] + ast.literal_eval(config['other_domains'])
+        domains = [kwargs['target_domain']] + kwargs['other_domains']
         negative_samplers = {
             domain: BaseNegativeSampler.create_from_config(
                         {'type': config['negative_sampler_type']}, 
@@ -257,8 +253,8 @@ class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSample
             num_items=kwargs['num_items'],
             negative_samplers=negative_samplers,
             num_negatives=config.get('num_negatives_val', 100),
-            target_domain=config['target_domain'],
-            other_domains=ast.literal_eval(config['other_domains'])
+            target_domain=kwargs['target_domain'],
+            other_domains=kwargs['other_domains']
         )
 
     def __getitem__(self, index):
@@ -325,12 +321,7 @@ class MultiDomainNextItemPredictionEvalSampler(MultiDomainEvalSampler, config_na
             other_domains
         ):
         
-        super().__init__()
-        self._dataset = dataset
-        self._num_users = num_users
-        self._num_items = num_items
-        self._target_domain = target_domain
-        self._other_domains = other_domains
+        super().__init__(dataset, num_users, num_items, target_domain, other_domains)
         self._user_id_to_index_cross_domain_mapping = self.get_user_id_to_index_cross_domain_mapping()
 
     def get_user_id_to_index_cross_domain_mapping(self):
@@ -348,8 +339,8 @@ class MultiDomainNextItemPredictionEvalSampler(MultiDomainEvalSampler, config_na
             dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
-            target_domain=config['target_domain'],
-            other_domains=ast.literal_eval(config['other_domains'])
+            target_domain=kwargs['target_domain'],
+            other_domains=kwargs['other_domains']
         )
 
     def __getitem__(self, index):
