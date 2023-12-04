@@ -1,17 +1,14 @@
 {
-  "experiment_name": "bert4rec_AliAd_d4",
+  "experiment_name": "sasrec_Douban_books",
   "best_metric": "eval/ndcg@20",
   "dataset": {
-    "type": "multi_domain_sequence",
-    "path_to_data_dir": "./drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/data/AliAd",
-    "name": "d4",
-    "target_domain": "d4",
-    "other_domains": ["d2", "d3", "d5", "d6", "d7", "d8", "d9"],
+    "type": "scientific",
+    "path_to_data_dir": "../data/Douban",
+    "name": "books",
     "max_sequence_length": 50,
     "samplers": {
-      "mask_prob": 0.3,
       "num_negatives_eval": 100,
-      "type": "multi_domain_masked_item_prediction",
+      "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
   },
@@ -36,16 +33,17 @@
     }
   },
   "model": {
-    "type": "bert4rec",
+    "type": "sasrec",
     "sequence_prefix": "item",
-    "labels_prefix": "labels",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
     "candidate_prefix": "candidates",
     "embedding_dim": 64,
     "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
-    "dropout": 0.1,
-    "activation": "gelu",
+    "dropout": 0.3,
+    "activation": "relu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },
@@ -53,7 +51,7 @@
     "type": "basic",
     "optimizer": {
       "type": "adam",
-      "lr": 1e-4
+      "lr": 0.001
     },
     "clip_grad_threshold": 5.0
   },
@@ -61,9 +59,10 @@
     "type": "composite",
     "losses": [
       {
-        "type": "ce",
-        "predictions_prefix": "logits",
-        "labels_prefix": "labels",
+        "type": "sasrec",
+        "positive_prefix": "positive_embeddings",
+        "negative_prefix": "negative_embeddings",
+        "representation_prefix": "current_embeddings",
         "output_prefix": "downstream_loss"
       }
     ],
@@ -76,11 +75,6 @@
         "type": "metric",
         "on_step": 1,
         "loss_prefix": "loss"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "downstream_loss"
       },
       {
         "type": "validation",

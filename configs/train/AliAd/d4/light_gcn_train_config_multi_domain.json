@@ -5,7 +5,7 @@
     "type": "graph",
     "graph_dir_path": "./drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/data/AliAd/d4",
     "dataset": {
-      "type": "scientific",
+      "type": "multi_domain_sequence",
       "path_to_data_dir": "./drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/data/AliAd",
       "name": "d4",
       "target_domain": "d4",

@@ -3,7 +3,6 @@ from dataset.samplers.base import MultiDomainTrainSampler, MultiDomainValidation
 from dataset.negative_samplers.base import BaseNegativeSampler
 
 import copy
-import ast
 
 
 class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_prediction'):
