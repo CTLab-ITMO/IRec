@@ -110,7 +110,13 @@ class EvalSampler(metaclass=MetaParent):
 
 class MultiDomainEvalSampler(EvalSampler):
 
-    def __init__(self, dataset, num_users, num_items, target_domain, other_domains):
+    def __init__(self, 
+                 dataset, 
+                 num_users, 
+                 num_items, 
+                 target_domain, 
+                 other_domains
+    ):
         super().__init__(dataset, num_users, num_items)
         self._target_domain = target_domain
         self._other_domains = other_domains

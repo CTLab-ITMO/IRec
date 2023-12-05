@@ -97,7 +97,7 @@ def main():
 
     model = BaseModel.create_from_config(config['model'], **dataset.meta).to(DEVICE)
     if 'checkpoint' in config:
-        checkpoint_path = os.path.join('./drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/checkpoints', f'{config["checkpoint"]}.pth')
+        checkpoint_path = os.path.join('../checkpoints', f'{config["checkpoint"]}.pth')
         logger.debug('Loading checkpoint from {}'.format(checkpoint_path))
         checkpoint = torch.load(checkpoint_path)
         print(checkpoint.keys())
@@ -132,7 +132,7 @@ def main():
     )
 
     # logger.debug('Saving model...')
-    checkpoint_path = './drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/checkpoints/{}_final_state.pth'.format(config['experiment_name'])
+    checkpoint_path = '../checkpoints/{}_final_state.pth'.format(config['experiment_name'])
     torch.save(model.state_dict(), checkpoint_path)
     logger.debug('Saved model as {}'.format(checkpoint_path))
 

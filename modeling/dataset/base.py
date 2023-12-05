@@ -48,7 +48,6 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
         data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
         max_user_idx, max_item_idx, max_sequence_length = 0, 0, 0
 
-        # Q: should we replace 'train_new','validation_new' and 'test_new' with 'all_data'?
         train_dataset, train_max_user_idx, train_max_item_idx, train_max_sequence_length = cls._create_dataset(
             data_dir_path, 'train_new', config['max_sequence_length']
         )
@@ -220,19 +219,19 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
 
         for domain in domains:
             train_dataset[domain], train_max_user_idx, train_max_item_idx, train_max_sequence_length = cls._create_dataset(
-                os.path.join(data_dir_path, domain), 'all_data', config['max_sequence_length']
+                os.path.join(data_dir_path, domain), 'train_new', config['max_sequence_length']
             )
             max_user_idx, max_item_idx = max(max_user_idx, train_max_user_idx), max(max_item_idx, train_max_item_idx)
             max_sequence_length = max(max_sequence_length, train_max_sequence_length)
             
             validation_dataset[domain], validation_max_user_idx, validation_max_item_idx, validation_max_sequence_length = cls._create_dataset(
-                os.path.join(data_dir_path, domain), 'all_data', config['max_sequence_length']
+                os.path.join(data_dir_path, domain), 'validation_new', config['max_sequence_length']
             )
             max_user_idx, max_item_idx = max(max_user_idx, validation_max_user_idx), max(max_item_idx, validation_max_item_idx)
             max_sequence_length = max(max_sequence_length, validation_max_sequence_length)
             
             test_dataset[domain], test_max_user_idx, test_max_item_idx, test_max_sequence_length = cls._create_dataset(
-                os.path.join(data_dir_path, domain), 'all_data', config['max_sequence_length']
+                os.path.join(data_dir_path, domain), 'test_new', config['max_sequence_length']
             )
             max_user_idx, max_item_idx = max(max_user_idx, test_max_user_idx), max(max_item_idx, test_max_item_idx)
             max_sequence_length = max(max_sequence_length, test_max_sequence_length)
@@ -247,33 +246,36 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
                     config['name'], (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx_by_domain[domain] / max_item_idx_by_domain[domain]
             ))
 		
-        # Q: Traceback (most recent call last):
-        #File "/content/drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/modeling/utils/registry.py", line 58, in child_create_from_config
-        #    raise ValueError(msg.format(cls, key, config))
-        #ValueError: There is no value for `<class 'dataset.samplers.base.MultiDomainTrainSampler'>.__init__` required field `target_domain` in config `{'num_negatives_eval': 100, 'type': 'multi_domain_next_item_prediction', 'negative_sampler_type': 'random'}`
+        # config['samplers'].update({
+        #     'target_domain': target_domain, 
+        #     'other_domains': other_domains
+        # })
         train_sampler = MultiDomainTrainSampler.create_from_config(
-            config['samplers'],
+            dict(config['samplers'], 
+                 **{'target_domain': target_domain,
+                    'other_domains': other_domains
+            }), 
             dataset=train_dataset,
             num_users=max_user_idx,
-            num_items=max_item_idx,
-            target_domain=target_domain, 
-            other_domains=other_domains
+            num_items=max_item_idx
         )
         validation_sampler = MultiDomainValidationSampler.create_from_config(
-            config['samplers'],
+            dict(config['samplers'], 
+                 **{'target_domain': target_domain,
+                    'other_domains': other_domains
+            }), 
             dataset=validation_dataset,
             num_users=max_user_idx,
-            num_items=max_item_idx,
-            target_domain=target_domain, 
-            other_domains=other_domains
+            num_items=max_item_idx
         )
         test_sampler = MultiDomainEvalSampler.create_from_config(
-            config['samplers'],
+            dict(config['samplers'], 
+                 **{'target_domain': target_domain,
+                    'other_domains': other_domains
+            }), 
             dataset=test_dataset,
             num_users=max_user_idx,
-            num_items=max_item_idx,
-            target_domain=target_domain, 
-            other_domains=other_domains
+            num_items=max_item_idx
         )
 
         return cls(
