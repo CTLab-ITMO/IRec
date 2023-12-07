@@ -132,20 +132,23 @@ class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_
         for domain in self._other_domains:
             for index, sample in enumerate(self._dataset[domain]):
                 user_id = sample['user.ids'][0]
-                _user_id_to_index_cross_domain_mapping[domain][user_id] = index
+                _user_id_to_index_cross_domain_mapping[domain][index] = user_id
 
         return _user_id_to_index_cross_domain_mapping
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
         domains = [config['target_domain']] + config['other_domains']
-        negative_samplers = {
-            domain: BaseNegativeSampler.create_from_config(
-                        {'type': config['negative_sampler_type']}, 
-                        **kwargs
-                    )
-            for domain in domains
-        }
+        negative_samplers = {}
+
+        datasets = kwargs['dataset']
+        for domain in domains:
+            kwargs['dataset'] = datasets[domain]
+            negative_samplers[domain] = BaseNegativeSampler.create_from_config(
+                                            {'type': config['negative_sampler_type']}, 
+                                            **kwargs
+                                        )
+        kwargs['dataset'] = datasets
 
         return cls(
             dataset=kwargs['dataset'],
@@ -231,20 +234,23 @@ class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSample
         for domain in self._other_domains:
             for index, sample in enumerate(self._dataset[domain]):
                 user_id = sample['user.ids'][0]
-                _user_id_to_index_cross_domain_mapping[domain][user_id] = index
+                _user_id_to_index_cross_domain_mapping[domain][index] = user_id
 
         return _user_id_to_index_cross_domain_mapping
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
         domains = [config['target_domain']] + config['other_domains']
-        negative_samplers = {
-            domain: BaseNegativeSampler.create_from_config(
-                        {'type': config['negative_sampler_type']}, 
-                        **kwargs
-                    )
-            for domain in domains
-        }
+        negative_samplers = {}
+
+        datasets = kwargs['dataset']
+        for domain in domains:
+            kwargs['dataset'] = datasets[domain]
+            negative_samplers[domain] = BaseNegativeSampler.create_from_config(
+                                            {'type': config['negative_sampler_type']}, 
+                                            **kwargs
+                                        )
+        kwargs['dataset'] = datasets
 
         return cls(
             dataset=kwargs['dataset'],
@@ -328,7 +334,7 @@ class MultiDomainNextItemPredictionEvalSampler(MultiDomainEvalSampler, config_na
         for domain in self._other_domains:
             for index, sample in enumerate(self._dataset[domain]):
                 user_id = sample['user.ids'][0]
-                _user_id_to_index_cross_domain_mapping[domain][user_id] = index
+                _user_id_to_index_cross_domain_mapping[domain][index] = user_id
 
         return _user_id_to_index_cross_domain_mapping
 

@@ -204,7 +204,7 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
         self._num_users = num_users
         self._num_items = num_items
         self._max_sequence_length = max_sequence_length
-        self._target_domain = target_domain,
+        self._target_domain = target_domain
         self._other_domains = other_domains
 
     @classmethod
@@ -284,7 +284,9 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
             test_sampler=test_sampler,
             num_users=max_user_idx,
             num_items=max_item_idx,
-            max_sequence_length=max_sequence_length
+            max_sequence_length=max_sequence_length,
+            target_domain=target_domain,
+            other_domains=other_domains
         )
 
 
@@ -702,3 +704,127 @@ class ScientificDataset(BaseDataset, config_name='scientific'):
             'num_items': self.num_items,
             'max_sequence_length': self.max_sequence_length
         }
+
+
+class MultiDomainScientificDataset(ScientificDataset, config_name='multi_domain_scientific'):
+
+    def __init__(
+            self,
+            train_sampler,
+            validation_sampler,
+            test_sampler,
+            num_users,
+            num_items,
+            max_sequence_length,
+            target_domain,
+            other_domains
+    ):
+        self._train_sampler = train_sampler
+        self._validation_sampler = validation_sampler
+        self._test_sampler = test_sampler
+        self._num_users = num_users
+        self._num_items = num_items
+        self._max_sequence_length = max_sequence_length
+        self._target_domain = target_domain
+        self._other_domains = other_domains
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        data_dir_path = config['path_to_data_dir']
+        target_domain, other_domains = config['target_domain'], config['other_domains']
+        domains = [target_domain] + other_domains
+        max_sequence_length = config['max_sequence_length']
+        max_user_idx, max_item_idx = 0, 0
+
+        train_dataset, validation_dataset, test_dataset = {}, {}, {}
+        max_user_idx_by_domain, max_item_idx_by_domain = {}, {}
+
+        for domain in domains:
+            dataset_path = os.path.join(data_dir_path, domain, '{}.txt'.format('all_data'))
+            with open(dataset_path, 'r') as f:
+                data = f.readlines()
+            train_dataset[domain], validation_dataset[domain], test_dataset[domain] = [], [], []
+
+            for sample in data:
+                sample = sample.strip('\n').split(' ')
+                user_idx = int(sample[0])
+                item_ids = [int(item_id) for item_id in sample[1:]]
+
+                max_user_idx = max(max_user_idx, user_idx)
+                max_item_idx = max(max_item_idx, max(item_ids))
+
+                assert len(item_ids) >= 5
+
+                train_dataset[domain].append({
+                    'user.ids': [user_idx],
+                    'user.length': 1,
+                    'item.ids': item_ids[:-2][-max_sequence_length:],
+                    'item.length': len(item_ids[:-2][-max_sequence_length:])
+                })
+                assert len(item_ids[:-2][-max_sequence_length:]) == len(set(item_ids[:-2][-max_sequence_length:]))
+                validation_dataset[domain].append({
+                    'user.ids': [user_idx],
+                    'user.length': 1,
+                    'item.ids': item_ids[:-1][-max_sequence_length:],
+                    'item.length': len(item_ids[:-1][-max_sequence_length:])
+                })
+                assert len(item_ids[:-1][-max_sequence_length:]) == len(set(item_ids[:-1][-max_sequence_length:]))
+                test_dataset[domain].append({
+                    'user.ids': [user_idx],
+                    'user.length': 1,
+                    'item.ids': item_ids[-max_sequence_length:],
+                    'item.length': len(item_ids[-max_sequence_length:])
+                })
+                assert len(item_ids[-max_sequence_length:]) == len(set(item_ids[-max_sequence_length:]))
+
+            max_user_idx_by_domain[domain] = max_user_idx
+            max_item_idx_by_domain[domain] = max_item_idx
+
+        logger.info('Max user idx: {}'.format(max_user_idx))
+        logger.info('Max item idx: {}'.format(max_item_idx))
+        logger.info('Max sequence length: {}'.format(max_sequence_length))
+        for domain in domains:
+            logger.info('Train dataset size: {}'.format(len(train_dataset[domain])))
+            logger.info('Test dataset size: {}'.format(len(test_dataset[domain])))
+            logger.info('{} dataset sparsity: {}'.format(
+                config['name'], (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx_by_domain[domain] / max_item_idx_by_domain[domain]
+            ))
+
+        train_sampler = MultiDomainTrainSampler.create_from_config(
+            dict(config['samplers'], 
+                 **{'target_domain': target_domain,
+                    'other_domains': other_domains
+            }), 
+            dataset=train_dataset,
+            num_users=max_user_idx,
+            num_items=max_item_idx
+        )
+        validation_sampler = MultiDomainValidationSampler.create_from_config(
+            dict(config['samplers'], 
+                 **{'target_domain': target_domain,
+                    'other_domains': other_domains
+            }), 
+            dataset=validation_dataset,
+            num_users=max_user_idx,
+            num_items=max_item_idx
+        )
+        test_sampler = MultiDomainEvalSampler.create_from_config(
+            dict(config['samplers'], 
+                 **{'target_domain': target_domain,
+                    'other_domains': other_domains
+            }), 
+            dataset=test_dataset,
+            num_users=max_user_idx,
+            num_items=max_item_idx
+        )
+
+        return cls(
+            train_sampler=train_sampler,
+            validation_sampler=validation_sampler,
+            test_sampler=test_sampler,
+            num_users=max_user_idx,
+            num_items=max_item_idx,
+            max_sequence_length=max_sequence_length,
+            target_domain=target_domain,
+            other_domains=other_domains
+        )
