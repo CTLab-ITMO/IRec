@@ -238,15 +238,16 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
 
             max_user_idx_by_domain[domain] = max_user_idx
             max_item_idx_by_domain[domain] = max_item_idx
-            
+
         logger.info('Max user idx: {}'.format(max_user_idx))
         logger.info('Max item idx: {}'.format(max_item_idx))
         for domain in domains:
             logger.info('{} dataset sparsity: {}'.format(
                     config['name'], (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx_by_domain[domain] / max_item_idx_by_domain[domain]
             ))
-		
-        train_sampler = MultiDomainTrainSampler.create_from_config(
+
+        # TODO replace unodomain samplers with multidomain ones
+        train_sampler = TrainSampler.create_from_config(
             dict(config['samplers'], 
                  **{'target_domain': target_domain,
                     'other_domains': other_domains
@@ -255,7 +256,7 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
             num_users=max_user_idx,
             num_items=max_item_idx
         )
-        validation_sampler = MultiDomainValidationSampler.create_from_config(
+        validation_sampler = ValidationSampler.create_from_config(
             dict(config['samplers'], 
                  **{'target_domain': target_domain,
                     'other_domains': other_domains
@@ -264,7 +265,7 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
             num_users=max_user_idx,
             num_items=max_item_idx
         )
-        test_sampler = MultiDomainEvalSampler.create_from_config(
+        test_sampler = EvalSampler.create_from_config(
             dict(config['samplers'], 
                  **{'target_domain': target_domain,
                     'other_domains': other_domains
@@ -786,7 +787,8 @@ class MultiDomainScientificDataset(ScientificDataset, config_name='multi_domain_
                 config['name'], (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx_by_domain[domain] / max_item_idx_by_domain[domain]
             ))
 
-        train_sampler = MultiDomainTrainSampler.create_from_config(
+        # TODO replace unodomain samplers with multidomain ones
+        train_sampler = TrainSampler.create_from_config(
             dict(config['samplers'], 
                  **{'target_domain': target_domain,
                     'other_domains': other_domains
@@ -795,7 +797,7 @@ class MultiDomainScientificDataset(ScientificDataset, config_name='multi_domain_
             num_users=max_user_idx,
             num_items=max_item_idx
         )
-        validation_sampler = MultiDomainValidationSampler.create_from_config(
+        validation_sampler = ValidationSampler.create_from_config(
             dict(config['samplers'], 
                  **{'target_domain': target_domain,
                     'other_domains': other_domains
@@ -804,7 +806,7 @@ class MultiDomainScientificDataset(ScientificDataset, config_name='multi_domain_
             num_users=max_user_idx,
             num_items=max_item_idx
         )
-        test_sampler = MultiDomainEvalSampler.create_from_config(
+        test_sampler = EvalSampler.create_from_config(
             dict(config['samplers'], 
                  **{'target_domain': target_domain,
                     'other_domains': other_domains
