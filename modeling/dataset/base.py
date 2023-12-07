@@ -246,10 +246,6 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
                     config['name'], (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx_by_domain[domain] / max_item_idx_by_domain[domain]
             ))
 		
-        # config['samplers'].update({
-        #     'target_domain': target_domain, 
-        #     'other_domains': other_domains
-        # })
         train_sampler = MultiDomainTrainSampler.create_from_config(
             dict(config['samplers'], 
                  **{'target_domain': target_domain,
