@@ -3,10 +3,10 @@
   "train_epochs_num": 50,
   "dataset": {
     "type": "graph",
-    "graph_dir_path": "./drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/data/AliAd/d4",
+    "graph_dir_path": "../data/AliAd/d4",
     "dataset": {
       "type": "multi_domain_scientific",
-      "path_to_data_dir": "./drive/MyDrive/Science/Multidomain RecSys/source/iz-dev/data/AliAd",
+      "path_to_data_dir": "../data/AliAd",
       "name": "d4",
       "target_domain": "d4",
       "other_domains": ["d2", "d3", "d5", "d6", "d7", "d8", "d9"],
