@@ -242,8 +242,8 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
         logger.info('Max user idx: {}'.format(max_user_idx))
         logger.info('Max item idx: {}'.format(max_item_idx))
         for domain in domains:
-            logger.info('{} dataset sparsity: {}'.format(
-                    config['name'], (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx_by_domain[domain] / max_item_idx_by_domain[domain]
+            logger.info('{} domain dataset sparsity: {}'.format(
+                    domain, (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx_by_domain[domain] / max_item_idx_by_domain[domain]
             ))
 
         # TODO replace unodomain samplers with multidomain ones
@@ -781,10 +781,10 @@ class MultiDomainScientificDataset(ScientificDataset, config_name='multi_domain_
         logger.info('Max item idx: {}'.format(max_item_idx))
         logger.info('Max sequence length: {}'.format(max_sequence_length))
         for domain in domains:
-            logger.info('Train dataset size: {}'.format(len(train_dataset[domain])))
-            logger.info('Test dataset size: {}'.format(len(test_dataset[domain])))
-            logger.info('{} dataset sparsity: {}'.format(
-                config['name'], (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx_by_domain[domain] / max_item_idx_by_domain[domain]
+            logger.info('{} domain Train dataset size: {}'.format(domain, len(train_dataset[domain])))
+            logger.info('{} domain Test dataset size: {}'.format(domain, len(test_dataset[domain])))
+            logger.info('{} domain dataset sparsity: {}'.format(
+                domain, (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx_by_domain[domain] / max_item_idx_by_domain[domain]
             ))
 
         # TODO replace unodomain samplers with multidomain ones
