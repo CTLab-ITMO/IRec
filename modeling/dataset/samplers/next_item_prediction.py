@@ -117,14 +117,14 @@ class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_
             num_items, 
             target_domain, 
             other_domains, 
-            negative_samplers
+            negative_sampler
     ):
 
         super().__init__(target_domain, other_domains)
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
-        self._negative_samplers = negative_samplers
+        self._negative_sampler = negative_sampler
         self._user_id_to_index_cross_domain_mapping = self.get_user_id_to_index_cross_domain_mapping()
 
     def get_user_id_to_index_cross_domain_mapping(self):
@@ -139,12 +139,12 @@ class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_
     @classmethod
     def create_from_config(cls, config, **kwargs):
         domains = [config['target_domain']] + config['other_domains']
-        negative_samplers = {}
+        negative_sampler = {}
 
         datasets = kwargs['dataset']
         for domain in domains:
             kwargs['dataset'] = datasets[domain]
-            negative_samplers[domain] = BaseNegativeSampler.create_from_config(
+            negative_sampler[domain] = BaseNegativeSampler.create_from_config(
                                             {'type': config['negative_sampler_type']}, 
                                             **kwargs
                                         )
@@ -154,7 +154,7 @@ class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_
             dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
-            negative_samplers=negative_samplers,
+            negative_sampler=negative_sampler,
             target_domain=config['target_domain'],
             other_domains=config['other_domains']
         )
@@ -190,7 +190,7 @@ class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_
 
             item_sequence = sample['item.ids']
             next_item_sequence = sample['item.ids'][1:]
-            negative_sequence = self._negative_samplers[domain].generate_negative_samples(sample, len(next_item_sequence))
+            negative_sequence = self._negative_sampler[domain].generate_negative_samples(sample, len(next_item_sequence))
 
             assert len(next_item_sequence) == len(negative_sequence)
 
@@ -217,7 +217,7 @@ class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSample
             num_items, 
             target_domain, 
             other_domains, 
-            negative_samplers, 
+            negative_sampler, 
             num_negatives=100
     ):
 
@@ -225,7 +225,7 @@ class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSample
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
-        self._negative_samplers = negative_samplers
+        self._negative_sampler = negative_sampler
         self._num_negatives = num_negatives
         self._user_id_to_index_cross_domain_mapping = self.get_user_id_to_index_cross_domain_mapping()
 
@@ -241,12 +241,12 @@ class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSample
     @classmethod
     def create_from_config(cls, config, **kwargs):
         domains = [config['target_domain']] + config['other_domains']
-        negative_samplers = {}
+        negative_sampler = {}
 
         datasets = kwargs['dataset']
         for domain in domains:
             kwargs['dataset'] = datasets[domain]
-            negative_samplers[domain] = BaseNegativeSampler.create_from_config(
+            negative_sampler[domain] = BaseNegativeSampler.create_from_config(
                                             {'type': config['negative_sampler_type']}, 
                                             **kwargs
                                         )
@@ -256,7 +256,7 @@ class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSample
             dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
-            negative_samplers=negative_samplers,
+            negative_sampler=negative_sampler,
             num_negatives=config.get('num_negatives_val', 100),
             target_domain=config['target_domain'],
             other_domains=config['other_domains']
@@ -296,7 +296,7 @@ class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSample
             item_sequence = sample['item.ids'][:-1]
 
             positive = sample['item.ids'][-1]
-            negatives = self._negative_samplers[domain].generate_negative_samples(sample, self._num_negatives)
+            negatives = self._negative_sampler[domain].generate_negative_samples(sample, self._num_negatives)
 
             candidates = [positive] + negatives
             labels = [1] + [0] * len(negatives)

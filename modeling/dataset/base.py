@@ -198,18 +198,13 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
             target_domain,
             other_domains
     ):
-        self._train_sampler = train_sampler
-        self._validation_sampler = validation_sampler
-        self._test_sampler = test_sampler
-        self._num_users = num_users
-        self._num_items = num_items
-        self._max_sequence_length = max_sequence_length
+        super().__init__(train_sampler, validation_sampler, test_sampler, num_users, num_items, max_sequence_length)
         self._target_domain = target_domain
         self._other_domains = other_domains
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        data_dir_path = config['path_to_data_dir']
+        data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
         target_domain, other_domains = config['target_domain'], config['other_domains']
         domains = [target_domain] + other_domains
         max_user_idx, max_item_idx, max_sequence_length = 0, 0, 0
@@ -716,18 +711,13 @@ class MultiDomainScientificDataset(ScientificDataset, config_name='multi_domain_
             target_domain,
             other_domains
     ):
-        self._train_sampler = train_sampler
-        self._validation_sampler = validation_sampler
-        self._test_sampler = test_sampler
-        self._num_users = num_users
-        self._num_items = num_items
-        self._max_sequence_length = max_sequence_length
+        super().__init__(train_sampler, validation_sampler, test_sampler, num_users, num_items, max_sequence_length)
         self._target_domain = target_domain
         self._other_domains = other_domains
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        data_dir_path = config['path_to_data_dir']
+        data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
         target_domain, other_domains = config['target_domain'], config['other_domains']
         domains = [target_domain] + other_domains
         max_sequence_length = config['max_sequence_length']
