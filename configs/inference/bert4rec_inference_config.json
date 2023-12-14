@@ -1,20 +1,17 @@
 {
-  "experiment_name": "bert4rec_sanity_check",
-  "dataset": {
-    "type": "amazon",
-    "path_to_data_dir": "../data/Beauty",
-    "dataset_prefix": "Beauty",
-    "min_sample_len": 5,
-    "max_sample_len": 200,
-    "validation_size": 0.1,
-    "test_size": 0.1,
+  "pred_prefix": "predictions",
+  "label_prefix": "labels",
+  "experiment_name": "bert4rec_inference_beauty",
+   "dataset": {
+    "type": "scientific",
+    "path_to_data_dir": "../data",
+    "name": "Beauty",
+    "max_sequence_length": 50,
     "samplers": {
+      "mask_prob": 0.3,
+      "num_negatives_eval": 100,
       "type": "masked_item_prediction",
-      "mask_prob": 0.4,
-      "negative_sampler": {
-        "type": "random",
-        "sample_size": 99
-      }
+      "negative_sampler_type": "random"
     }
   },
   "dataloader": {
@@ -22,7 +19,7 @@
       "type": "torch",
       "batch_size": 256,
       "batch_processor": {
-        "type": "amazon"
+        "type": "basic"
       },
       "drop_last": true,
       "shuffle": true
@@ -31,69 +28,25 @@
       "type": "torch",
       "batch_size": 256,
       "batch_processor": {
-        "type": "amazon"
+        "type": "basic"
       },
       "drop_last": false,
       "shuffle": false
     }
   },
   "model": {
-    "type": "feedforward",
-    "projector": {
-      "type": "basic",
-      "embedding_dim": 256,
-      "fields": [
-        {
-          "prefix": "sample",
-          "use_layernorm": true,
-          "use_position": true
-        }
-      ]
-    },
-    "encoders": [
-      {
-        "type": "bert4rec",
-        "prefix": "sample",
-        "num_layers": 2,
-        "num_heads": 2,
-        "embedding_dim": 256,
-        "output_dim": 12102,
-        "output_prefix": "logits"
-      },
-      {
-        "type": "train/test",
-        "train": {
-          "type": "composite",
-          "encoders": [
-            {
-              "type": "unmask",
-              "prefix": "logits"
-            },
-            {
-              "type": "filter",
-              "logits_prefix": "logits",
-              "labels_prefix": "labels"
-            }
-          ]
-        },
-        "test": {
-          "type": "composite",
-          "encoders": [
-            {
-              "type": "last_item",
-              "prefix": "logits",
-              "output_prefix": "next_item_prediction"
-            },
-            {
-              "type": "gather",
-              "prefix": "next_item_prediction",
-              "candidate_prefix": "candidates",
-              "output_prefix": "logits"
-            }
-          ]
-        }
-      }
-    ]
+    "type": "bert4rec",
+    "sequence_prefix": "item",
+    "labels_prefix": "labels",
+    "candidate_prefix": "candidates",
+    "embedding_dim": 64,
+    "num_heads": 2,
+    "num_layers": 2,
+    "dim_feedforward": 256,
+    "dropout": 0.1,
+    "activation": "gelu",
+    "layer_norm_eps": 1e-9,
+    "initializer_range": 0.02
   },
   "metrics": {
     "ndcg@5": {
@@ -120,7 +73,5 @@
       "type": "recall",
       "k": 20
     }
-  },
-  "pred_prefix": "logits",
-  "labels_prefix": "labels"
+  }
 }
