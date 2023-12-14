@@ -1,22 +1,17 @@
 {
   "pred_prefix": "predictions",
   "label_prefix": "labels",
-  "experiment_name": "light_gcn_inference_AliAd_d4",
+  "experiment_name": "pop_inference_AliAd_d4",
   "dataset": {
-    "type": "graph",
-    "graph_dir_path": "../data/AliAd/d4",
-    "dataset": {
-      "type": "multi_domain_scientific",
-      "path_to_data_dir": "../data/AliAd",
-      "name": "d4",
+    "type": "multi_domain_scientific",
+    "path_to_data_dir": "../data/AliAd",
+    "name": "d4",
     "target_domain": "d4",
     "other_domains": ["d2", "d3", "d5", "d6", "d7", "d8", "d9"],
-      "max_sequence_length": 50,
-      "samplers": {
-        "num_negatives_eval": 100,
-        "type": "multi_domain_next_item_prediction",
-        "negative_sampler_type": "random"
-      }
+    "max_sequence_length": 50,
+    "samplers": {
+      "type": "pop",
+      "negative_sampler_type": "random"
     }
   },
   "dataloader": {
@@ -40,16 +35,10 @@
     }
   },
   "model": {
-    "type": "light_gcn",
-    "user_prefix": "user",
-    "positive_prefix": "positive",
-    "negative_prefix": "negative",
+    "type": "pop",
+    "label_prefix": "labels",
     "candidate_prefix": "candidates",
-    "embedding_dim": 64,
-    "num_layers": 3,
-    "keep_prob": 1.0,
-    "dropout": 0.0,
-    "initializer_range": 0.02
+    "counts_prefix": "candidates_counts"
   },
   "metrics": {
     "ndcg@5": {

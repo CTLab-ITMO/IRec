@@ -1,6 +1,7 @@
 {
   "pred_prefix": "predictions",
   "label_prefix": "labels",
+  "experiment_name": "pop_inference_AliAd_d4",
   "dataset": {
     "type": "scientific",
     "path_to_data_dir": "../data/AliAd",
@@ -12,6 +13,15 @@
     }
   },
   "dataloader": {
+    "train": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "basic"
+      },
+      "drop_last": true,
+      "shuffle": true
+    },
     "validation": {
       "type": "torch",
       "batch_size": 256,

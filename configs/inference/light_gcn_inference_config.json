@@ -1,21 +1,19 @@
 {
-  "experiment_name": "light_gcn_sanity_check",
+  "pred_prefix": "predictions",
+  "label_prefix": "labels",
+  "experiment_name": "light_gcn_inference_beauty",
   "dataset": {
     "type": "graph",
+    "graph_dir_path": "../data/Beauty",
     "dataset": {
-      "type": "amazon",
-      "path_to_data_dir": "../data/Beauty",
-      "dataset_prefix": "Beauty",
-      "min_sample_len": 5,
-      "max_sample_len": 200,
-      "validation_size": 0.1,
-      "test_size": 0.1,
+      "type": "scientific",
+      "path_to_data_dir": "../data",
+      "name": "Beauty",
+      "max_sequence_length": 50,
       "samplers": {
+        "num_negatives_eval": 100,
         "type": "next_item_prediction",
-        "negative_sampler": {
-          "type": "random",
-          "sample_size": 99
-        }
+        "negative_sampler_type": "random"
       }
     }
   },
@@ -24,7 +22,7 @@
       "type": "torch",
       "batch_size": 256,
       "batch_processor": {
-        "type": "amazon"
+        "type": "basic"
       },
       "drop_last": true,
       "shuffle": true
@@ -33,75 +31,23 @@
       "type": "torch",
       "batch_size": 256,
       "batch_processor": {
-        "type": "amazon"
+        "type": "basic"
       },
       "drop_last": false,
       "shuffle": false
     }
   },
   "model": {
-    "type": "feedforward",
-    "encoders": [
-      {
-        "type": "light_gcn",
-        "user_prefix": [
-          "user"
-        ],
-        "item_prefix": [
-          "positive",
-          "negative",
-          "candidates"
-        ],
-        "embedding_dim": 256,
-        "num_layers": 2,
-        "keep_prob": 0.8,
-        "dropout": 0.2
-      },
-      {
-        "type": "train/test",
-        "train": {
-          "type": "composite",
-          "encoders": [
-            {
-              "type": "einsum",
-              "fst_prefix": "user",
-              "snd_prefix": "positive",
-              "mask_prefix": "positive",
-              "operation": "bsd,bsd->bs",
-              "output_prefix": "positive_scores"
-            },
-            {
-              "type": "einsum",
-              "fst_prefix": "user",
-              "snd_prefix": "negative",
-              "mask_prefix": "negative",
-              "operation": "bsd,bsd->bs",
-              "output_prefix": "negative_scores"
-            },
-            {
-              "type": "unmask",
-              "prefix": [
-                "positive_scores",
-                "negative_scores"
-              ]
-            }
-          ]
-        },
-        "test": {
-          "type": "composite",
-          "encoders": [
-            {
-              "type": "einsum",
-              "fst_prefix": "user",
-              "snd_prefix": "candidates",
-              "mask_prefix": "candidates",
-              "operation": "bsd,bcd->bc",
-              "output_prefix": "logits"
-            }
-          ]
-        }
-      }
-    ]
+    "type": "light_gcn",
+    "user_prefix": "user",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
+    "candidate_prefix": "candidates",
+    "embedding_dim": 64,
+    "num_layers": 3,
+    "keep_prob": 1.0,
+    "dropout": 0.0,
+    "initializer_range": 0.02
   },
   "metrics": {
     "ndcg@5": {
@@ -128,7 +74,5 @@
       "type": "recall",
       "k": 20
     }
-  },
-  "pred_prefix": "logits",
-  "labels_prefix": "labels"
+  }
 }
