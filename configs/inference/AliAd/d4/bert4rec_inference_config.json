@@ -4,8 +4,8 @@
   "experiment_name": "bert4rec_inference_AliAd_d4",
    "dataset": {
     "type": "scientific",
-    "path_to_data_dir": "../data/AliAd",
-    "name": "d4",
+    "path_to_data_dir": "../data",
+    "name": "AliAd/d4",
     "max_sequence_length": 50,
     "samplers": {
       "mask_prob": 0.3,
