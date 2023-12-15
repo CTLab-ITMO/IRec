@@ -1,15 +1,17 @@
 {
   "pred_prefix": "predictions",
   "label_prefix": "labels",
-  "experiment_name": "random_inference_beauty",
+  "experiment_name": "sasrec_inference_beauty_AliAd_d4",
   "dataset": {
-    "type": "scientific",
+    "type": "multi_domain_scientific",
     "path_to_data_dir": "../data",
-    "name": "Beauty",
+    "name": "AliAd",
+    "target_domain": "d4",
+    "other_domains": ["d2", "d3", "d5", "d6", "d7", "d8", "d9"],
     "max_sequence_length": 50,
     "samplers": {
       "num_negatives_eval": 100,
-      "type": "next_item_prediction",
+      "type": "multi_domain_next_item_prediction",
       "negative_sampler_type": "random"
     }
   },
@@ -34,9 +36,21 @@
     }
   },
   "model": {
-    "type": "random",
+    "type": "sasrec",
+    "sequence_prefix": "item",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
     "label_prefix": "labels",
-    "candidate_prefix": "candidates"
+    "candidate_prefix": "candidates",
+    "embedding_dim": 64,
+    "num_heads": 2,
+    "num_layers": 2,
+    "dim_feedforward": 256,
+    "dropout": 0.6,
+    "use_ce": true,
+    "activation": "relu",
+    "layer_norm_eps": 1e-9,
+    "initializer_range": 0.02
   },
   "metrics": {
     "ndcg@5": {
