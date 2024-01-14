@@ -8,13 +8,14 @@ from metric import BaseMetric
 import json
 import numpy as np
 import torch
+import datetime
 
 
 logger = create_logger(name=__name__)
 seed_val = 42
 
 
-def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_path=None):
+def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_path=None, output_params=None):
     running_metrics = {}
     for metric_name, metric_function in metrics.items():
         running_metrics[metric_name] = []
@@ -42,14 +43,33 @@ def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_pat
 
     logger.debug('Inference procedure has been finished!')
     logger.debug('Metrics are the following:')
-    # TODO add file inference option
     for metric_name, metric_value in running_metrics.items():
         logger.info('{}: {}'.format(metric_name, np.mean(metric_value)))
+
+    #TODO implement output_path as argument in utils.parse_args
+    #TODO add other output_params if needed
+    if output_path:
+        line = {
+            'datetime': datetime.datetime.now(),
+            'experiment_name': output_params['experiment_name'],
+            'model': output_params['experiment_name'].split('_')[0],
+            'dataset': output_params['experiment_name'].split('_')[1],
+            'domain': output_params['experiment_name'].split('_')[2]
+        }
+        for metric_name, metric_value in running_metrics.items():
+            line['metric_name'] = np.mean(metric_value)
+
+        with open(output_path, 'a') as output_file:
+            json.dump(line, output_file)
 
 
 def main():
     fix_random_seed(seed_val)
     config = parse_args()
+    #TODO implement output_path as argument in utils.parse_args
+    #TODO add other output_params if needed
+    output_path = './checkpoints/metrics.log'
+    output_params = {'experiment_name': config['experiment_name']}
 
     logger.debug('Inference config: \n{}'.format(json.dumps(config, indent=2)))
 
@@ -74,7 +94,10 @@ def main():
         for metric_name, metric_cfg in config['metrics'].items()
     }
 
-    inference(eval_dataloader, model, metrics, config['pred_prefix'], config['label_prefix'])
+    if output_path:
+        inference(eval_dataloader, model, metrics, config['pred_prefix'], config['label_prefix'], output_path, output_params)
+    else:
+        inference(eval_dataloader, model, metrics, config['pred_prefix'], config['label_prefix'])
 
 
 if __name__ == '__main__':

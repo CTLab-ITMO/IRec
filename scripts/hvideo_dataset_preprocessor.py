@@ -181,7 +181,7 @@ for d in tqdm(domains):
     df = all_data[all_data['domain']==d].drop('domain', axis=1).reset_index(drop=True)
 
     user_history, item_history = create_all_data(df, new_dir)
-    for output_name in ['all_data.txt','train_new.txt','validation_new.txt','test_new.txt']:
+    for output_name in ['all_data.txt']:
         with open(new_dir+'/'+output_name, 'w') as f:
                 for user_id, item_history in user_history.items():
                     f.write(' '.join([str(user_id)] + [

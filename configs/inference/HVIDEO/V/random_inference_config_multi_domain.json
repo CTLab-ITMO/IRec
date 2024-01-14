@@ -1,7 +1,7 @@
 {
   "pred_prefix": "predictions",
   "label_prefix": "labels",
-  "experiment_name": "random_inference_HVIDEO_V",
+  "experiment_name": "random_HVIDEO_V",
   "dataset": {
     "type": "multi_domain_scientific",
     "path_to_data_dir": "../data",

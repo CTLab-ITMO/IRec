@@ -17,10 +17,17 @@ DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--params', required=True)
+    parser.add_argument('--iter_from', required=False)
+    parser.add_argument('--iter_to', required=False)
     args = parser.parse_args()
+
     with open(args.params) as f:
         params = json.load(f)
-    return params
+    
+    if not(args.iter_from is None and args.iter_to is None):
+        return params, args.params, args.iter_from, args.iter_to
+    else:
+        return params
 
 
 def create_logger(

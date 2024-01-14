@@ -1,7 +1,7 @@
 {
   "pred_prefix": "predictions",
   "label_prefix": "labels",
-  "experiment_name": "light_gcn_inference_HVIDEO_E",
+  "experiment_name": "light_gcn_HVIDEO_E",
   "dataset": {
     "type": "graph",
     "graph_dir_path": "../data/HVIDEO/E",
