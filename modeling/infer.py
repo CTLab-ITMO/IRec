@@ -50,7 +50,7 @@ def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_pat
     #TODO add other output_params if needed
     if output_path:
         line = {
-            'datetime': datetime.datetime.now(),
+            'datetime': str(datetime.datetime.now()),
             'experiment_name': output_params['experiment_name'],
             'model': output_params['experiment_name'].split('_')[0],
             'dataset': output_params['experiment_name'].split('_')[1],
@@ -68,7 +68,7 @@ def main():
     config = parse_args()
     #TODO implement output_path as argument in utils.parse_args
     #TODO add other output_params if needed
-    output_path = './checkpoints/metrics.log'
+    output_path = '../checkpoints/metrics.log'
     output_params = {'experiment_name': config['experiment_name']}
 
     logger.debug('Inference config: \n{}'.format(json.dumps(config, indent=2)))

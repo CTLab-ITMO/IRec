@@ -23,7 +23,7 @@ def main():
 
         subprocess_result = os.system("python3 ./infer.py --params {}".format(path_to_config))
         logger.debug('SUBPROCESS RESULT: {}'.format(subprocess_result))
-        if subprocess_result == 1:
+        if subprocess_result != 0:
             logger.debug('EXITING')
         
     
