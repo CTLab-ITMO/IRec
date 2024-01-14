@@ -57,10 +57,10 @@ def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_pat
             'domain': output_params['experiment_name'].split('_')[2]
         }
         for metric_name, metric_value in running_metrics.items():
-            line['metric_name'] = np.mean(metric_value)
+            line[metric_name] = round(np.mean(metric_value), 18)
 
         with open(output_path, 'a') as output_file:
-            json.dump(line, output_file)
+            output_file.write('{}\n'.format(json.dumps(line)))
 
 
 def main():
