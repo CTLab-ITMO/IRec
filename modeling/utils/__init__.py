@@ -24,8 +24,8 @@ def parse_args():
     with open(args.params) as f:
         params = json.load(f)
     
-    if not(args.iter_from is None and args.iter_to is None):
-        return params, args.params, args.iter_from, args.iter_to
+    if not(args.iter_from is None or args.iter_to is None):
+        return params, args.params, int(args.iter_from), int(args.iter_to)
     else:
         return params
 
