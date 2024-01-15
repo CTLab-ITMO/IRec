@@ -1,11 +1,11 @@
 {
   "pred_prefix": "predictions",
   "label_prefix": "labels",
-  "experiment_name": "pop_Amazon_Movies",
+  "experiment_name": "pop_AmazonReviews2018_Movies",
   "dataset": {
     "type": "scientific",
     "path_to_data_dir": "../data",
-    "name": "Amazon/Movies",
+    "name": "AmazonReviews2018/Movies",
     "max_sequence_length": 50,
     "samplers": {
       "type": "pop",

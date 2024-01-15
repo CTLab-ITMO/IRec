@@ -1,18 +1,15 @@
 {
   "pred_prefix": "predictions",
   "label_prefix": "labels",
-  "experiment_name": "bert4rec_AmazonReviews2018_Movies",
-   "dataset": {
-    "type": "multi_domain_scientific",
+  "experiment_name": "sasrec_HVIDEO_V_grid",
+  "dataset": {
+    "type": "scientific",
     "path_to_data_dir": "../data",
-    "name": "AmazonReviews2018",
-    "target_domain": "Movies",
-    "other_domains": ["Books"],
+    "name": "HVIDEO/V",
     "max_sequence_length": 50,
     "samplers": {
-      "mask_prob": 0.3,
       "num_negatives_eval": 100,
-      "type": "multi_domain_masked_item_prediction",
+      "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
   },
@@ -37,16 +34,19 @@
     }
   },
   "model": {
-    "type": "bert4rec",
+    "type": "sasrec",
     "sequence_prefix": "item",
-    "labels_prefix": "labels",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
+    "label_prefix": "labels",
     "candidate_prefix": "candidates",
     "embedding_dim": 64,
     "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
-    "dropout": 0.1,
-    "activation": "gelu",
+    "dropout": 0.6,
+    "use_ce": true,
+    "activation": "relu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },

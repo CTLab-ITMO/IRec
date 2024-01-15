@@ -1,14 +1,14 @@
 {
   "pred_prefix": "predictions",
   "label_prefix": "labels",
-  "experiment_name": "light_gcn_Amazon_Books",
+  "experiment_name": "light_gcn_AmazonReviews2018_Books",
   "dataset": {
     "type": "graph",
-    "graph_dir_path": "../data/Amazon/Books",
+    "graph_dir_path": "../data/AmazonReviews2018/Books",
     "dataset": {
       "type": "multi_domain_scientific",
 	  "path_to_data_dir": "../data",
-	  "name": "Amazon",
+	  "name": "AmazonReviews2018",
 	  "target_domain": "Books",
 	  "other_domains": ["Movies"],
       "max_sequence_length": 50,

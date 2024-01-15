@@ -1,13 +1,13 @@
 {
-  "experiment_name": "light_gcn_Amazon_Movies",
+  "experiment_name": "light_gcn_AmazonReviews2018_Movies",
   "train_epochs_num": 50,
   "dataset": {
     "type": "graph",
-    "graph_dir_path": "../data/Amazon/Movies",
+    "graph_dir_path": "../data/AmazonReviews2018/Movies",
     "dataset": {
       "type": "multi_domain_scientific",
       "path_to_data_dir": "../data",
-      "name": "Amazon",
+      "name": "AmazonReviews2018",
       "target_domain": "Movies",
       "other_domains": ["Books"],
       "max_sequence_length": 50,
