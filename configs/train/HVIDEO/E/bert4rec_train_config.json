@@ -1,6 +1,6 @@
 {
   "experiment_name": "bert4rec_HVIDEO_E",
-  "best_metric": "eval/ndcg@20",
+  "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "scientific",
     "path_to_data_dir": "../data",
@@ -8,7 +8,7 @@
     "max_sequence_length": 50,
     "samplers": {
       "mask_prob": 0.3,
-      "num_negatives_eval": 100,
+      "num_negatives_val": 100,
       "type": "masked_item_prediction",
       "negative_sampler_type": "random"
     }
@@ -43,7 +43,7 @@
     "num_layers": 2,
     "dim_feedforward": 256,
     "dropout": 0.1,
-    "activation": "gelu",
+    "activation": "relu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },
@@ -51,9 +51,8 @@
     "type": "basic",
     "optimizer": {
       "type": "adam",
-      "lr": 1e-4
-    },
-    "clip_grad_threshold": 5.0
+      "lr": 0.001
+    }
   },
   "loss": {
     "type": "composite",
@@ -82,39 +81,7 @@
       },
       {
         "type": "validation",
-        "on_step": 64,
-        "pred_prefix": "logits",
-        "labels_prefix": "labels",
-        "metrics": {
-          "ndcg@5": {
-            "type": "ndcg",
-            "k": 5
-          },
-          "ndcg@10": {
-            "type": "ndcg",
-            "k": 10
-          },
-          "ndcg@20": {
-            "type": "ndcg",
-            "k": 20
-          },
-          "recall@5": {
-            "type": "recall",
-            "k": 5
-          },
-          "recall@10": {
-            "type": "recall",
-            "k": 10
-          },
-          "recall@20": {
-            "type": "recall",
-            "k": 20
-          }
-        }
-      },
-      {
-        "type": "eval",
-        "on_step": 256,
+        "on_step": 128,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {

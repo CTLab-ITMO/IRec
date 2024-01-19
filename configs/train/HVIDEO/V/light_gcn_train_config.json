@@ -10,7 +10,7 @@
       "name": "HVIDEO/V",
       "max_sequence_length": 50,
       "samplers": {
-        "num_negatives_eval": 100,
+        "num_negatives_val": 100,
         "type": "next_item_prediction",
         "negative_sampler_type": "random"
       }
@@ -93,39 +93,7 @@
       },
       {
         "type": "validation",
-        "on_step": 64,
-        "pred_prefix": "logits",
-        "labels_prefix": "labels",
-        "metrics": {
-          "ndcg@5": {
-            "type": "ndcg",
-            "k": 5
-          },
-          "ndcg@10": {
-            "type": "ndcg",
-            "k": 10
-          },
-          "ndcg@20": {
-            "type": "ndcg",
-            "k": 20
-          },
-          "recall@5": {
-            "type": "recall",
-            "k": 5
-          },
-          "recall@10": {
-            "type": "recall",
-            "k": 10
-          },
-          "recall@20": {
-            "type": "recall",
-            "k": 20
-          }
-        }
-      },
-      {
-        "type": "eval",
-        "on_step": 256,
+        "on_step": 128,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {

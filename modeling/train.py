@@ -22,13 +22,14 @@ def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt=None,
     current_metric = 0
 
     epochs_threshold = 40
+    step_threshold = 20000
 
     best_epoch = 0
     best_checkpoint = None
 
     logger.debug('Start training...')
 
-    while epoch_cnt is None or epoch_num < epoch_cnt:
+    while (epoch_cnt is None or epoch_num < epoch_cnt) and step_num <= step_threshold:
         if best_epoch + epochs_threshold < epoch_num:
             logger.debug('There is no progress during {} epochs. Finish training'.format(epochs_threshold))
             break
