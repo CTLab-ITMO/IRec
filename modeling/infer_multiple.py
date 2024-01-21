@@ -41,11 +41,11 @@ def main():
 
         # change experiment_name to get right checkpoint
         config['experiment_name'] = '_'.join([
-            config['experiment_name'],
-            dict_to_str(dataset_param, config['dataset_params']),
-            dict_to_str(model_param, config['model_params']),
-            dict_to_str(loss_param, config['loss_params']),
-            dict_to_str(optimizer_param, config['optimizer_params'])
+            '{}grid'.format(config['experiment_name'].split('grid')[0]),
+            dict_to_str(dataset_param, train_multiple_config['dataset_params']),
+            dict_to_str(model_param, train_multiple_config['model_params']),
+            dict_to_str(loss_param, train_multiple_config['loss_params']),
+            dict_to_str(optimizer_param, train_multiple_config['optimizer_params'])
         ])
 
         logger.debug('Starting {} inference'.format(config['experiment_name']))
