@@ -8,6 +8,7 @@
     "name": "HVIDEO/E",
     "max_sequence_length": 50,
     "samplers": {
+      "num_negatives_val": 100,
       "type": "masked_item_prediction",
       "negative_sampler_type": "random"
     }
