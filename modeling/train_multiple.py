@@ -111,12 +111,8 @@ def main():
         )
 
         logger.debug('Saving best model checkpoint...')
-        try:
-            checkpoint_path = '../checkpoints/{}_final_state.pth'.format(model_name)
-            torch.save(best_model_checkpoint, checkpoint_path)
-        except:
-            checkpoint_path = '../../../../../mnt/tank/scratch/izaputlyaev/GSRec_backup/checkpoints/{}_final_state.pth'.format(model_name)
-            torch.save(best_model_checkpoint, checkpoint_path)
+        checkpoint_path = '../checkpoints/{}_final_state.pth'.format(model_name)
+        torch.save(best_model_checkpoint, checkpoint_path)
         logger.debug('Saved model as {}'.format(checkpoint_path))
 
 

@@ -27,12 +27,6 @@ def main():
     # for iter in range (iter_from, iter_to+1):
     for iter in range(len(list_of_params)):
         logger.debug('...iteration {} of {}...'.format(iter, len(list_of_params)-1))
-        
-        # # change experiment_name to get right checkpoint
-        # i = "{:02d}".format(iter)
-        # i = "{}-{}".format(i[:-1],i[-1])
-        # experiment_name = '_'.join(config['experiment_name'].split('_')[:4])
-        # config['experiment_name'] = '{}__{}__'.format(experiment_name, i)
 
         # change model hyperparameters according to train_grid and checkpoint
         dataset_param, model_param, loss_param, optimizer_param = list_of_params[iter]
