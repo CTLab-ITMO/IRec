@@ -1,11 +1,11 @@
 {
   "pred_prefix": "predictions",
   "label_prefix": "labels",
-  "experiment_name": "bert4rec_HVIDEO_E_grid",
+  "experiment_name": "bert4rec_HVIDEO_V_grid",
    "dataset": {
     "type": "scientific",
     "path_to_data_dir": "../data",
-    "name": "HVIDEO/E",
+    "name": "HVIDEO/V",
     "max_sequence_length": 50,
     "samplers": {
       "mask_prob": 0.3,
