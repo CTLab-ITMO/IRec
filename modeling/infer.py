@@ -50,7 +50,7 @@ def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_pat
     #TODO add other output_params if needed
     if output_path:
         line = {
-            'datetime': str(datetime.datetime.now()),
+            'datetime': str(datetime.datetime.now().replace(microsecond=0)),
             'experiment_name': output_params['experiment_name'],
             'model': output_params['experiment_name'].split('_')[0],
             'dataset': output_params['experiment_name'].split('_')[1],

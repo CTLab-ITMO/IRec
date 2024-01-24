@@ -9,7 +9,6 @@
     "max_sequence_length": 50,
     "samplers": {
       "mask_prob": 0.3,
-      "num_negatives_eval": 100,
       "type": "masked_item_prediction",
       "negative_sampler_type": "random"
     }
@@ -44,7 +43,7 @@
     "num_layers": 2,
     "dim_feedforward": 256,
     "dropout": 0.1,
-    "activation": "gelu",
+    "activation": "relu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },

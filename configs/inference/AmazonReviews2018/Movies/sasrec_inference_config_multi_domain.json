@@ -10,7 +10,6 @@
     "other_domains": ["Books"],
     "max_sequence_length": 50,
     "samplers": {
-      "num_negatives_eval": 100,
       "type": "multi_domain_next_item_prediction",
       "negative_sampler_type": "random"
     }
@@ -47,7 +46,7 @@
     "num_layers": 2,
     "dim_feedforward": 256,
     "dropout": 0.6,
-    "use_ce": true,
+    "use_ce": false,
     "activation": "relu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
