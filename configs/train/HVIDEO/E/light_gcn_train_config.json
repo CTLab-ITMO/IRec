@@ -1,6 +1,7 @@
 {
   "experiment_name": "light_gcn_HVIDEO_E",
   "train_epochs_num": 50,
+  "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "graph",
     "graph_dir_path": "../data/HVIDEO/E",
@@ -41,7 +42,7 @@
     "user_prefix": "user",
     "positive_prefix": "positive",
     "negative_prefix": "negative",
-    "candidates_prefix": "candidates",
+    "candidate_prefix": "candidates",
     "embedding_dim": 64,
     "num_layers": 3,
     "keep_prob": 1.0,

@@ -13,7 +13,7 @@ class LightGCNModel(TorchModel, config_name='light_gcn'):
             user_prefix,
             positive_prefix,
             negative_prefix,
-            candidates_prefix,
+            candidate_prefix,
             graph,
             num_users,
             num_items,
@@ -27,7 +27,7 @@ class LightGCNModel(TorchModel, config_name='light_gcn'):
         self._user_prefix = user_prefix
         self._positive_prefix = positive_prefix
         self._negative_prefix = negative_prefix
-        self._candidates_prefix = candidates_prefix
+        self._candidate_prefix = candidate_prefix
 
         self._graph = graph
 
@@ -56,7 +56,7 @@ class LightGCNModel(TorchModel, config_name='light_gcn'):
             user_prefix=config['user_prefix'],
             positive_prefix=config['positive_prefix'],
             negative_prefix=config['negative_prefix'],
-            candidates_prefix=config['candidates_prefix'],
+            candidate_prefix=config['candidate_prefix'],
             graph=kwargs['graph'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],

@@ -1,6 +1,6 @@
 {
-  "experiment_name": "light_gcn_HVIDEO_V",
-  "train_epochs_num": 50,
+  "start_from": 0,
+  "experiment_name": "light_gcn_HVIDEO_V_grid",
   "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "graph",
@@ -16,6 +16,8 @@
         "negative_sampler_type": "random"
       }
     }
+  },
+  "dataset_params": {
   },
   "dataloader": {
     "train": {
@@ -44,10 +46,12 @@
     "negative_prefix": "negative",
     "candidate_prefix": "candidates",
     "embedding_dim": 64,
-    "num_layers": 3,
     "keep_prob": 1.0,
-    "dropout": 0.0,
     "initializer_range": 0.02
+  },
+  "model_params": {
+    "dropout": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+    "num_layers": [2, 3, 4]
   },
   "optimizer": {
     "type": "basic",
@@ -56,23 +60,85 @@
       "lr": 0.001
     }
   },
+  "optimizer_params": {
+  },
   "loss": {
     "type": "composite",
-    "losses": [
-      {
-        "type": "bpr",
-        "positive_prefix": "positive_scores",
-        "negative_prefix": "negative_scores",
-        "output_prefix": "lightgcn_downstream_loss"
-      },
-      {
-        "type": "regularization",
-        "prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
-        "weight": 0.5,
-        "output_prefix": "lightgcn_regularization_loss"
-      }
-    ],
     "output_prefix": "lightgcn_loss"
+  },
+  "loss_params": {
+	  "losses": [
+	  [
+		  {
+			"type": "bpr",
+			"positive_prefix": "positive_scores",
+			"negative_prefix": "negative_scores",
+			"output_prefix": "lightgcn_downstream_loss"
+		  },
+		  {
+			"type": "regularization",
+			"prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
+			"weight": 0.3,
+			"output_prefix": "lightgcn_regularization_loss"
+		  }
+	  ],
+	  [
+		  {
+			"type": "bpr",
+			"positive_prefix": "positive_scores",
+			"negative_prefix": "negative_scores",
+			"output_prefix": "lightgcn_downstream_loss"
+		  },
+		  {
+			"type": "regularization",
+			"prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
+			"weight": 0.4,
+			"output_prefix": "lightgcn_regularization_loss"
+		  }
+	  ],
+	  [
+		  {
+			"type": "bpr",
+			"positive_prefix": "positive_scores",
+			"negative_prefix": "negative_scores",
+			"output_prefix": "lightgcn_downstream_loss"
+		  },
+		  {
+			"type": "regularization",
+			"prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
+			"weight": 0.5,
+			"output_prefix": "lightgcn_regularization_loss"
+		  }
+	  ],
+	  [
+		  {
+			"type": "bpr",
+			"positive_prefix": "positive_scores",
+			"negative_prefix": "negative_scores",
+			"output_prefix": "lightgcn_downstream_loss"
+		  },
+		  {
+			"type": "regularization",
+			"prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
+			"weight": 0.6,
+			"output_prefix": "lightgcn_regularization_loss"
+		  }
+	  ],
+	  [
+		  {
+			"type": "bpr",
+			"positive_prefix": "positive_scores",
+			"negative_prefix": "negative_scores",
+			"output_prefix": "lightgcn_downstream_loss"
+		  },
+		  {
+			"type": "regularization",
+			"prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
+			"weight": 0.7,
+			"output_prefix": "lightgcn_regularization_loss"
+		  }
+	  ]
+	]
   },
   "callback": {
     "type": "composite",
