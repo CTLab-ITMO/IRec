@@ -51,7 +51,7 @@
   },
   "model_params": {
     "dropout": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
-    "num_layers": [2, 3, 4]
+    "num_layers": [1, 2, 3, 4]
   },
   "optimizer": {
     "type": "basic",
@@ -64,11 +64,8 @@
   },
   "loss": {
     "type": "composite",
-    "output_prefix": "lightgcn_loss"
-  },
-  "loss_params": {
-	  "losses": [
-	  [
+    "output_prefix": "lightgcn_loss",
+	"losses": [
 		  {
 			"type": "bpr",
 			"positive_prefix": "positive_scores",
@@ -78,66 +75,17 @@
 		  {
 			"type": "regularization",
 			"prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
-			"weight": 0.3,
-			"output_prefix": "lightgcn_regularization_loss"
-		  }
-	  ],
-	  [
-		  {
-			"type": "bpr",
-			"positive_prefix": "positive_scores",
-			"negative_prefix": "negative_scores",
-			"output_prefix": "lightgcn_downstream_loss"
-		  },
-		  {
-			"type": "regularization",
-			"prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
-			"weight": 0.4,
-			"output_prefix": "lightgcn_regularization_loss"
-		  }
-	  ],
-	  [
-		  {
-			"type": "bpr",
-			"positive_prefix": "positive_scores",
-			"negative_prefix": "negative_scores",
-			"output_prefix": "lightgcn_downstream_loss"
-		  },
-		  {
-			"type": "regularization",
-			"prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
-			"weight": 0.5,
-			"output_prefix": "lightgcn_regularization_loss"
-		  }
-	  ],
-	  [
-		  {
-			"type": "bpr",
-			"positive_prefix": "positive_scores",
-			"negative_prefix": "negative_scores",
-			"output_prefix": "lightgcn_downstream_loss"
-		  },
-		  {
-			"type": "regularization",
-			"prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
-			"weight": 0.6,
-			"output_prefix": "lightgcn_regularization_loss"
-		  }
-	  ],
-	  [
-		  {
-			"type": "bpr",
-			"positive_prefix": "positive_scores",
-			"negative_prefix": "negative_scores",
-			"output_prefix": "lightgcn_downstream_loss"
-		  },
-		  {
-			"type": "regularization",
-			"prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
-			"weight": 0.7,
 			"output_prefix": "lightgcn_regularization_loss"
 		  }
 	  ]
+  },
+  "loss_params": {
+	"losses": [
+	  { 
+	  },
+	  {
+		"weight": [0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
+	  }
 	]
   },
   "callback": {
