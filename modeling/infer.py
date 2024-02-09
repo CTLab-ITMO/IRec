@@ -49,12 +49,13 @@ def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_pat
     #TODO implement output_path as argument in utils.parse_args
     #TODO add other output_params if needed
     if output_path:
+		experiment_name = output_params['experiment_name'].replace('light_gcn','lightgcn')
         line = {
             'datetime': str(datetime.datetime.now().replace(microsecond=0)),
             'experiment_name': output_params['experiment_name'],
-            'model': output_params['experiment_name'].split('_')[0],
-            'dataset': output_params['experiment_name'].split('_')[1],
-            'domain': output_params['experiment_name'].split('_')[2]
+            'model': experiment_name.split('_')[0].replace('lightgcn','light_gcn'),
+            'dataset': experiment_name.split('_')[1],
+            'domain': experiment_name.split('_')[2]
         }
         for metric_name, metric_value in running_metrics.items():
             line[metric_name] = round(np.mean(metric_value), 18)

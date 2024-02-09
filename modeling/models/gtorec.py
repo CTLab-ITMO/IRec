@@ -6,16 +6,15 @@ import torch
 import torch.nn as nn
 
 
-class MyMultidomainModel(SequentialTorchModel, config_name='my_multidomain_model'):
+class GTOModel(SequentialTorchModel, config_name='gtorec'):
     def __init__(
             self,
-            # base params
+            # sequential params (base)
             other_domains, # Q: нужно ли это здесь?
             sequence_prefix,
-            positive_prefix,
-            negative_prefix,
-            labels_prefix, # from bert4rec # Q: нужно или удалить?
-            candidate_prefix,
+            positive_prefix, # Q: общий параметр для seq и graph?
+            negative_prefix, # Q: общий параметр для seq и graph?
+            candidate_prefix,  # Q: общий параметр для seq и graph?
             num_items,
             max_sequence_length,
             embedding_dim,
@@ -34,8 +33,8 @@ class MyMultidomainModel(SequentialTorchModel, config_name='my_multidomain_model
             graph_dropout=0.0,
             activation='relu',
             score_function='cos', # способ вычисления скора для айтема: 'cos' или 'dot'
-            layer_norm_eps=1e-9,
-            initializer_range=0.02,
+            layer_norm_eps=1e-9, # Q: общее значение для seq и graph?
+            initializer_range=0.02, # Q: общее значение для seq и graph?
             use_ce=False
     ):
         super().__init__(
@@ -50,11 +49,10 @@ class MyMultidomainModel(SequentialTorchModel, config_name='my_multidomain_model
             layer_norm_eps=layer_norm_eps,
             is_causal=True # false for bert4rec # Q: за что отвечает данный параметр и какое значение нужно?
         )
-        # transformer part (base)
+        # sequential part (base)
         self._sequence_prefix = sequence_prefix
         self._positive_prefix = positive_prefix
         self._negative_prefix = negative_prefix
-        self._labels_prefix = labels_prefix  # from bert4rec # Q: нужно или удалить?
         self._candidate_prefix = candidate_prefix
 
         self._use_ce = use_ce # from sasrec # Q: нужно или удалить?
@@ -74,7 +72,7 @@ class MyMultidomainModel(SequentialTorchModel, config_name='my_multidomain_model
 
         # graph part
         self._graph = graph
-        self._graph_user_prefix = user_prefix # Q: откуда взять?
+        self._graph_user_prefix = user_prefix # Q: получаем из create_from_config?
         self._graph_positive_prefix = positive_prefix # Q: нужна отдельная переменная или достаточно той, что у трансформера?
         self._graph_negative_prefix = negative_prefix # Q: нужна отдельная переменная или достаточно той, что у трансформера?
         self._graph_candidate_prefix = candidate_prefix # Q: нужна отдельная переменная или достаточно той, что у трансформера?
@@ -127,11 +125,10 @@ class MyMultidomainModel(SequentialTorchModel, config_name='my_multidomain_model
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
-            # transformer part (base)
+            # sequential part (base)
             sequence_prefix=config['sequence_prefix'],
             positive_prefix=config['positive_prefix'],
             negative_prefix=config['negative_prefix'],
-            labels_prefix=config['labels_prefix'], # from bert4rec
             candidate_prefix=config['candidate_prefix'],
             num_items=kwargs['num_items'],
             max_sequence_length=kwargs['max_sequence_length'],
@@ -141,10 +138,16 @@ class MyMultidomainModel(SequentialTorchModel, config_name='my_multidomain_model
             dim_feedforward=config.get('dim_feedforward', 4 * config['embedding_dim']),
             dropout=config.get('dropout', 0.0),
             use_ce=config.get('use_ce', False),
-            initializer_range=config.get('initializer_range', 0.02)
+            initializer_range=config.get('initializer_range', 0.02),
 
             # graph part
-            # TODO
+            user_prefix=config["user_prefix"],
+            graph_embedding_dim=config["graph_embedding_dim"],
+            graph_num_layers=config["graph_num_layers"],
+            graph_keep_prob=config.get("graph_keep_prob", 1.0),
+            graph_dropout=config.get("graph_dropout", 0.0),
+            
+            score_function=config.get("score_function", "cos")
         )
     
     @torch.no_grad()
@@ -261,26 +264,27 @@ class MyMultidomainModel(SequentialTorchModel, config_name='my_multidomain_model
         last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
 
         # энкодер айтемов из target domain для графа
-        all_final_user_embeddings, all_final_item_embeddings = \
+        all_final_user_embeddings_target, all_final_item_embeddings_target = \
             self._apply_graph_encoder(all_sample_events, all_sample_lengths)  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
         # энкодер айтемов из source domain для графа
         all_final_user_embeddings_source, all_final_item_embeddings_source = \
             self._apply_graph_encoder(all_sample_events_source, all_sample_lengths_source)  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
-
+        
+        # TODO: переименовать (embeddings_1, embeddings_2) в (embeddings_target, embeddings_source) соответственно
         # Q: ???
-        # Q: как получить разные выходы графовой модели (оранжевый_2 и синий_2 на рисунке) и в чем различие между выходами?
-        # оранжевые_2 эмбеды из графа # Q: эмбеды айтемов?
+        # Q: как получить разные выходы графовой модели (оранжевый_2 и синий_2 на рисунке) ?
+        # оранжевые_2 эмбеды из графа: эмбеды айтемов из таргет домена
         graph_embeddings_1, user_ego_embeddings_1, user_mask_1 = self._get_graph_embeddings(
-            inputs, self._graph_user_prefix, self._graph_user_embeddings, all_final_user_embeddings
+            inputs, self._graph_user_prefix, self._graph_user_embeddings, all_final_user_embeddings_target
         )
         user_embeddings_1 = graph_embeddings_1[user_mask_1]  # (batch_size, embedding_dim)
-        # синие_2 эмбеды из графа # Q: эмбеды юзеров?
+        # синие_2 эмбеды из графа: эмбеды айтемов из сурс домена
         graph_embeddings_2, user_ego_embeddings_2, user_mask_2 = self._get_graph_embeddings(
             inputs, self._graph_user_prefix, self._graph_user_embeddings, all_final_user_embeddings_source
         )
         user_embeddings_2 = graph_embeddings_2[user_mask_2]  # (batch_size, embedding_dim)
 
-        # todo: выход энкодера + оранжевые_2 эмбеды из графа -> cross-attention
+        # TODO: выход энкодера + оранжевые_2 эмбеды из графа -> cross-attention
         # keys   = embeddings
         # values = graph_embeddings_1
         # query  = graph_embeddings_1
@@ -306,7 +310,7 @@ class MyMultidomainModel(SequentialTorchModel, config_name='my_multidomain_model
         embeddings_1 = torch.cat([embeddings, graph_embeddings_1], dim=-1)
         embeddings_1 = self._mha_output_projection(embeddings_1)  # (batch_size, seq_len, embedding_dim)
 
-        # todo: выход энкодера + синие_2 эмбеды из графа -> cross-attention
+        # TODO: выход энкодера + синие_2 эмбеды из графа -> cross-attention
         # keys   = embeddings
         # values = graph_embeddings_2
         # query  = graph_embeddings_2
@@ -342,6 +346,7 @@ class MyMultidomainModel(SequentialTorchModel, config_name='my_multidomain_model
             if self._use_ce:
                 return {'logits': embeddings[mask]}
             else:
+                # sasrec part
                 all_positive_sample_events = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
                 all_negative_sample_events = inputs['{}.ids'.format(self._negative_prefix)]  # (all_batch_events)
 
@@ -353,10 +358,41 @@ class MyMultidomainModel(SequentialTorchModel, config_name='my_multidomain_model
                     all_negative_sample_events
                 )  # (all_batch_events, embedding_dim)
 
+                # light_gcn part
+                # Q: возвращаем только эмбеды, без скоров? как вычислять bpr-loss без скоров?
+                # all_positive_sample_events - те же, что выше # Q: верно или нет?
+                # all_negative_sample_events - те же, что выше # Q: верно или нет?
+                # target domain item embeddings
+                graph_positive_embeddings_target, _, graph_positive_mask_target = self._get_graph_embeddings(
+                    inputs, self._positive_prefix, self._graph_item_embeddings, all_final_item_embeddings_target
+                )
+                graph_negative_embeddings_target, _, graph_negative_mask_target = self._get_graph_embeddings(
+                    inputs, self._negative_prefix, self._graph_item_embeddings, all_final_item_embeddings_target
+                )
+                # source domain item embeddings
+                graph_positive_embeddings_source, _, graph_positive_mask_source = self._get_graph_embeddings(
+                    inputs, self._positive_prefix, self._graph_item_embeddings, all_final_item_embeddings_source
+                )
+                graph_negative_embeddings_source, _, graph_negative_mask_source = self._get_graph_embeddings(
+                    inputs, self._negative_prefix, self._graph_item_embeddings, all_final_item_embeddings_source
+                )
+
                 return {
-                    'current_embeddings': all_sample_embeddings,
+                    # sequential part
+                    # эмбеды для юзеров
+                    'current_embeddings': all_sample_embeddings, # enriched item represantations, все айтемы для юзера
                     'positive_embeddings': all_positive_sample_embeddings,
-                    'negative_embeddings': all_negative_sample_embeddings
+                    'negative_embeddings': all_negative_sample_embeddings,
+                    
+                    # graph part
+                    # target domain item embeddings
+                    'graph_positive_embeddings_target': graph_positive_embeddings_target[graph_positive_mask_target],
+                    'graph_negative_embeddings_target': graph_negative_embeddings_target[graph_negative_mask_target],
+                    'graph_user_embeddings_target': user_embeddings_1,
+                    # source domain item embeddings
+                    'graph_positive_embeddings_source': graph_positive_embeddings_source[graph_positive_mask_source],
+                    'graph_negative_embeddings_source': graph_negative_embeddings_source[graph_negative_mask_source],
+                    'graph_user_embeddings_source': user_embeddings_2
                 }
         else:  # eval mode
             # TODO # Q: ???
