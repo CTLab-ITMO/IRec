@@ -1,6 +1,5 @@
 {
   "experiment_name": "light_gcn_beauty_test",
-  "train_epochs_num": 50,
   "dataset": {
     "type": "graph",
     "graph_dir_path": "../data/Beauty",
@@ -10,7 +9,7 @@
       "name": "Beauty",
       "max_sequence_length": 50,
       "samplers": {
-        "num_negatives_eval": 100,
+        "num_negatives_val": 100,
         "type": "next_item_prediction",
         "negative_sampler_type": "random"
       }
@@ -41,11 +40,10 @@
     "user_prefix": "user",
     "positive_prefix": "positive",
     "negative_prefix": "negative",
-    "candidates_prefix": "candidates",
+    "candidate_prefix": "candidates",
     "embedding_dim": 64,
     "num_layers": 3,
-    "keep_prob": 1.0,
-    "dropout": 0.0,
+    "dropout": 0.2,
     "initializer_range": 0.02
   },
   "optimizer": {
@@ -66,8 +64,8 @@
       },
       {
         "type": "regularization",
-        "prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
-        "weight": 0.5,
+        "prefix": ["item_embeddings"],
+        "weight": 1e-2,
         "output_prefix": "lightgcn_regularization_loss"
       }
     ],

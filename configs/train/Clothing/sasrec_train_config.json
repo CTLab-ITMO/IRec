@@ -1,22 +1,15 @@
 {
-  "experiment_name": "bert4rec_beauty_with_graph_05_fixed",
+  "experiment_name": "sasrec_clothing",
   "best_metric": "eval/ndcg@20",
   "dataset": {
-    "type": "graph",
-    "use_user_graph": true,
-    "use_item_graph": true,
-    "graph_dir_path": "../data/Beauty",
-    "dataset": {
-      "type": "scientific",
-      "path_to_data_dir": "../data",
-      "name": "Beauty",
-      "max_sequence_length": 50,
-      "samplers": {
-        "mask_prob": 0.4,
-        "num_negatives_eval": 100,
-        "type": "masked_item_prediction",
-        "negative_sampler_type": "random"
-      }
+    "type": "scientific",
+    "path_to_data_dir": "../data",
+    "name": "Clothing",
+    "max_sequence_length": 50,
+    "samplers": {
+      "num_negatives_val": 100,
+      "type": "next_item_prediction",
+      "negative_sampler_type": "random"
     }
   },
   "dataloader": {
@@ -40,28 +33,25 @@
     }
   },
   "model": {
-    "type": "bert4rec_mclsr",
+    "type": "sasrec",
     "sequence_prefix": "item",
-    "labels_prefix": "labels",
-    "user_prefix": "user",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
     "candidate_prefix": "candidates",
     "embedding_dim": 64,
     "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
-    "num_graph_layers": 3,
     "dropout": 0.5,
-    "activation": "gelu",
+    "activation": "relu",
     "layer_norm_eps": 1e-9,
-    "graph_dropout": 0.3,
-    "initializer_range": 0.02,
-    "alpha": 0.5
+    "initializer_range": 0.02
   },
   "optimizer": {
     "type": "basic",
     "optimizer": {
       "type": "adam",
-      "lr": 1e-4
+      "lr": 0.001
     },
     "clip_grad_threshold": 5.0
   },
@@ -69,35 +59,11 @@
     "type": "composite",
     "losses": [
       {
-        "type": "ce",
-        "predictions_prefix": "logits",
-        "labels_prefix": "labels",
-        "output_prefix": "downstream_loss",
-        "weight": 1.0
-      },
-      {
-        "type": "fps",
-        "fst_embeddings_prefix": "sequential_representation",
-        "snd_embeddings_prefix": "graph_representation",
-        "output_prefix": "contrastive_interest_loss",
-        "use_mean": true,
-        "weight": 0.3
-      },
-      {
-        "type": "fps",
-        "fst_embeddings_prefix": "user_graph_user_embeddings",
-        "snd_embeddings_prefix": "common_graph_user_embeddings",
-        "output_prefix": "contrastive_user_feature_loss",
-        "use_mean": true,
-        "weight": 0.1
-      },
-      {
-        "type": "fps",
-        "fst_embeddings_prefix": "item_graph_item_embeddings",
-        "snd_embeddings_prefix": "common_graph_item_embeddings",
-        "output_prefix": "contrastive_item_feature_loss",
-        "use_mean": true,
-        "weight": 0.1
+        "type": "sasrec",
+        "positive_prefix": "positive_embeddings",
+        "negative_prefix": "negative_embeddings",
+        "representation_prefix": "current_embeddings",
+        "output_prefix": "downstream_loss"
       }
     ],
     "output_prefix": "loss"
@@ -109,26 +75,6 @@
         "type": "metric",
         "on_step": 1,
         "loss_prefix": "loss"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "downstream_loss"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "contrastive_interest_loss"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "contrastive_user_feature_loss"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "contrastive_item_feature_loss"
       },
       {
         "type": "validation",

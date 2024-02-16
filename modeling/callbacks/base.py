@@ -139,7 +139,7 @@ class CheckpointCallback(BaseCallback, config_name='checkpoint'):
                     'model_state_dict': self._model.state_dict(),
                     'optimizer_state_dict': self._optimizer.state_dict(),
                 },
-                os.path.join(self._save_path, 'checkpoint_{}.pt'.format(step_num))
+                os.path.join(self._save_path, 'checkpoint_{}.pth'.format(step_num))
             )
             logger.debug('Saving done!')
 

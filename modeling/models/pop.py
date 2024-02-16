@@ -29,21 +29,31 @@ class PopModel(BaseModel, config_name='pop'):
     def __call__(self, inputs):
         candidate_counts = inputs['{}.ids'.format(self._counts_prefix)]  # (all_batch_candidates)
         candidate_counts_lengths = inputs['{}.length'.format(self._counts_prefix)]  # (batch_size)
-
         batch_size = candidate_counts_lengths.shape[0]
-        num_candidates = candidate_counts_lengths[0]
+
+        candidate_scores = torch.reshape(
+            candidate_counts,
+            shape=(batch_size, self._num_items + 2)
+        ).float()  # (batch_size, num_items)
+        candidate_scores[:, 0] = -torch.inf  # zero (padding) token
+        candidate_scores[:, self._num_items + 1:] = -torch.inf  # all not real items-related things
 
         if '{}.ids'.format(self._candidate_prefix) in inputs:
-            candidate_scores = torch.reshape(
-                candidate_counts,
-                shape=(batch_size, num_candidates)
-            ).float()  # (batch_size, num_candidates)
-        else:
-            candidate_scores = torch.reshape(
-                candidate_counts,
-                shape=(batch_size, self._num_items + 1)
-            ).float()  # (batch_size, num_items)
-            candidate_scores[:, 0] = -torch.inf  # zero (padding) token
-            candidate_scores[:, self._num_items + 1:] = -torch.inf  # all not real items-related things
+            candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
+            candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
 
-        return candidate_scores  # (batch_size, num_candidates) / (batch_size, num_items)
+            batch_size = candidate_lengths.shape[0]
+            num_candidates = candidate_lengths[0]
+
+            candidate_scores = torch.gather(
+                input=candidate_scores,
+                dim=1,
+                index=torch.reshape(candidate_events, [batch_size, num_candidates])
+            )  # (batch_size, num_candidates)
+
+        _, indices = torch.topk(
+            candidate_scores,
+            k=20, dim=-1, largest=True
+        )  # (batch_size, 20)
+
+        return indices

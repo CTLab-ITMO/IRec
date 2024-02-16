@@ -316,4 +316,9 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
                 candidate_scores[:, 0] = -torch.inf
                 candidate_scores[:, self._num_items + 1:] = -torch.inf
 
-            return candidate_scores
+            values, indices = torch.topk(
+                candidate_scores,
+                k=20, dim=-1, largest=True
+            )  # (batch_size, 100), (batch_size, 100)
+
+            return indices

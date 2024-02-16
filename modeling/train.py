@@ -1,12 +1,12 @@
 import utils
-from utils import parse_args, create_logger, DEVICE
+from utils import parse_args, create_logger, DEVICE, fix_random_seed
 
+from callbacks import BaseCallback
 from dataset import BaseDataset
 from dataloader import BaseDataloader
+from loss import BaseLoss
 from models import BaseModel
 from optimizer import BaseOptimizer
-from loss import BaseLoss
-from callbacks import BaseCallback
 
 import copy
 import json
@@ -14,6 +14,7 @@ import os
 import torch
 
 logger = create_logger(name=__name__)
+seed_val = 42
 
 
 def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt=None, best_metric=None):
@@ -65,6 +66,7 @@ def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt=None,
 
 
 def main():
+    fix_random_seed(seed_val)
     config = parse_args()
 
     utils.tensorboards.GLOBAL_TENSORBOARD_WRITER = \
@@ -121,7 +123,7 @@ def main():
     logger.debug('Everything is ready for training process!')
 
     # Train process
-    train(
+    _ = train(
         dataloader=train_dataloader,
         model=model,
         optimizer=optimizer,
@@ -131,7 +133,7 @@ def main():
         best_metric=config.get('best_metric', None)
     )
 
-    # logger.debug('Saving model...')
+    logger.debug('Saving model...')
     checkpoint_path = '../checkpoints/{}_final_state.pth'.format(config['experiment_name'])
     torch.save(model.state_dict(), checkpoint_path)
     logger.debug('Saved model as {}'.format(checkpoint_path))

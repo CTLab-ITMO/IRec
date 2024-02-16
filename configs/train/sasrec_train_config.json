@@ -1,5 +1,5 @@
 {
-  "experiment_name": "sasrec_beauty_test",
+  "experiment_name": "sasrec_test",
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "scientific",
@@ -7,7 +7,7 @@
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
-      "num_negatives_eval": 100,
+      "num_negatives_val": 100,
       "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
@@ -43,7 +43,8 @@
     "num_layers": 2,
     "dim_feedforward": 256,
     "dropout": 0.3,
-    "activation": "relu",
+    "activation": "gelu",
+    "use_ce": true,
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },

@@ -7,7 +7,7 @@
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
-      "num_negatives_eval": 100,
+      "num_negatives_val": 100,
       "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
@@ -52,17 +52,15 @@
     "optimizer": {
       "type": "adam",
       "lr": 0.001
-    },
-    "clip_grad_threshold": 5.0
+    }
   },
   "loss": {
     "type": "composite",
     "losses": [
       {
-        "type": "sasrec",
-        "positive_prefix": "positive_embeddings",
-        "negative_prefix": "negative_embeddings",
-        "representation_prefix": "current_embeddings",
+        "type": "bpr",
+        "positive_prefix": "positive_scores",
+        "negative_prefix": "negative_scores",
         "output_prefix": "downstream_loss"
       }
     ],

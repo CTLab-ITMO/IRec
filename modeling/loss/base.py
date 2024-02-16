@@ -112,21 +112,19 @@ class BPRLoss(TorchLoss, config_name='bpr'):
             self,
             positive_prefix,
             negative_prefix,
-            output_prefix=None,
-            activation='softplus'
+            output_prefix=None
     ):
         super().__init__()
         self._positive_prefix = positive_prefix
         self._negative_prefix = negative_prefix
         self._output_prefix = output_prefix
-        self._activation = get_activation_function(activation)
 
     def forward(self, inputs):
-        positive_scores = inputs[self._positive_prefix]  # (all_batch_items)
-        negative_scores = inputs[self._negative_prefix]  # (all_batch_items)
-        assert positive_scores.shape[0] == negative_scores.shape[0]
+        pos_scores = inputs[self._positive_prefix]  # (all_batch_items)
+        neg_scores = inputs[self._negative_prefix]  # (all_batch_items)
+        assert neg_scores.shape == pos_scores.shape
 
-        loss = torch.mean(self._activation(negative_scores - positive_scores))  # (1)
+        loss = -(pos_scores - neg_scores).sigmoid().log().mean()  # (1)
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()
@@ -144,7 +142,7 @@ class RegularizationLoss(TorchLoss, config_name='regularization'):
     def forward(self, inputs):
         loss = 0.0
         for prefix in self._prefix:
-            loss += torch.mean(inputs[prefix].norm(p=2, dim=-1))
+            loss += (1/2) * inputs[prefix].pow(2).mean()
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()

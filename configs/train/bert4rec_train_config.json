@@ -7,8 +7,8 @@
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
-      "mask_prob": 0.3,
-      "num_negatives_eval": 100,
+      "mask_prob": 0.7,
+      "num_negatives_val": 100,
       "type": "masked_item_prediction",
       "negative_sampler_type": "random"
     }
@@ -35,6 +35,7 @@
   },
   "model": {
     "type": "bert4rec",
+    "user_prefix": "user",
     "sequence_prefix": "item",
     "labels_prefix": "labels",
     "candidate_prefix": "candidates",
@@ -42,7 +43,7 @@
     "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
-    "dropout": 0.1,
+    "dropout": 0.2,
     "activation": "gelu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
@@ -62,7 +63,8 @@
         "type": "ce",
         "predictions_prefix": "logits",
         "labels_prefix": "labels",
-        "output_prefix": "downstream_loss"
+        "output_prefix": "downstream_loss",
+        "weight": 1.0
       }
     ],
     "output_prefix": "loss"
@@ -74,11 +76,6 @@
         "type": "metric",
         "on_step": 1,
         "loss_prefix": "loss"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "downstream_loss"
       },
       {
         "type": "validation",

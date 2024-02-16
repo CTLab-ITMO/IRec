@@ -107,8 +107,8 @@ class MaskedItemPredictionValidationSampler(ValidationSampler, config_name='mask
             'candidates.ids': candidates,
             'candidates.length': len(candidates),
 
-            'labels.ids': labels,
-            'labels.length': len(labels),
+            'labels.ids': [0],
+            'labels.length': 1,
         }
 
 

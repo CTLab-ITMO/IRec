@@ -1,5 +1,5 @@
 {
-  "experiment_name": "bert4rec_beauty_train_best",
+  "experiment_name": "bert4rec_beauty",
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "scientific",
@@ -8,7 +8,7 @@
     "max_sequence_length": 50,
     "samplers": {
       "mask_prob": 0.6,
-      "num_negatives_eval": 100,
+      "num_negatives_val": 100,
       "type": "masked_item_prediction",
       "negative_sampler_type": "random"
     }

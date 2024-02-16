@@ -7,12 +7,13 @@ import copy
 
 class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_prediction'):
 
-    def __init__(self, dataset, num_users, num_items, negative_sampler):
+    def __init__(self, dataset, num_users, num_items, negative_sampler, num_negatives=-1):
         super().__init__()
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
         self._negative_sampler = negative_sampler
+        self._num_negatives = num_negatives
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -22,7 +23,8 @@ class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_predic
             dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
-            negative_sampler=negative_sampler
+            negative_sampler=negative_sampler,
+            num_negatives=config.get('num_negatives_train', -1)
         )
 
     def __getitem__(self, index):
@@ -30,9 +32,15 @@ class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_predic
 
         item_sequence = sample['item.ids'][:-1]
         next_item_sequence = sample['item.ids'][1:]
-        negative_sequence = self._negative_sampler.generate_negative_samples(sample, len(next_item_sequence))
 
-        assert len(next_item_sequence) == len(negative_sequence)
+        if self._num_negatives == -1:
+            negative_sequence = self._negative_sampler.generate_negative_samples(
+                sample, len(next_item_sequence)
+            )
+        else:
+            negative_sequence = self._negative_sampler.generate_negative_samples(
+                sample, self._num_negatives
+            )
 
         return {
             'user.ids': sample['user.ids'],
@@ -80,7 +88,6 @@ class NextItemPredictionValidationSampler(ValidationSampler, config_name='next_i
         negatives = self._negative_sampler.generate_negative_samples(sample, self._num_negatives)
 
         candidates = [positive] + negatives
-        labels = [1] + [0] * len(negatives)
 
         return {
             'user.ids': sample['user.ids'],
@@ -92,8 +99,8 @@ class NextItemPredictionValidationSampler(ValidationSampler, config_name='next_i
             'candidates.ids': candidates,
             'candidates.length': len(candidates),
 
-            'labels.ids': labels,
-            'labels.length': len(labels),
+            'labels.ids': [0],
+            'labels.length': 1,
         }
 
 

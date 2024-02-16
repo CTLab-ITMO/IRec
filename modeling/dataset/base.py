@@ -495,8 +495,13 @@ class GraphDataset(BaseDataset, config_name='graph'):
 
         edges_degree = np.array(adj_mat.sum(axis=1))  # D
 
+        rowsum = np.array(adj_mat.sum(1))
+        d_inv = np.power(rowsum, -1).flatten()
+        d_inv[np.isinf(d_inv)] = 0.
+        d_mat_inv = sp.diags(d_inv)
+
         d_inv = np.power(edges_degree, -0.5).flatten()  # D^(-0.5)
-        d_inv[np.isinf(d_inv)] = 0.0  # fix NaNs in case if row with zero connections
+        d_inv[np.isinf(d_inv)] = 0.  # fix NaNs in case if row with zero connections
         d_mat = sp.diags(d_inv)  # make it square matrix
 
         # D^(-0.5) @ A @ D^(-0.5)

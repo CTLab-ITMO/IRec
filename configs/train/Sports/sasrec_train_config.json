@@ -1,23 +1,16 @@
 {
-  "experiment_name": "graph_seq_rec_beauty_test",
+  "experiment_name": "sasrec_sports",
   "best_metric": "eval/ndcg@20",
   "dataset": {
-    "type": "graph",
-    "dataset": {
-      "type": "scientific",
-      "path_to_data_dir": "../data",
-      "name": "Beauty",
-      "max_sequence_length": 50,
-      "samplers": {
-        "num_negatives_eval": 100,
-        "type": "next_item_prediction",
-        "negative_sampler_type": "random"
-      }
-    },
-    "graph_dir_path": "../data/Beauty",
-    "use_train_data_only": true,
-    "use_item_graph": true,
-    "use_user_graph": false
+    "type": "scientific",
+    "path_to_data_dir": "../data",
+    "name": "Sports",
+    "max_sequence_length": 50,
+    "samplers": {
+      "num_negatives_val": 100,
+      "type": "next_item_prediction",
+      "negative_sampler_type": "random"
+    }
   },
   "dataloader": {
     "train": {
@@ -40,19 +33,18 @@
     }
   },
   "model": {
-    "type": "graph_seq_rec",
+    "type": "sasrec",
     "sequence_prefix": "item",
     "positive_prefix": "positive",
     "negative_prefix": "negative",
     "candidate_prefix": "candidates",
-    "num_hops": 2,
-    "graph_dropout": 0.1,
     "embedding_dim": 64,
     "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
-    "dropout": 0.3,
-    "activation": "relu",
+    "dropout": 0.6,
+    "activation": "gelu",
+    "use_ce": false,
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },

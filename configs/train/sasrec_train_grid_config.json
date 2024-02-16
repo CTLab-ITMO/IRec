@@ -1,14 +1,14 @@
 {
   "start_from": 0,
-  "experiment_name": "sasrec_ml_grid",
+  "experiment_name": "sasrec_clothes_grid",
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "scientific",
     "path_to_data_dir": "../data",
-    "name": "MovieLens1M",
+    "name": "Clothing",
     "max_sequence_length": 50,
     "samplers": {
-      "num_negatives_eval": 100,
+      "num_negatives_val": 100,
       "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
@@ -50,7 +50,7 @@
     "initializer_range": 0.02
   },
   "model_params": {
-    "dropout": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    "dropout": [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
   },
   "optimizer": {
     "type": "basic",
