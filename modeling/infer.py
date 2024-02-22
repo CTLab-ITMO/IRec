@@ -25,7 +25,6 @@ def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_pat
 
     with torch.no_grad():
         for idx, batch in enumerate(dataloader):
-            print(idx, len(running_metrics['ndcg@20']))
 
             for key, value in batch.items():
                 batch[key] = value.to(DEVICE)
@@ -46,31 +45,37 @@ def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_pat
     for metric_name, metric_value in running_metrics.items():
         logger.info('{}: {}'.format(metric_name, np.mean(metric_value)))
 
-    #TODO implement output_path as argument in utils.parse_args
-    #TODO add other output_params if needed
-    if output_path:
-		experiment_name = output_params['experiment_name'].replace('light_gcn','lightgcn')
+    if not(output_path is None):
         line = {
-            'datetime': str(datetime.datetime.now().replace(microsecond=0)),
-            'experiment_name': output_params['experiment_name'],
-            'model': experiment_name.split('_')[0].replace('lightgcn','light_gcn'),
-            'dataset': experiment_name.split('_')[1],
-            'domain': experiment_name.split('_')[2]
+            'datetime': str(datetime.datetime.now().replace(microsecond=0))
         }
+        
+        if not(output_params is None):
+            for param_name, param_value in output_params.items():
+                line[param_name] = param_value
+        
         for metric_name, metric_value in running_metrics.items():
-            line[metric_name] = round(np.mean(metric_value), 18)
+            line[metric_name] = round(np.mean(metric_value), 8)
 
         with open(output_path, 'a') as output_file:
-            output_file.write('{}\n'.format(json.dumps(line)))
+            output_file.write('{}\n'.format('\t'.join([param_value for param_value in line.values()])))
 
 
 def main():
     fix_random_seed(seed_val)
     config = parse_args()
-    #TODO implement output_path as argument in utils.parse_args
-    #TODO add other output_params if needed
-    output_path = '../checkpoints/metrics.log'
-    output_params = {'experiment_name': config['experiment_name']}
+    
+    output_path = '../checkpoints/metrics.tsv'
+    output_params = {
+        'experiment_name': config['experiment_name'],
+        'model': config['model']['type']
+    }
+    if config['dataset'].get('dataset', None) is None:
+        output_params['dataset'] = config['dataset']['name'].split('/')[0]
+        output_params['domain'] = config['dataset'].get('target_domain', config['dataset']['name'].split('/')[1])
+    else:
+        output_params['dataset'] = config['dataset']['dataset']['name'].split('/')[0]
+        output_params['domain'] = config['dataset']['dataset'].get('target_domain', config['dataset']['dataset']['name'].split('/')[1])
 
     logger.debug('Inference config: \n{}'.format(json.dumps(config, indent=2)))
 
@@ -95,10 +100,15 @@ def main():
         for metric_name, metric_cfg in config['metrics'].items()
     }
 
-    if output_path:
-        inference(eval_dataloader, model, metrics, config['pred_prefix'], config['label_prefix'], output_path, output_params)
-    else:
-        inference(eval_dataloader, model, metrics, config['pred_prefix'], config['label_prefix'])
+    _ = inference(
+        dataloader=eval_dataloader, 
+        model=model, 
+        metrics=metrics, 
+        pred_prefix=config['pred_prefix'], 
+        labels_prefix=config['label_prefix'], 
+        output_path=output_path, 
+        output_params=output_params
+    )
 
 
 if __name__ == '__main__':

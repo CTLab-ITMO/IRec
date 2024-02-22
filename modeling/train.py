@@ -1,12 +1,12 @@
 import utils
-from utils import parse_args, create_logger, DEVICE
+from utils import parse_args, create_logger, DEVICE, fix_random_seed
 
+from callbacks import BaseCallback
 from dataset import BaseDataset
 from dataloader import BaseDataloader
+from loss import BaseLoss
 from models import BaseModel
 from optimizer import BaseOptimizer
-from loss import BaseLoss
-from callbacks import BaseCallback
 
 import copy
 import json
@@ -14,22 +14,22 @@ import os
 import torch
 
 logger = create_logger(name=__name__)
+seed_val = 42
 
 
-def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt=None, best_metric=None):
+def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt=None, step_cnt=None, best_metric=None):
     step_num = 0
     epoch_num = 0
     current_metric = 0
 
     epochs_threshold = 40
-    step_threshold = 20000
 
     best_epoch = 0
     best_checkpoint = None
 
     logger.debug('Start training...')
 
-    while (epoch_cnt is None or epoch_num < epoch_cnt) and step_num <= step_threshold:
+    while (epoch_cnt is None or epoch_num < epoch_cnt) and (step_cnt is None or step_num < step_cnt):
         if best_epoch + epochs_threshold < epoch_num:
             logger.debug('There is no progress during {} epochs. Finish training'.format(epochs_threshold))
             break
@@ -66,6 +66,7 @@ def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt=None,
 
 
 def main():
+    fix_random_seed(seed_val)
     config = parse_args()
 
     utils.tensorboards.GLOBAL_TENSORBOARD_WRITER = \
@@ -122,17 +123,18 @@ def main():
     logger.debug('Everything is ready for training process!')
 
     # Train process
-    train(
+    _ = train(
         dataloader=train_dataloader,
         model=model,
         optimizer=optimizer,
         loss_function=loss_function,
         callback=callback,
         epoch_cnt=config.get('train_epochs_num', None),
+        step_cnt=config.get('train_steps_num', None),
         best_metric=config.get('best_metric', None)
     )
 
-    # logger.debug('Saving model...')
+    logger.debug('Saving model...')
     checkpoint_path = '../checkpoints/{}_final_state.pth'.format(config['experiment_name'])
     torch.save(model.state_dict(), checkpoint_path)
     logger.debug('Saved model as {}'.format(checkpoint_path))

@@ -1,24 +1,27 @@
 import itertools
-import random
-
-import utils
-from utils import parse_args, create_logger, DEVICE, Params, dict_to_str
-from train import train
-
-from dataset import BaseDataset
-from dataloader import BaseDataloader
-from models import BaseModel
-from optimizer import BaseOptimizer
-from loss import BaseLoss
-from callbacks import BaseCallback
-
 import json
+import random
 import torch
 
+import utils
+from utils import parse_args, create_logger, DEVICE, Params, dict_to_str, fix_random_seed
+
+from train import train
+from infer import inference
+
+from callbacks import BaseCallback, EvalCallback
+from dataset import BaseDataset
+from dataloader import BaseDataloader
+from loss import BaseLoss
+from models import BaseModel
+from optimizer import BaseOptimizer
+
 logger = create_logger(name=__name__)
+seed_val = 42
 
 
 def main():
+    fix_random_seed(seed_val)
     config = parse_args()
 
     logger.debug('Training config: \n{}'.format(json.dumps(config, indent=2)))
@@ -109,6 +112,20 @@ def main():
             epoch_cnt=config.get('train_epochs_num'),
             best_metric=config.get('best_metric')
         )
+
+        eval_model = BaseModel.create_from_config(config['model'], **dataset.meta).to(DEVICE)
+        eval_model.load_state_dict(best_model_checkpoint)
+
+        for cl in callback._callbacks:
+            if isinstance(cl, EvalCallback):
+                metrics = cl._metrics
+                pred_prefix = cl._pred_prefix
+                labels_prefix = cl._labels_prefix
+                break
+        else:
+            assert False
+
+        inference(eval_dataloader, eval_model, metrics, pred_prefix, labels_prefix)
 
         logger.debug('Saving best model checkpoint...')
         checkpoint_path = '../checkpoints/{}_final_state.pth'.format(model_name)
