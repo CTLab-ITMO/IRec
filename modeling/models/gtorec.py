@@ -195,22 +195,21 @@ class GTOModel(SequentialTorchModel, config_name='gtorec'):
 
     def forward(self, inputs):
         # target domain item sequence
-        all_sample_events = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
-        all_sample_lengths = inputs['{}.length'.format(self._sequence_prefix)]  # (batch_size)
+        all_sample_events_target = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
+        all_sample_lengths_target = inputs['{}.length'.format(self._sequence_prefix)]  # (batch_size)
         # source domain item sequence
         all_sample_events_source = inputs['{}.{}.ids'.format(self._sequence_prefix, self._source_domain)]  # (all_batch_events)
         all_sample_lengths_source = inputs['{}.{}.length'.format(self._sequence_prefix, self._source_domain)]  # (batch_size)
 
         # sequential model encoder and target domain items embeddings from sequential model
-        embeddings, mask = self._apply_sequential_encoder(
-            all_sample_events, all_sample_lengths
+        seq_embeddings_target, seq_mask_target = self._apply_sequential_encoder(
+            all_sample_events_target, all_sample_lengths_target
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
-        # last embeddings, used for forecasting
-        last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
-
+        seq_last_embeddings_target = self._get_last_embedding(seq_embeddings_target, seq_mask_target)  # (batch_size, embedding_dim) # last embeddings, used for forecasting
+        
         # target domain items encoder for graph model
         all_final_user_embeddings_target, all_final_item_embeddings_target = \
-            self._apply_graph_encoder(all_sample_events, all_sample_lengths)  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
+            self._apply_graph_encoder(all_sample_events_target, all_sample_lengths_target)  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
         # source domain items encoder for graph model
         all_final_user_embeddings_source, all_final_item_embeddings_source = \
             self._apply_graph_encoder(all_sample_events_source, all_sample_lengths_source)  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
@@ -220,13 +219,13 @@ class GTOModel(SequentialTorchModel, config_name='gtorec'):
             inputs, self._sequence_prefix, self._graph_item_embeddings, all_final_item_embeddings_target
         )
         graph_item_embeddings_target = graph_embeddings_target[graph_item_mask_target]  # (batch_size, embedding_dim) 
-        graph_last_embeddings_target = self._get_last_embedding(graph_embeddings_target, graph_item_mask_target)  # (batch_size, embedding_dim)
+        #graph_last_embeddings_target = self._get_last_embedding(graph_embeddings_target, graph_item_mask_target)  # (batch_size, embedding_dim)
         # source domain items embeddings from graph model
         graph_embeddings_source, graph_item_ego_embeddings_source, graph_item_mask_source = self._get_graph_embeddings(
             inputs, self._sequence_prefix, self._graph_item_embeddings, all_final_item_embeddings_source
         )
         graph_item_embeddings_source = graph_embeddings_source[graph_item_mask_source]  # (batch_size, embedding_dim) 
-        graph_last_embeddings_source = self._get_last_embedding(graph_embeddings_source, graph_item_mask_source)  # (batch_size, embedding_dim)
+        #graph_last_embeddings_source = self._get_last_embedding(graph_embeddings_source, graph_item_mask_source)  # (batch_size, embedding_dim)
 
         # embeddings + graph_embeddings_target -> cross-attention
         # query   = embeddings
@@ -234,25 +233,26 @@ class GTOModel(SequentialTorchModel, config_name='gtorec'):
         # values  = graph_embeddings_target
         if self.norm_first: 
             graph_embeddings_target = graph_embeddings_target + self.norm1(self._ca_block(
-                q=embeddings,
+                q=seq_embeddings_target,
                 k=graph_embeddings_target,
                 v=graph_embeddings_target,
                 attn_mask=None,
-                key_padding_mask=~mask
+                key_padding_mask=~graph_item_mask_target
             ))  # (batch_size, seq_len, embedding_dim)
             graph_embeddings_target = graph_embeddings_target + self.norm2(self._ff_block(graph_embeddings_target))
         else:
             graph_embeddings_target = self.norm1(graph_embeddings_target + self._ca_block(
-                q=embeddings,
+                q=seq_embeddings_target,
                 k=graph_embeddings_target,
                 v=graph_embeddings_target,
                 attn_mask=None,
-                key_padding_mask=~mask
+                key_padding_mask=~graph_item_mask_target
             ))  # (batch_size, seq_len, embedding_dim)
             graph_embeddings_target = self.norm2(graph_embeddings_target + self._ff_block(graph_embeddings_target))
         # target-target cross-attention result
-        embeddings_target = torch.cat([embeddings, graph_embeddings_target], dim=-1)
-        embeddings_target = self._mha_output_projection(embeddings_target)  # (batch_size, seq_len, embedding_dim)
+        mha_embeddings_target = torch.cat([seq_embeddings_target, graph_embeddings_target], dim=-1)
+        mha_embeddings_target = self._mha_output_projection(mha_embeddings_target)  # (batch_size, seq_len, embedding_dim)
+        mha_last_embeddings_target = self._get_last_embedding(mha_embeddings_target, seq_mask_target)  # (batch_size, embedding_dim)
 
         # embeddings + graph_embeddings_source -> cross-attention
         # query   = embeddings
@@ -260,32 +260,34 @@ class GTOModel(SequentialTorchModel, config_name='gtorec'):
         # values  = graph_embeddings_source
         if self.norm_first: 
             graph_embeddings_source = graph_embeddings_source + self.norm1(self._ca_block(
-                q=embeddings,
+                q=seq_embeddings_target,
                 k=graph_embeddings_source,
                 v=graph_embeddings_source,
                 attn_mask=None,
-                key_padding_mask=~mask # TODO: подать другую маску (разные маски для q и k, так как разные target и source домены)
+                key_padding_mask=~graph_item_mask_source # TODO: подать другую маску (разные маски для q и k, так как разные target и source домены)
             ))  # (batch_size, seq_len, embedding_dim)
             graph_embeddings_source = graph_embeddings_source + self.norm2(self._ff_block(graph_embeddings_source))
         else:
             graph_embeddings_source = self.norm1(graph_embeddings_source + self._ca_block(
-                q=embeddings,
+                q=seq_embeddings_target,
                 k=graph_embeddings_source,
                 v=graph_embeddings_source,
                 attn_mask=None,
-                key_padding_mask=~mask # TODO: подать другую маску
+                key_padding_mask=~graph_item_mask_source # TODO: подать другую маску
             ))  # (batch_size, seq_len, embedding_dim)
             graph_embeddings_source = self.norm2(graph_embeddings_source + self._ff_block(graph_embeddings_source))
         # source-target cross-attention result
-        embeddings_source = torch.cat([embeddings, graph_embeddings_source], dim=-1)
-        embeddings_source = self._mha_output_projection(embeddings_source)  # (batch_size, seq_len, embedding_dim)
+        mha_embeddings_source = torch.cat([seq_embeddings_target, graph_embeddings_source], dim=-1)
+        mha_embeddings_source = self._mha_output_projection(mha_embeddings_source)  # (batch_size, seq_len, embedding_dim)
+        # TODO: implement seq_mask_source
+        mha_last_embeddings_source = self._get_last_embedding(mha_embeddings_source, seq_mask_source)  # (batch_size, embedding_dim)
 
         if self.training:  # training mode
             # sequential part
             all_positive_sample_events = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
             all_negative_sample_events = inputs['{}.ids'.format(self._negative_prefix)]  # (all_batch_events)
 
-            all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
+            all_sample_embeddings = seq_embeddings_target[seq_mask_target]  # (all_batch_events, embedding_dim)
             all_positive_sample_embeddings = self._item_embeddings(
                 all_positive_sample_events
             )  # (all_batch_events, embedding_dim)
@@ -363,8 +365,8 @@ class GTOModel(SequentialTorchModel, config_name='gtorec'):
                 )  # (batch_size, num_candidates, embedding_dim)
 
                 aggregated_last_embeddings = torch.max(
-                    last_embeddings, 
-                    torch.max(graph_last_embeddings_target, graph_last_embeddings_source)
+                    seq_last_embeddings_target, 
+                    torch.max(mha_last_embeddings_target, mha_last_embeddings_source)
                 )  # (batch_size, embedding_dim)
 
                 candidate_scores = torch.einsum(
@@ -376,8 +378,8 @@ class GTOModel(SequentialTorchModel, config_name='gtorec'):
                 candidate_embeddings = self._item_embeddings.weight  # (num_items, embedding_dim)
 
                 aggregated_last_embeddings = torch.max(
-                    last_embeddings, 
-                    torch.max(graph_last_embeddings_target, graph_last_embeddings_source)
+                    seq_last_embeddings_target, 
+                    torch.max(mha_last_embeddings_target, mha_last_embeddings_source)
                 )  # (batch_size, embedding_dim)
 
                 candidate_scores = torch.einsum(
