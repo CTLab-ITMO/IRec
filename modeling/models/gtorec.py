@@ -204,7 +204,7 @@ class GTOModel(SequentialTorchModel, config_name='gtorec'):
         # sequential model encoder and target domain items embeddings from sequential model
         seq_embeddings_target, seq_mask_target = self._apply_sequential_encoder(
             all_sample_events_target, all_sample_lengths_target
-        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
+        )  # (batch_size, target_seq_len, embedding_dim), (batch_size, target_seq_len)
         seq_last_embeddings_target = self._get_last_embedding(seq_embeddings_target, seq_mask_target)  # (batch_size, embedding_dim) # last embeddings, used for forecasting
         
         # target domain items encoder for graph model
@@ -218,13 +218,13 @@ class GTOModel(SequentialTorchModel, config_name='gtorec'):
         graph_embeddings_target, graph_item_ego_embeddings_target, graph_item_mask_target = self._get_graph_embeddings(
             inputs, self._sequence_prefix, self._graph_item_embeddings, all_final_item_embeddings_target
         )
-        graph_item_embeddings_target = graph_embeddings_target[graph_item_mask_target]  # (batch_size, embedding_dim) 
+        graph_item_embeddings_target = graph_embeddings_target[graph_item_mask_target]  # (batch_size, target_seq_len, embedding_dim) 
         #graph_last_embeddings_target = self._get_last_embedding(graph_embeddings_target, graph_item_mask_target)  # (batch_size, embedding_dim)
         # source domain items embeddings from graph model
         graph_embeddings_source, graph_item_ego_embeddings_source, graph_item_mask_source = self._get_graph_embeddings(
             inputs, self._sequence_prefix, self._graph_item_embeddings, all_final_item_embeddings_source
         )
-        graph_item_embeddings_source = graph_embeddings_source[graph_item_mask_source]  # (batch_size, embedding_dim) 
+        graph_item_embeddings_source = graph_embeddings_source[graph_item_mask_source]  # (batch_size, source_seq_len, embedding_dim) 
         #graph_last_embeddings_source = self._get_last_embedding(graph_embeddings_source, graph_item_mask_source)  # (batch_size, embedding_dim)
 
         # embeddings + graph_embeddings_target -> cross-attention
@@ -238,7 +238,7 @@ class GTOModel(SequentialTorchModel, config_name='gtorec'):
                 v=graph_embeddings_target,
                 attn_mask=None,
                 key_padding_mask=~graph_item_mask_target
-            ))  # (batch_size, seq_len, embedding_dim)
+            ))  # (batch_size, target_seq_len, embedding_dim)
             graph_embeddings_target = graph_embeddings_target + self.norm2(self._ff_block(graph_embeddings_target))
         else:
             graph_embeddings_target = self.norm1(graph_embeddings_target + self._ca_block(
@@ -247,11 +247,11 @@ class GTOModel(SequentialTorchModel, config_name='gtorec'):
                 v=graph_embeddings_target,
                 attn_mask=None,
                 key_padding_mask=~graph_item_mask_target
-            ))  # (batch_size, seq_len, embedding_dim)
+            ))  # (batch_size, target_seq_len, embedding_dim)
             graph_embeddings_target = self.norm2(graph_embeddings_target + self._ff_block(graph_embeddings_target))
         # target-target cross-attention result
         mha_embeddings_target = torch.cat([seq_embeddings_target, graph_embeddings_target], dim=-1)
-        mha_embeddings_target = self._mha_output_projection(mha_embeddings_target)  # (batch_size, seq_len, embedding_dim)
+        mha_embeddings_target = self._mha_output_projection(mha_embeddings_target)  # (batch_size, target_seq_len, embedding_dim)
         mha_last_embeddings_target = self._get_last_embedding(mha_embeddings_target, seq_mask_target)  # (batch_size, embedding_dim)
 
         # embeddings + graph_embeddings_source -> cross-attention
@@ -305,10 +305,10 @@ class GTOModel(SequentialTorchModel, config_name='gtorec'):
             # b - batch_size, s - seq_len, d - embedding_dim
             graph_positive_scores_target = torch.einsum(
                 'bd,bsd->bs', graph_item_embeddings_target, graph_positive_embeddings_target
-            )  # (batch_size, seq_len)
+            )  # (batch_size, target_seq_len)
             graph_negative_scores_target = torch.einsum(
                 'bd,bsd->bs', graph_item_embeddings_target, graph_negative_embeddings_target
-            )  # (batch_size, seq_len)
+            )  # (batch_size, target_seq_len)
             graph_positive_scores_target = graph_positive_scores_target[graph_positive_mask_target]  # (all_batch_events)
             graph_negative_scores_target = graph_negative_scores_target[graph_negative_mask_target]  # (all_batch_events)
 
@@ -322,10 +322,10 @@ class GTOModel(SequentialTorchModel, config_name='gtorec'):
             # b - batch_size, s - seq_len, d - embedding_dim
             graph_positive_scores_source = torch.einsum(
                 'bd,bsd->bs', graph_item_embeddings_source, graph_positive_embeddings_source
-            )  # (batch_size, seq_len)
+            )  # (batch_size, source_seq_len)
             graph_negative_scores_source = torch.einsum(
                 'bd,bsd->bs', graph_item_embeddings_source, graph_negative_embeddings_source
-            )  # (batch_size, seq_len)
+            )  # (batch_size, source_seq_len)
             graph_positive_scores_source = graph_positive_scores_source[graph_positive_mask_source]  # (all_batch_events)
             graph_negative_scores_source = graph_negative_scores_source[graph_negative_mask_source]  # (all_batch_events)
 

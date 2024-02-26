@@ -129,9 +129,9 @@ def main():
         optimizer=optimizer,
         loss_function=loss_function,
         callback=callback,
-        epoch_cnt=config.get('train_epochs_num', None),
-        step_cnt=config.get('train_steps_num', None),
-        best_metric=config.get('best_metric', None)
+        epoch_cnt=config.get('train_epochs_num'),
+        step_cnt=config.get('train_steps_num'),
+        best_metric=config.get('best_metric')
     )
 
     logger.debug('Saving model...')

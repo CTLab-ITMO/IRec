@@ -45,14 +45,13 @@ def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_pat
     for metric_name, metric_value in running_metrics.items():
         logger.info('{}: {}'.format(metric_name, np.mean(metric_value)))
 
-    if not(output_path is None):
+    if output_path is not None:
         line = {
             'datetime': str(datetime.datetime.now().replace(microsecond=0))
         }
         
-        if not(output_params is None):
-            for param_name, param_value in output_params.items():
-                line[param_name] = param_value
+        if output_params is not None:
+            line.update(output_params)
         
         for metric_name, metric_value in running_metrics.items():
             line[metric_name] = round(np.mean(metric_value), 8)
@@ -70,12 +69,18 @@ def main():
         'experiment_name': config['experiment_name'],
         'model': config['model']['type']
     }
-    if config['dataset'].get('dataset', None) is None:
+    if 'dataset' not in config['dataset']:
         output_params['dataset'] = config['dataset']['name'].split('/')[0]
-        output_params['domain'] = config['dataset'].get('target_domain', config['dataset']['name'].split('/')[1])
+        if 'target_domain' in config['dataset']: 
+            output_params['domain'] = config['dataset']['target_domain']
+        else:
+            output_params['domain'] = config['dataset']['name'].split('/')[1]
     else:
         output_params['dataset'] = config['dataset']['dataset']['name'].split('/')[0]
-        output_params['domain'] = config['dataset']['dataset'].get('target_domain', config['dataset']['dataset']['name'].split('/')[1])
+        if 'target_domain' in config['dataset']['dataset']:
+            output_params['domain'] = config['dataset']['dataset']['target_domain']
+        else:
+            output_params['domain'] = config['dataset']['dataset']['name'].split('/')[1]
 
     logger.debug('Inference config: \n{}'.format(json.dumps(config, indent=2)))
 
