@@ -1,0 +1,198 @@
+{
+  "experiment_name": "gtorec_AmazonReviews2018_Books",
+  "train_epochs_num": 40,
+  "train_steps_num": 20000,
+  "best_metric": "validation/ndcg@20",
+  "dataset": {
+    "type": "graph",
+    "graph_dir_path": "../data/AmazonReviews2018/Books",
+    "dataset": {
+      "type": "multi_domain_scientific",
+      "path_to_data_dir": "../data",
+      "name": "AmazonReviews2018",
+	  "target_domain": "Books",
+	  "other_domains": ["Movies"],
+      "max_sequence_length": 50,
+      "samplers": {
+        "num_negatives_val": 100,
+        "type": "multi_domain_next_item_prediction",
+        "negative_sampler_type": "random"
+      }
+    }
+  },
+  "dataloader": {
+    "train": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "basic"
+      },
+      "drop_last": true,
+      "shuffle": true
+    },
+    "validation": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "basic"
+      },
+      "drop_last": false,
+      "shuffle": false
+    }
+  },
+  "model": {
+    "type": "gtorec",
+    "sequence_prefix": "item",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
+    "candidate_prefix": "candidates",
+    "embedding_dim": 64,
+    "num_heads": 2,
+    "num_layers": 2,
+    "dim_feedforward": 256,
+    "dropout": 0.3,
+    "activation": "relu",
+    "layer_norm_eps": 1e-9,
+    "initializer_range": 0.02,
+    "norm_first": true,
+    "user_prefix": "user",
+    "graph_embedding_dim": 64,
+    "graph_num_layers": 3,
+    "graph_dropout": 0.3
+  },
+  "optimizer": {
+    "type": "basic",
+    "optimizer": {
+      "type": "adam",
+      "lr": 0.001
+    }
+  },
+  "loss": {
+    "type": "composite",
+    "losses": [
+      {
+        "type": "sasrec",
+        "positive_prefix": "positive_embeddings",
+        "negative_prefix": "negative_embeddings",
+        "representation_prefix": "current_embeddings",
+        "output_prefix": "gtorec_sequential_downstream_loss"
+      },
+      {
+        "type": "bpr",
+        "positive_prefix": "graph_positive_scores_target",
+        "negative_prefix": "graph_negative_scores_target",
+        "output_prefix": "gtorec_graph_target_domain_downstream_loss"
+      },
+      {
+        "type": "regularization",
+        "prefix": ["graph_positive_embeddings_target", "graph_negative_embeddings_target", "graph_item_embeddings_target"],
+        "weight": 0.5,
+        "output_prefix": "gtorec_graph_target_domain_regularization_loss"
+      },
+      {
+        "type": "bpr",
+        "positive_prefix": "graph_positive_scores_source",
+        "negative_prefix": "graph_negative_scores_source",
+        "output_prefix": "gtorec_graph_source_domain_downstream_loss"
+      },
+      {
+        "type": "regularization",
+        "prefix": ["graph_positive_embeddings_source", "graph_negative_embeddings_source", "graph_item_embeddings_source"],
+        "weight": 0.5,
+        "output_prefix": "gtorec_graph_source_domain_regularization_loss"
+      },
+      {
+        "type": "sasrec",
+        "positive_prefix": "mha_positive_embeddings_target",
+        "negative_prefix": "mha_negative_embeddings_target",
+        "representation_prefix": "mha_embeddings_target",
+        "output_prefix": "gtorec_mha_target_domain_sequential_downstream_loss"
+      },
+      {
+        "type": "sasrec",
+        "positive_prefix": "mha_positive_embeddings_source",
+        "negative_prefix": "mha_negative_embeddings_source",
+        "representation_prefix": "mha_embeddings_source",
+        "output_prefix": "gtorec_mha_source_domain_sequential_downstream_loss"
+      }
+    ],
+    "output_prefix": "gtorec_loss"
+  },
+  "callback": {
+    "type": "composite",
+    "callbacks": [
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "gtorec_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "gtorec_sequential_downstream_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "gtorec_graph_target_domain_downstream_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "gtorec_graph_target_domain_regularization_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "gtorec_graph_source_domain_downstream_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "gtorec_graph_source_domain_regularization_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "gtorec_mha_target_domain_sequential_downstream_loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "gtorec_mha_source_domain_sequential_downstream_loss"
+      },
+      {
+        "type": "validation",
+        "on_step": 128,
+        "pred_prefix": "logits",
+        "labels_prefix": "labels",
+        "metrics": {
+          "ndcg@5": {
+            "type": "ndcg",
+            "k": 5
+          },
+          "ndcg@10": {
+            "type": "ndcg",
+            "k": 10
+          },
+          "ndcg@20": {
+            "type": "ndcg",
+            "k": 20
+          },
+          "recall@5": {
+            "type": "recall",
+            "k": 5
+          },
+          "recall@10": {
+            "type": "recall",
+            "k": 10
+          },
+          "recall@20": {
+            "type": "recall",
+            "k": 20
+          }
+        }
+      }
+    ]
+  }
+}
