@@ -200,6 +200,9 @@ class GTOModel(SequentialTorchModel, config_name='gtorec'):
         # source domain item sequence
         all_sample_events_source = inputs['{}.{}.ids'.format(self._sequence_prefix, self._source_domain)]  # (all_batch_events)
         all_sample_lengths_source = inputs['{}.{}.length'.format(self._sequence_prefix, self._source_domain)]  # (batch_size)
+        # global for global graph
+        all_sample_events_global = all_sample_events_target + all_sample_events_source
+        all_sample_lengths_global = all_sample_lengths_target + all_sample_lengths_source
 
         # sequential model encoder and target domain items embeddings from sequential model
         seq_embeddings_target, seq_mask_target = self._apply_sequential_encoder(
@@ -207,6 +210,7 @@ class GTOModel(SequentialTorchModel, config_name='gtorec'):
         )  # (batch_size, target_seq_len, embedding_dim), (batch_size, target_seq_len)
 
         # target domain items encoder for graph model
+        # Q: здесь нужно изменить 
         all_final_user_embeddings_target, all_final_item_embeddings_target = \
             self._apply_graph_encoder(all_sample_events_target, all_sample_lengths_target)  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
         # source domain items encoder for graph model
