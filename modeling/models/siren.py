@@ -19,7 +19,6 @@ class SiReNModel(TorchModel, config_name='siren'):
             embedding_dim,
             num_layers,
             mlp_layers,
-            offset,
             graph,
             dropout=0.0,
             initializer_range=0.02,
@@ -34,7 +33,6 @@ class SiReNModel(TorchModel, config_name='siren'):
         self._embedding_dim = embedding_dim
         self._num_layers = num_layers
         self._dropout_rate = dropout
-        self._offset = offset
         self._mlp_layers = mlp_layers
 
         self._output_projection = nn.Linear(
@@ -90,7 +88,6 @@ class SiReNModel(TorchModel, config_name='siren'):
             mlp_layers=config['mlp_layers'],
             dropout=config.get('dropout', 0.0),
             initializer_range=config.get('initializer_range', 0.02),
-            offset=config['offset'],
             graph=kwargs['graph']
         )
 
@@ -181,6 +178,15 @@ class SiReNModel(TorchModel, config_name='siren'):
         user_embeddings = user_embeddings[user_mask]  # (all_batch_events, embedding_dim)
 
         if self.training:  # training mode
+            print(f"""users {inputs['user.ids']}""")
+            print(f"""len users {len(inputs['user.ids'])}""")
+            print(f"""items {inputs['item.ids']}""")
+            print(f"""len items {len(inputs['item.ids'])}""")
+            print(f"""ratings {inputs['ratings.ids']}""")
+            print(f"""len ratings {len(inputs['ratings.ids'])}""")
+            print(f"""negatives {inputs['negatives.ids']}""")
+            print(f"""len negatives {len(inputs['negatives.ids'])}""")
+
             positive_embeddings, _, positive_mask = self._get_embeddings(
                 inputs, self._positive_prefix, self._item_embeddings, all_final_item_embeddings
             )  # (batch_size, seq_len, embedding_dim)

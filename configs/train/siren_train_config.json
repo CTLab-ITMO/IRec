@@ -16,7 +16,8 @@
         "type": "negative_ratings_next_item_prediction",
         "negative_sampler_type": "negative_ratings_negative_sampler",
         "negative_sampler_type_graph": "random",
-        "positive_domain": "positive"
+        "positive_domain": "positive",
+        "offset": 4
       }
     }
   },
@@ -50,8 +51,7 @@
     "embedding_dim": 64,
     "num_layers": 3,
     "dropout": 0.5,
-    "initializer_range": 0.02,
-    "offset": 3.5
+    "initializer_range": 0.02
   },
   "optimizer": {
     "type": "basic",

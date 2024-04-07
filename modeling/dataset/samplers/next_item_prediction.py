@@ -408,7 +408,8 @@ class NegativeRatingsNextItemPredictionTrainSampler(NegativeRatingsTrainSampler,
             negative_domain,
             num_negatives,
             negative_sampler,
-            negative_sampler_graph
+            negative_sampler_graph,
+            offset
     ):
 
         super().__init__(positive_domain, negative_domain)
@@ -418,6 +419,7 @@ class NegativeRatingsNextItemPredictionTrainSampler(NegativeRatingsTrainSampler,
         self._num_negatives = num_negatives
         self._negative_sampler = negative_sampler
         self._negative_sampler_graph = negative_sampler_graph
+        self._offset = offset
         self._user_id_to_index_cross_domain_mapping = self.get_user_id_to_index_cross_domain_mapping()
 
     def get_user_id_to_index_cross_domain_mapping(self):
@@ -441,7 +443,8 @@ class NegativeRatingsNextItemPredictionTrainSampler(NegativeRatingsTrainSampler,
             negative_domain=config['negative_domain'],
             negative_sampler_graph=negative_sampler_graph,
             negative_sampler=negative_sampler,
-            num_negatives=config.get('num_negatives_train', -1)
+            num_negatives=config.get('num_negatives_train', -1),
+            offset=config['offset']
         )
 
     def __getitem__(self, index):
@@ -469,13 +472,13 @@ class NegativeRatingsNextItemPredictionTrainSampler(NegativeRatingsTrainSampler,
         len_item_sequence = len(item_sequence)
         ratings = ratings_positive_domain + ratings_negative_domain
         result = {
-            'user.ids': sample_positive_domain['user.ids'] * len_item_sequence,
+            'user.ids': [sample_positive_domain['user.ids'][0] - 1] * len_item_sequence,
             'user.length': len_item_sequence,
 
-            'item.ids': item_sequence,
+            'item.ids': [item - 1 + self._num_users for item in item_sequence],
             'item.length': len_item_sequence,
 
-            'ratings.ids': ratings,
+            'ratings.ids': [rating - self._offset for rating in ratings],
             'ratings.length': len(ratings),
 
             'negatives.ids': negatives,
@@ -507,7 +510,8 @@ class NegativeRatingsNextItemPredictionValidationSampler(NegativeRatingsValidati
             positive_domain,
             negative_domain,
             negative_sampler_graph,
-            num_negatives
+            num_negatives,
+            offset
     ):
 
         super().__init__(positive_domain, negative_domain)
@@ -516,6 +520,7 @@ class NegativeRatingsNextItemPredictionValidationSampler(NegativeRatingsValidati
         self._num_items = num_items
         self._negative_sampler_graph = negative_sampler_graph
         self._num_negatives = num_negatives
+        self._offset = offset
         self._user_id_to_index_cross_domain_mapping = self.get_user_id_to_index_cross_domain_mapping()
 
     def get_user_id_to_index_cross_domain_mapping(self):
@@ -537,7 +542,8 @@ class NegativeRatingsNextItemPredictionValidationSampler(NegativeRatingsValidati
             negative_sampler_graph=negative_sampler_graph,
             num_negatives=config['num_negatives_val'],
             positive_domain=config['positive_domain'],
-            negative_domain=config['negative_domain']
+            negative_domain=config['negative_domain'],
+            offset=config['offset']
         )
 
     def __getitem__(self, index):
@@ -562,17 +568,17 @@ class NegativeRatingsNextItemPredictionValidationSampler(NegativeRatingsValidati
         len_item_sequence = len(item_sequence)
         ratings = ratings_positive_domain + ratings_negative_domain
         result = {
-            'user.ids': sample_positive_domain['user.ids'] * len_item_sequence,
+            'user.ids': [sample_positive_domain['user.ids'][0] - 1] * len_item_sequence,
             'user.length': len_item_sequence,
 
-            'item.ids': item_sequence,
+            'item.ids': [item - 1 + self._num_users for item in item_sequence],
             'item.length': len_item_sequence,
+
+            'ratings.ids': [rating - self._offset for rating in ratings],
+            'ratings.length': len(ratings),
 
             'user.graph.ids': sample_positive_domain['user.ids'],
             'user.graph.length': len(sample_positive_domain['user.ids']),
-
-            'ratings.ids': ratings,
-            'ratings.length': len(ratings),
 
             'item.graph.ids': item_sequence_positive_domain,
             'item.graph.length': len(item_sequence_positive_domain),
@@ -595,13 +601,15 @@ class NegativeRatingsNextItemPredictionEvalSampler(NegativeRatingsEvalSampler,
             num_users,
             num_items,
             positive_domain,
-            negative_domain
+            negative_domain,
+            offset
     ):
 
         super().__init__(dataset, num_users, num_items, positive_domain, negative_domain)
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
+        self._offset = offset
         self._user_id_to_index_cross_domain_mapping = self.get_user_id_to_index_cross_domain_mapping()
 
     def get_user_id_to_index_cross_domain_mapping(self):
@@ -620,6 +628,7 @@ class NegativeRatingsNextItemPredictionEvalSampler(NegativeRatingsEvalSampler,
             num_items=kwargs['num_items'],
             positive_domain=config['positive_domain'],
             negative_domain=config['negative_domain'],
+            offset=config['offset']
         )
 
     def __getitem__(self, index):
@@ -641,13 +650,13 @@ class NegativeRatingsNextItemPredictionEvalSampler(NegativeRatingsEvalSampler,
         len_item_sequence = len(item_sequence)
         ratings = ratings_positive_domain + ratings_negative_domain
         result = {
-            'user.ids': sample_positive_domain['user.ids'] * len_item_sequence,
+            'user.ids': [sample_positive_domain['user.ids'][0] - 1] * len_item_sequence,
             'user.length': len_item_sequence,
 
-            'item.ids': item_sequence,
+            'item.ids': [item - 1 + self._num_users for item in item_sequence],
             'item.length': len_item_sequence,
 
-            'ratings.ids': ratings,
+            'ratings.ids': [rating - self._offset for rating in ratings],
             'ratings.length': len(ratings),
 
             'user.graph.ids': sample_positive_domain['user.ids'],
