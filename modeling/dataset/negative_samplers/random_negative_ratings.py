@@ -2,18 +2,20 @@ from collections import defaultdict
 
 from tqdm import tqdm
 
-from dataset.negative_samplers.base import BaseNegativeSampler
+from dataset.negative_samplers import BaseNegRatingsNegativeSampler
 
 import numpy as np
 
 
-class RandomNegativeSampler(BaseNegativeSampler, config_name='random'):
+class RandomNegativeRatingsSampler(BaseNegRatingsNegativeSampler, config_name='random'):
     @classmethod
     def create_from_config(cls, _, **kwargs):
         return cls(
             dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
-            num_items=kwargs['num_items']
+            num_items=kwargs['num_items'],
+            items_popularity=kwargs['items_popularity'],
+            positive_domain=kwargs['positive_domain']
         )
 
     def generate_negative_samples(self, sample, num_negatives):

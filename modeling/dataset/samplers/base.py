@@ -17,7 +17,7 @@ class TrainSampler(metaclass=MetaParent):
 
     def __getitem__(self, index):
         raise NotImplementedError
-    
+
 
 class MultiDomainTrainSampler(TrainSampler):
 
@@ -39,6 +39,32 @@ class MultiDomainTrainSampler(TrainSampler):
         raise NotImplementedError
 
 
+# TODO use this samplers
+class NegativeRatingsTrainSampler(TrainSampler):
+
+    def __init__(self, positive_domain, negative_domain):
+        super().__init__()
+        self._positive_domain = positive_domain
+        self._negative_domain = negative_domain
+
+    @property
+    def dataset(self, domain):
+        return self._dataset[domain]
+
+    def __len__(self, domain=None):
+        if domain is None:
+            return len(self._dataset[self._positive_domain])
+        return len(self._dataset[domain])
+
+    def __getitem__(self, index):
+        # TODO логика которая в siren 20 эпох - переместить сюда, сделать без эпох, на каждый getitem для одного юзера
+        #  if EPOCH % 20 - 1 == 0: training_dataset.negs_gen_EP(20)
+        #   training_dataset.edge_4 = training_dataset.edge_4_tot[:, :, EPOCH % 20 - 1]
+        #    По индексу который приходит, достать u, v, w
+        # TODO ?
+        raise NotImplementedError
+
+
 class ValidationSampler(metaclass=MetaParent):
 
     def __init__(self):
@@ -53,7 +79,7 @@ class ValidationSampler(metaclass=MetaParent):
 
     def __getitem__(self, index):
         raise NotImplementedError
-    
+
 
 class MultiDomainValidationSampler(ValidationSampler):
 
@@ -69,6 +95,27 @@ class MultiDomainValidationSampler(ValidationSampler):
     def __len__(self, domain=None):
         if domain is None:
             return len(self._dataset[self._target_domain])
+        return len(self._dataset[domain])
+
+    def __getitem__(self, index):
+        raise NotImplementedError
+
+
+# TODO use this samplers
+class NegativeRatingsValidationSampler(ValidationSampler):
+
+    def __init__(self, positive_domain, negative_domain):
+        super().__init__()
+        self._positive_domain = positive_domain
+        self._negative_domain = negative_domain
+
+    @property
+    def dataset(self, domain):
+        return self._dataset[domain]
+
+    def __len__(self, domain=None):
+        if domain is None:
+            return len(self._dataset[self._positive_domain])
         return len(self._dataset[domain])
 
     def __getitem__(self, index):
@@ -110,13 +157,13 @@ class EvalSampler(metaclass=MetaParent):
 
 class MultiDomainEvalSampler(EvalSampler):
 
-    def __init__(self, 
-                 dataset, 
-                 num_users, 
-                 num_items, 
-                 target_domain, 
+    def __init__(self,
+                 dataset,
+                 num_users,
+                 num_items,
+                 target_domain,
                  other_domains
-    ):
+                 ):
         super().__init__(dataset, num_users, num_items)
         self._target_domain = target_domain
         self._other_domains = other_domains
@@ -141,4 +188,48 @@ class MultiDomainEvalSampler(EvalSampler):
 
             'labels.ids': [next_item],
             'labels.length': 1
+        }
+
+
+# TODO use this samplers
+class NegativeRatingsEvalSampler(EvalSampler):
+
+    def __init__(self,
+                 dataset,
+                 num_users,
+                 num_items,
+                 positive_domain,
+                 negative_domain
+                 ):
+        super().__init__(dataset, num_users, num_items)
+        self._positive_domain = positive_domain
+        self._negative_domain = negative_domain
+
+    def __len__(self, domain=None):
+        if domain is None:
+            return len(self._dataset[self._positive_domain])
+        return len(self._dataset[domain])
+
+    def __getitem__(self, index, domain):
+        sample = copy.deepcopy(self._dataset[domain][index])
+
+        item_sequence = sample['item.ids'][:-1]
+        ratings_sequence = sample['ratings.ids'][:-1]
+
+        next_item = sample['item.ids'][-1]
+        next_item_rating = sample['ratings.ids'][-1]
+
+        return {
+            'user.ids': sample['user.ids'],
+            'user.length': sample['user.length'],
+
+            'item.ids': item_sequence,
+            'item.length': len(item_sequence),
+
+            'ratings.ids': ratings_sequence,
+            'ratings.length': len(ratings_sequence),
+
+            'labels.ids': [next_item],
+            'labels.ratings': [next_item_rating],
+            'labels.length': 1,
         }
