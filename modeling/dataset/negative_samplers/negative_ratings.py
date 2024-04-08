@@ -20,5 +20,5 @@ class NegativeRatingsNegativeSampler(BaseNegRatingsNegativeSampler, config_name=
         users_items = sample['item.ids']
         none_interactions = setdiff1d(self._all_items, users_items)
         probabilities = self._items_popularity[none_interactions] / self._items_popularity[none_interactions].sum()
-        temp = (tensor(random.choice(none_interactions, num_negatives, replace=True, p=probabilities)) + self._num_users).long()
+        temp = (tensor(random.choice(none_interactions, num_negatives, replace=True, p=probabilities))).long()
         return temp

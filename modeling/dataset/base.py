@@ -1132,7 +1132,7 @@ class NegativeRatingsScientificDataset(ScientificDataset, config_name='negative_
             with open(dataset_path, 'r') as f:
                 for user_items_info, ratings in zip_longest(*[f] * 2):
                     user_items_info = user_items_info.strip('\n').split(' ')
-                    ratings = [int(x) for x in ratings.strip('\n').split(' ')]
+                    ratings = [float(x) for x in ratings.strip('\n').split(' ')]
                     user_idx = int(user_items_info[0])
                     item_ids = [int(item_id) for item_id in user_items_info[1:]]
                     items_count = dict(Counter(item_ids[:-2][-max_sequence_length:]))

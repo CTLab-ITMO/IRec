@@ -58,6 +58,9 @@ class NegativeBatchProcessor(BaseBatchProcessor, config_name='negative_batch'):
                         processed_batch[f'{prefix}.length'].append(sample[f'{prefix}.length'])
 
         for part, values in processed_batch.items():
-            processed_batch[part] = torch.tensor(values, dtype=torch.long)
+            if part == 'ratings.ids':
+                processed_batch[part] = torch.tensor(values, dtype=torch.float)
+            else:
+                processed_batch[part] = torch.tensor(values, dtype=torch.long)
 
         return processed_batch

@@ -13,3 +13,4 @@ from .random import RandomModel
 from .sasrec import SasRecModel
 from .sasrec_ce import SasRecCeModel
 from .s3rec import S3RecModel
+from .siren import SiReNModel
