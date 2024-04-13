@@ -109,7 +109,6 @@ class GRU4RecModel(GRUModel, config_name='gru4rec'):
             sequence_prefix,
             positive_prefix,
             negative_prefix,
-            candidate_prefix,
             num_items,
             max_sequence_length,
             embedding_dim,
@@ -132,7 +131,6 @@ class GRU4RecModel(GRUModel, config_name='gru4rec'):
         self._sequence_prefix = sequence_prefix
         self._positive_prefix = positive_prefix
         self._negative_prefix = negative_prefix
-        self._candidate_prefix = candidate_prefix
         self._init_weights(initializer_range)
 
     @classmethod
@@ -141,7 +139,6 @@ class GRU4RecModel(GRUModel, config_name='gru4rec'):
             sequence_prefix=config['sequence_prefix'],
             positive_prefix=config['positive_prefix'],
             negative_prefix=config['negative_prefix'],
-            candidate_prefix=config['candidate_prefix'],
             num_items=kwargs['num_items'],
             max_sequence_length=kwargs['max_sequence_length'],
             embedding_dim=config['embedding_dim'],
@@ -198,21 +195,9 @@ class GRU4RecModel(GRUModel, config_name='gru4rec'):
             candidate_scores[:, 0] = -torch.inf
             candidate_scores[:, self._num_items + 1:] = -torch.inf
 
-            if '{}.ids'.format(self._candidate_prefix) in inputs:
-                candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
-                candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
-
-                batch_size = candidate_lengths.shape[0]
-                num_candidates = candidate_lengths[0]
-
-                candidate_scores = torch.gather(
-                    input=candidate_scores,
-                    dim=1,
-                    index=torch.reshape(candidate_events, [batch_size, num_candidates])
-                )  # (batch_size, num_candidates)
-
             _, indices = torch.topk(
                 candidate_scores,
                 k=20, dim=-1, largest=True
             )  # (batch_size, 20)
+
             return indices

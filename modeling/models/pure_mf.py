@@ -13,7 +13,6 @@ class PureMF(TorchModel, config_name='pure_mf'):
             user_prefix,
             positive_prefix,
             negative_prefix,
-            candidate_prefix,
             num_users,
             num_items,
             embedding_dim,
@@ -24,7 +23,6 @@ class PureMF(TorchModel, config_name='pure_mf'):
         self._user_prefix = user_prefix
         self._positive_prefix = positive_prefix
         self._negative_prefix = negative_prefix
-        self._candidate_prefix = candidate_prefix
 
         self._num_users = num_users
         self._num_items = num_items
@@ -48,30 +46,11 @@ class PureMF(TorchModel, config_name='pure_mf'):
             user_prefix=config['user_prefix'],
             positive_prefix=config['positive_prefix'],
             negative_prefix=config['negative_prefix'],
-            candidate_prefix=config['candidate_prefix'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
             embedding_dim=config['embedding_dim'],
             initializer_range=config.get('initializer_range', 0.02)
         )
-
-    @torch.no_grad()
-    def _init_weights(self, initializer_range):
-        for key, value in self.named_parameters():
-            if 'weight' in key:
-                if 'norm' in key:
-                    nn.init.ones_(value.data)
-                else:
-                    nn.init.trunc_normal_(
-                        value.data,
-                        std=initializer_range,
-                        a=-2 * initializer_range,
-                        b=2 * initializer_range
-                    )
-            elif 'bias' in key:
-                nn.init.zeros_(value.data)
-            else:
-                raise ValueError(f'Unknown transformer weight: {key}')
 
     def forward(self, inputs):
         user_ids = inputs['{}.ids'.format(self._user_prefix)]  # (batch_size)
@@ -100,27 +79,18 @@ class PureMF(TorchModel, config_name='pure_mf'):
                 'negative_scores': negative_scores
             }
         else:
-            if '{}.ids'.format(self._candidate_prefix) in inputs:
-                candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
-                candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
-                candidate_embeddings = self._item_embeddings(candidate_events)  # (all_batch_candidates, embedding_dim)
-                candidate_embeddings, _ = create_masked_tensor(
-                    data=candidate_embeddings,
-                    lengths=candidate_lengths
-                )  # (batch_size, num_candidates, embedding_dim)
-                candidate_scores = torch.einsum(
-                    'bd,bnd->bn',
-                    user_embeddings,
-                    candidate_embeddings
-                )  # (batch_size, num_candidates)
-            else:
-                candidate_embeddings = self._item_embeddings.weight  # (num_items, embedding_dim)
-                candidate_scores = torch.einsum(
-                    'bd,nd->bn',
-                    user_embeddings,
-                    candidate_embeddings
-                )  # (batch_size, num_items)
-                candidate_scores[:, 0] = -torch.inf
-                candidate_scores[:, self._num_items + 1:] = -torch.inf
+            candidate_embeddings = self._item_embeddings.weight  # (num_items, embedding_dim)
+            candidate_scores = torch.einsum(
+                'bd,nd->bn',
+                user_embeddings,
+                candidate_embeddings
+            )  # (batch_size, num_items)
+            candidate_scores[:, 0] = -torch.inf
+            candidate_scores[:, self._num_items + 1:] = -torch.inf
 
-            return candidate_scores
+            _, indices = torch.topk(
+                candidate_scores,
+                k=20, dim=-1, largest=True
+            )  # (batch_size, 20)
+
+            return indices

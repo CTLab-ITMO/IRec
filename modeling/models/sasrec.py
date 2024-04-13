@@ -1,9 +1,6 @@
 from models.base import SequentialTorchModel
 
-from utils import create_masked_tensor
-
 import torch
-import torch.nn as nn
 
 
 class SasRecModel(SequentialTorchModel, config_name='sasrec'):
@@ -12,8 +9,6 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
             self,
             sequence_prefix,
             positive_prefix,
-            negative_prefix,
-            candidate_prefix,
             num_items,
             max_sequence_length,
             embedding_dim,
@@ -39,18 +34,6 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
         )
         self._sequence_prefix = sequence_prefix
         self._positive_prefix = positive_prefix
-        self._negative_prefix = negative_prefix
-        self._candidate_prefix = candidate_prefix
-
-        self._output_projection = nn.Linear(
-            in_features=embedding_dim,
-            out_features=embedding_dim
-        )
-
-        self._bias = nn.Parameter(
-            data=torch.zeros(num_items + 2),
-            requires_grad=True
-        )
 
         self._init_weights(initializer_range)
 
@@ -59,8 +42,6 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
         return cls(
             sequence_prefix=config['sequence_prefix'],
             positive_prefix=config['positive_prefix'],
-            negative_prefix=config['negative_prefix'],
-            candidate_prefix=config['candidate_prefix'],
             num_items=kwargs['num_items'],
             max_sequence_length=kwargs['max_sequence_length'],
             embedding_dim=config['embedding_dim'],
@@ -81,20 +62,28 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
 
         if self.training:  # training mode
             all_positive_sample_events = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
-            all_negative_sample_events = inputs['{}.ids'.format(self._negative_prefix)]  # (all_batch_events)
 
             all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
             all_positive_sample_embeddings = self._item_embeddings(
                 all_positive_sample_events
             )  # (all_batch_events, embedding_dim)
-            all_negative_sample_embeddings = self._item_embeddings(
-                all_negative_sample_events
-            )  # (all_batch_events, embedding_dim)
+
+            all_embeddings = self._item_embeddings.weight  # (num_items + 2, embedding_dim)
+
+            all_scores = torch.einsum(
+                'ad,nd->an',
+                all_sample_embeddings,
+                all_embeddings
+            )  # (all_batch_events, num_items + 2)
+            positive_scores = torch.gather(
+                input=all_scores,
+                dim=1,
+                index=all_positive_sample_events[..., None]
+            )  # (all_batch_items, 1)
 
             return {
-                'current_embeddings': all_sample_embeddings,
-                'positive_embeddings': all_positive_sample_embeddings,
-                'negative_embeddings': all_negative_sample_embeddings
+                'positive_scores': positive_scores,
+                'negative_scores': all_scores
             }
         else:  # eval mode
             last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
@@ -108,23 +97,10 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
             candidate_scores[:, 0] = -torch.inf
             candidate_scores[:, self._num_items + 1:] = -torch.inf
 
-            if '{}.ids'.format(self._candidate_prefix) in inputs:
-                candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
-                candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
-
-                batch_size = candidate_lengths.shape[0]
-                num_candidates = candidate_lengths[0]
-
-                candidate_scores = torch.gather(
-                    input=candidate_scores,
-                    dim=1,
-                    index=torch.reshape(candidate_events, [batch_size, num_candidates])
-                )  # (batch_size, num_candidates)
-
-            values, indices = torch.topk(
+            _, indices = torch.topk(
                 candidate_scores,
                 k=20, dim=-1, largest=True
-            )  # (batch_size, 20), (batch_size, 20)
+            )  # (batch_size, 20)
 
             return indices
 

@@ -39,42 +39,6 @@ class MultiDomainTrainSampler(TrainSampler):
         raise NotImplementedError
 
 
-class ValidationSampler(metaclass=MetaParent):
-
-    def __init__(self):
-        self._dataset = None
-
-    @property
-    def dataset(self):
-        return self._dataset
-
-    def __len__(self):
-        return len(self._dataset)
-
-    def __getitem__(self, index):
-        raise NotImplementedError
-    
-
-class MultiDomainValidationSampler(ValidationSampler):
-
-    def __init__(self, target_domain, other_domains):
-        super().__init__()
-        self._target_domain = target_domain
-        self._other_domains = other_domains
-
-    @property
-    def dataset(self, domain):
-        return self._dataset[domain]
-
-    def __len__(self, domain=None):
-        if domain is None:
-            return len(self._dataset[self._target_domain])
-        return len(self._dataset[domain])
-
-    def __getitem__(self, index):
-        raise NotImplementedError
-
-
 class EvalSampler(metaclass=MetaParent):
 
     def __init__(self, dataset, num_users, num_items):

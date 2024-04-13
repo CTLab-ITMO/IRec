@@ -14,7 +14,6 @@ class NgcfModel(TorchModel, config_name='ngcf'):
             user_prefix,
             positive_prefix,
             negative_prefix,
-            candidate_prefix,
             graph,
             num_users,
             num_items,
@@ -27,7 +26,6 @@ class NgcfModel(TorchModel, config_name='ngcf'):
         self._user_prefix = user_prefix
         self._positive_prefix = positive_prefix
         self._negative_prefix = negative_prefix
-        self._candidate_prefix = candidate_prefix
         self._graph = graph
         self._num_users = num_users
         self._num_items = num_items
@@ -61,7 +59,6 @@ class NgcfModel(TorchModel, config_name='ngcf'):
             user_prefix=config['user_prefix'],
             positive_prefix=config['positive_prefix'],
             negative_prefix=config['negative_prefix'],
-            candidate_prefix=config['candidate_prefix'],
             graph=kwargs['graph'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
@@ -173,19 +170,6 @@ class NgcfModel(TorchModel, config_name='ngcf'):
             )  # (batch_size, num_items + 2)
             candidate_scores[:, 0] = -torch.inf
             candidate_scores[:, self._num_items + 1:] = -torch.inf
-
-            if '{}.ids'.format(self._candidate_prefix) in inputs:
-                candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
-                candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
-
-                batch_size = candidate_lengths.shape[0]
-                num_candidates = candidate_lengths[0]
-
-                candidate_scores = torch.gather(
-                    input=candidate_scores,
-                    dim=1,
-                    index=torch.reshape(candidate_events, [batch_size, num_candidates])
-                )  # (batch_size, num_candidates)
 
             _, indices = torch.topk(
                 candidate_scores,
