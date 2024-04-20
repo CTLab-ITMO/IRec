@@ -1,6 +1,6 @@
 from models.base import TorchModel
 
-from utils import create_masked_tensor
+from utils import create_masked_tensor, DEVICE
 
 import torch
 import torch.nn as nn
@@ -13,7 +13,6 @@ class NgcfModel(TorchModel, config_name='ngcf'):
             self,
             user_prefix,
             positive_prefix,
-            negative_prefix,
             graph,
             num_users,
             num_items,
@@ -25,7 +24,6 @@ class NgcfModel(TorchModel, config_name='ngcf'):
         super().__init__()
         self._user_prefix = user_prefix
         self._positive_prefix = positive_prefix
-        self._negative_prefix = negative_prefix
         self._graph = graph
         self._num_users = num_users
         self._num_items = num_items
@@ -58,7 +56,6 @@ class NgcfModel(TorchModel, config_name='ngcf'):
         return cls(
             user_prefix=config['user_prefix'],
             positive_prefix=config['positive_prefix'],
-            negative_prefix=config['negative_prefix'],
             graph=kwargs['graph'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
@@ -134,31 +131,49 @@ class NgcfModel(TorchModel, config_name='ngcf'):
         user_embeddings = user_embeddings[user_mask]  # (all_batch_events, embedding_dim)
 
         if self.training:  # training mode
-            positive_embeddings, _, positive_mask = self._get_embeddings(
-                inputs, self._positive_prefix, self._item_embeddings, all_final_item_embeddings
-            )  # (batch_size, seq_len, embedding_dim)
-            negative_embeddings, _, negative_mask = self._get_embeddings(
-                inputs, self._negative_prefix, self._item_embeddings, all_final_item_embeddings
-            )  # (batch_size, seq_len, embedding_dim)
+            positive_item_ids = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
+            positive_item_lengths = inputs['{}.length'.format(self._positive_prefix)]  # (batch_size)
 
-            # b - batch_size, s - seq_len, d - embedding_dim
-            positive_scores = torch.einsum(
-                'bd,bsd->bs',
-                user_embeddings,
-                positive_embeddings
-            )  # (batch_size, seq_len)
-            negative_scores = torch.einsum(
-                'bd,bsd->bs',
-                user_embeddings,
-                negative_embeddings
-            )  # (batch_size, seq_len)
+            batch_size = positive_item_lengths.shape[0]
+            max_sequence_length = positive_item_lengths.max().item()
 
-            positive_scores = positive_scores[positive_mask]  # (all_batch_events)
-            negative_scores = negative_scores[negative_mask]  # (all_batch_events)
+            mask = torch.arange(
+                end=max_sequence_length,
+                device=DEVICE
+            )[None].tile([batch_size, 1]) < positive_item_lengths[:, None]  # (batch_size, max_seq_len)
+
+            positive_user_ids = torch.arange(
+                batch_size,
+                device=DEVICE
+            )[None].tile([max_sequence_length, 1]).T  # (batch_size, max_seq_len)
+            positive_user_ids = positive_user_ids[mask]  # (all_batch_items)
+            user_embeddings = user_embeddings[positive_user_ids]  # (all_batch_items, embedding_dim)
+
+            all_scores = torch.einsum(
+                'ad,nd->an',
+                user_embeddings,
+                all_final_item_embeddings
+            )  # (all_batch_items, num_items + 2)
+
+            negative_mask = torch.zeros(self._num_items + 2, dtype=torch.bool, device=DEVICE)  # (num_items + 2)
+            negative_mask[positive_item_ids] = 1
+
+            positive_scores = torch.gather(
+                input=all_scores,
+                dim=1,
+                index=positive_item_ids[..., None]
+            )  # (all_batch_items, 1)
+
+            all_scores = torch.scatter_add(
+                input=all_scores,
+                dim=1,
+                index=positive_item_ids[..., None],
+                src=torch.ones_like(positive_item_ids[..., None]).float()
+            )  # (all_batch_items, num_items + 2)
 
             return {
                 'positive_scores': positive_scores,
-                'negative_scores': negative_scores,
+                'negative_scores': all_scores,
                 'item_embeddings': torch.cat((self._user_embeddings.weight, self._item_embeddings.weight), dim=0)
             }
         else:  # eval mode

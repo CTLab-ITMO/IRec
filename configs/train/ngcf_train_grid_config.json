@@ -1,6 +1,6 @@
 {
   "start_from": 0,
-  "experiment_name": "light_gcn_beauty_grid",
+  "experiment_name": "ngcf_beauty_grid",
   "best_metric": "validation/ndcg@20",
   "num_exps": 60,
   "dataset": {
@@ -40,16 +40,13 @@
     }
   },
   "model": {
-    "type": "light_gcn",
+    "type": "ngcf",
     "user_prefix": "user",
     "positive_prefix": "positive",
     "embedding_dim": 64,
     "initializer_range": 0.02
   },
   "model_params": {
-    "num_layers": [
-      2,
-      3],
     "dropout": [
       0.2,
       0.3,
@@ -57,7 +54,10 @@
       0.5,
       0.6,
       0.7,
-      0.8]
+      0.8],
+    "num_layers": [
+      2,
+      3]
   },
   "optimizer": {
     "type": "basic",
@@ -75,13 +75,13 @@
         "type": "bpr",
         "positive_prefix": "positive_scores",
         "negative_prefix": "negative_scores",
-        "output_prefix": "lightgcn_downstream_loss"
+        "output_prefix": "ngcf_downstream_loss"
       },
       {
         "type": "regularization",
         "prefix": [
           "item_embeddings"],
-        "output_prefix": "lightgcn_regularization_loss"
+        "output_prefix": "ngcf_regularization_loss"
       }
     ],
     "output_prefix": "loss"
