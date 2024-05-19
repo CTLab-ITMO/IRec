@@ -9,7 +9,7 @@ from utils import parse_args, create_logger, DEVICE, Params, dict_to_str, fix_ra
 from train import train
 from infer import inference
 
-from callbacks import BaseCallback, EvalCallback
+from callbacks import BaseCallback, EvalCallback, ValidationCallback
 from dataset import BaseDataset
 from dataloader import BaseDataloader
 from loss import BaseLoss
@@ -113,11 +113,11 @@ def main():
             best_metric=config.get('best_metric')
         )
 
-        eval_model = BaseModel.create_from_config(config['model'], **dataset.meta).to(DEVICE)
+        eval_model = BaseModel.create_from_config(model_param, **dataset.meta).to(DEVICE)
         eval_model.load_state_dict(best_model_checkpoint)
 
         for cl in callback._callbacks:
-            if isinstance(cl, EvalCallback):
+            if isinstance(cl, ValidationCallback):
                 metrics = cl._metrics
                 pred_prefix = cl._pred_prefix
                 labels_prefix = cl._labels_prefix

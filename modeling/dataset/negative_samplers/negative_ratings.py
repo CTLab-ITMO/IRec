@@ -13,6 +13,7 @@ class NegativeRatingsNegativeSampler(BaseNegRatingsNegativeSampler, config_name=
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
             items_popularity=kwargs['items_popularity'],
+            negative_items_popularity=kwargs['negative_items_popularity'],
             positive_domain=kwargs['positive_domain']
         )
 

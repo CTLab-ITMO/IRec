@@ -14,3 +14,5 @@ from .sasrec import SasRecModel
 from .sasrec_ce import SasRecCeModel
 from .s3rec import S3RecModel
 from .siren import SiReNModel
+from .gsnrec3 import GSNRec3Model
+from .gsnrec5 import GSNRec5Model

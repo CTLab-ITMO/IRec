@@ -4,6 +4,7 @@ from utils import MetaParent, get_activation_function, maybe_to_list, DEVICE
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class BaseLoss(metaclass=MetaParent):
@@ -132,6 +133,87 @@ class BPRLoss(TorchLoss, config_name='bpr'):
         return loss
 
 
+class SBPRLoss(TorchLoss, config_name='sbpr'):
+
+    def __init__(
+            self,
+            positive_prefix,
+            negative_prefix,
+            ratings_prefix,
+            output_prefix=None
+    ):
+        super().__init__()
+        self._positive_prefix = positive_prefix
+        self._negative_prefix = negative_prefix
+        self._output_prefix = output_prefix
+        self._ratings_prefix = ratings_prefix
+
+    def forward(self, inputs):
+        pos_scores = inputs[self._positive_prefix]  # (all_batch_items)
+        neg_scores = inputs[self._negative_prefix]  # (all_batch_items)
+        ratings = inputs[self._ratings_prefix]
+
+        assert neg_scores.shape == pos_scores.shape
+
+        # loss = -(pos_scores - neg_scores).sigmoid().log().mean()  # (1)
+
+        loss = -(((-1 / 2 * torch.sign(ratings) + 3 / 2).view(len(pos_scores), 1) * pos_scores) - neg_scores).sigmoid().log().mean()
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss
+
+
+class ContrastiveLoss(TorchLoss, config_name='contrastive'):
+
+    def __init__(
+            self,
+            positive_prefix,
+            negative_prefix,
+            # ratings_prefix,
+            output_prefix=None,
+    ):
+        super().__init__()
+        self._positive_prefix = positive_prefix
+        self._negative_prefix = negative_prefix
+        self._output_prefix = output_prefix
+        # self._ratings_prefix = ratings_prefix
+
+        self.size_average = True
+
+    def distance_metric(self, z1, z2):
+        sim_matrix = 1 - F.cosine_similarity(z1, z2)
+
+        return sim_matrix
+
+    def forward(self, inputs):
+        rep_anchor = inputs[self._positive_prefix]
+        rep_other = inputs[self._negative_prefix]
+
+        assert rep_anchor.shape == rep_other.shape
+
+        # ratings = inputs[self._ratings_prefix]
+        # labels = ratings
+        margin = 0
+
+        distances = self.distance_metric(rep_anchor, rep_other)
+
+        # losses = 0.5 * (
+        #     labels.float() * distances.pow(2) +
+        #     (1 - labels).float() * F.relu(self.margin - distances).pow(2)
+        # )
+
+        # losses = 0.5 * F.relu(margin - distances).pow(2)
+
+        losses = 0.5 * distances.pow(2)
+        loss = losses.mean() if self.size_average else losses.sum()
+
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss
+
+
 class RegularizationLoss(TorchLoss, config_name='regularization'):
 
     def __init__(self, prefix, output_prefix=None):
@@ -142,7 +224,7 @@ class RegularizationLoss(TorchLoss, config_name='regularization'):
     def forward(self, inputs):
         loss = 0.0
         for prefix in self._prefix:
-            loss += (1/2) * inputs[prefix].pow(2).mean()
+            loss += (1 / 2) * inputs[prefix].pow(2).mean()
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()
@@ -234,6 +316,8 @@ class SASRecLoss(TorchLoss, config_name='sasrec'):
         current_embeddings = inputs[self._representation_prefix]  # (x, embedding_dim)
         assert positive_embeddings.shape[0] == negative_embeddings.shape[0] == current_embeddings.shape[0]
 
+        # positive_scores = positive_embeddings
+        # negative_scores = negative_embeddings
         positive_scores = torch.einsum(
             'bd,bd->b',
             positive_embeddings,

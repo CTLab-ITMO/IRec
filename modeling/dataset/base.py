@@ -1,24 +1,18 @@
+import logging
+import os
+import pickle
+from collections import Counter
 from collections import defaultdict
+from itertools import zip_longest
 
+import numpy as np
+import scipy.sparse as sp
+import torch
+from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
 from dataset.samplers import TrainSampler, ValidationSampler, EvalSampler
-from dataset.samplers import MultiDomainTrainSampler, MultiDomainValidationSampler, MultiDomainEvalSampler
-from dataset.samplers import NegativeRatingsTrainSampler, NegativeRatingsValidationSampler, \
-    NegativeRatingsEvalSampler
-
 from utils import MetaParent, DEVICE
-
-import pickle
-import torch
-import numpy as np
-import scipy.sparse as sp
-from scipy.sparse import csr_matrix
-from collections import Counter
-
-import os
-import logging
-from itertools import zip_longest
 
 logger = logging.getLogger(__name__)
 
@@ -581,8 +575,8 @@ class NegativeRatingsGraphDataset(BaseDataset, config_name='negative_ratings_gra
         visited_user_item_pairs = set()
 
         for sample in train_sampler:
-            user_id = sample['user.graph.ids'][0]
-            item_ids = sample['item.graph.ids']
+            user_id = sample['user.positive.ids'][0]
+            item_ids = sample['item.positive.ids']
 
             for item_id in item_ids:
                 if (user_id, item_id) not in visited_user_item_pairs:
@@ -597,8 +591,8 @@ class NegativeRatingsGraphDataset(BaseDataset, config_name='negative_ratings_gra
 
         if not self._use_train_data_only:
             for sample in validation_sampler:
-                user_id = sample['user.graph.ids'][0]
-                item_ids = sample['item.graph.ids']
+                user_id = sample['user.positive.ids'][0]
+                item_ids = sample['item.positive.ids']
 
                 for item_id in item_ids:
                     if (user_id, item_id) not in visited_user_item_pairs:
@@ -612,8 +606,8 @@ class NegativeRatingsGraphDataset(BaseDataset, config_name='negative_ratings_gra
                         visited_user_item_pairs.add((user_id, item_id))
 
             for sample in test_sampler:
-                user_id = sample['user.graph.ids'][0]
-                item_ids = sample['item.graph.ids']
+                user_id = sample['user.positive.ids'][0]
+                item_ids = sample['item.positive.ids']
 
                 for item_id in item_ids:
                     if (user_id, item_id) not in visited_user_item_pairs:
@@ -630,7 +624,7 @@ class NegativeRatingsGraphDataset(BaseDataset, config_name='negative_ratings_gra
         self._train_user_interactions = np.array(train_user_interactions)
         self._train_item_interactions = np.array(train_item_interactions)
 
-        path_to_graph = os.path.join(graph_dir_path, 'general_graph.npz')
+        path_to_graph = os.path.join(graph_dir_path, 'general_negative_graph.npz')
         if os.path.exists(path_to_graph):
             self._graph = sp.load_npz(path_to_graph)
         else:
@@ -648,91 +642,6 @@ class NegativeRatingsGraphDataset(BaseDataset, config_name='negative_ratings_gra
             sp.save_npz(path_to_graph, self._graph)
 
         self._graph = self._convert_sp_mat_to_sp_tensor(self._graph).coalesce().to(DEVICE)
-
-        if self._use_user_graph:
-            path_to_user_graph = os.path.join(graph_dir_path, 'user_graph.npz')
-            if os.path.exists(path_to_user_graph):
-                self._user_graph = sp.load_npz(path_to_user_graph)
-            else:
-                user2user_interactions_fst = []
-                user2user_interactions_snd = []
-                visited_user_item_pairs = set()
-                visited_user_user_pairs = set()
-
-                for user_id, item_id in tqdm(zip(self._train_user_interactions, self._train_item_interactions)):
-                    if (user_id, item_id) in visited_user_item_pairs:
-                        continue  # process (user, item) pair only once
-                    visited_user_item_pairs.add((user_id, item_id))
-
-                    for connected_user_id in train_item_2_users[item_id]:
-                        if (user_id, connected_user_id) in visited_user_user_pairs or user_id == connected_user_id:
-                            continue  # add (user, user) to graph connections pair only once
-                        visited_user_user_pairs.add((user_id, connected_user_id))
-
-                        user2user_interactions_fst.append(user_id)
-                        user2user_interactions_snd.append(connected_user_id)
-
-                # (user, user) graph
-                user2user_connections = csr_matrix(
-                    (
-                        np.ones(len(user2user_interactions_fst)),
-                        (user2user_interactions_fst, user2user_interactions_snd)),
-                    shape=(self._num_users + 2, self._num_users + 2)
-                )
-
-                self._user_graph = self.get_sparse_graph_layer(
-                    user2user_connections,
-                    self._num_users + 2,
-                    self._num_users + 2,
-                    biparite=False
-                )
-                sp.save_npz(path_to_user_graph, self._user_graph)
-
-            self._user_graph = self._convert_sp_mat_to_sp_tensor(self._user_graph).coalesce().to(DEVICE)
-        else:
-            self._user_graph = None
-
-        if self._use_item_graph:
-            path_to_item_graph = os.path.join(graph_dir_path, 'item_graph.npz')
-            if os.path.exists(path_to_item_graph):
-                self._item_graph = sp.load_npz(path_to_item_graph)
-            else:
-                item2item_interactions_fst = []
-                item2item_interactions_snd = []
-                visited_user_item_pairs = set()
-                visited_item_item_pairs = set()
-
-                for user_id, item_id in tqdm(zip(self._train_user_interactions, self._train_item_interactions)):
-                    if (user_id, item_id) in visited_user_item_pairs:
-                        continue  # process (user, item) pair only once
-                    visited_user_item_pairs.add((user_id, item_id))
-
-                    for connected_item_id in train_user_2_items[user_id]:
-                        if (item_id, connected_item_id) in visited_item_item_pairs or item_id == connected_item_id:
-                            continue  # add (item, item) to graph connections pair only once
-                        visited_item_item_pairs.add((item_id, connected_item_id))
-
-                        item2item_interactions_fst.append(item_id)
-                        item2item_interactions_snd.append(connected_item_id)
-
-                # (item, item) graph
-                item2item_connections = csr_matrix(
-                    (
-                        np.ones(len(item2item_interactions_fst)),
-                        (item2item_interactions_fst, item2item_interactions_snd)),
-                    shape=(self._num_items + 2, self._num_items + 2)
-                )
-                self._item_graph = self.get_sparse_graph_layer(
-                    item2item_connections,
-                    self._num_items + 2,
-                    self._num_items + 2,
-                    biparite=False
-                )
-                sp.save_npz(path_to_item_graph, self._item_graph)
-
-            self._item_graph = self._convert_sp_mat_to_sp_tensor(self._item_graph).coalesce().to(DEVICE)
-        else:
-            self._item_graph = None
 
     @classmethod
     def create_from_config(cls, config):
@@ -805,8 +714,6 @@ class NegativeRatingsGraphDataset(BaseDataset, config_name='negative_ratings_gra
     @property
     def meta(self):
         meta = {
-            'user_graph': self._user_graph,
-            'item_graph': self._item_graph,
             'graph': self._graph,
             **self._dataset.meta
         }
@@ -1107,11 +1014,13 @@ class NegativeRatingsScientificDataset(ScientificDataset, config_name='negative_
             num_items,
             max_sequence_length,
             positive_domain,
-            negative_domain
+            negative_domain,
+            negative_items_popularity
     ):
         super().__init__(train_sampler, validation_sampler, test_sampler, num_users, num_items, max_sequence_length)
         self._positive_domain = positive_domain
         self._negative_domain = negative_domain
+        self._negative_items_popularity = negative_items_popularity
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -1125,7 +1034,8 @@ class NegativeRatingsScientificDataset(ScientificDataset, config_name='negative_
         train_dataset, validation_dataset, test_dataset = {}, {}, {}
         max_user_idx_by_domain, max_item_idx_by_domain = {}, {}
 
-        count_items = {}
+        negative_count_items = {}
+        all_count_items = {}
         for domain in domains:
             dataset_path = os.path.join(data_dir_path, domain + '_data.txt')
             train_dataset[domain], validation_dataset[domain], test_dataset[domain] = [], [], []
@@ -1135,8 +1045,12 @@ class NegativeRatingsScientificDataset(ScientificDataset, config_name='negative_
                     ratings = [float(x) for x in ratings.strip('\n').split(' ')]
                     user_idx = int(user_items_info[0])
                     item_ids = [int(item_id) for item_id in user_items_info[1:]]
-                    items_count = dict(Counter(item_ids[:-2][-max_sequence_length:]))
-                    count_items = {k: count_items.get(k, 0) + items_count.get(k, 0) for k in set(count_items) | set(items_count)}
+                    items_dict = dict(Counter(item_ids))
+                    all_count_items = {k: all_count_items.get(k, 0) + items_dict.get(k, 0) for k in
+                                       set(all_count_items) | set(items_dict)}
+                    if domain == negative_domain:
+                        negative_count_items = {k: negative_count_items.get(k, 0) + items_dict.get(k, 0) for k in
+                                                set(negative_count_items) | set(items_dict)}
 
                     max_user_idx = max(max_user_idx, user_idx)
                     max_item_idx = max(max_item_idx, max(item_ids))
@@ -1152,7 +1066,7 @@ class NegativeRatingsScientificDataset(ScientificDataset, config_name='negative_
                         'ratings.ids': ratings[:-2][-max_sequence_length:],
                         'ratings.length': len(ratings[:-2][-max_sequence_length:])
                     })
-                    assert len(item_ids[:-2][-max_sequence_length:]) == len(set(item_ids[:-2][-max_sequence_length:]))
+                    # assert len(item_ids[:-2][-max_sequence_length:]) == len(set(item_ids[:-2][-max_sequence_length:]))
                     validation_dataset[domain].append({
                         'user.ids': [user_idx],
                         'user.length': 1,
@@ -1161,7 +1075,7 @@ class NegativeRatingsScientificDataset(ScientificDataset, config_name='negative_
                         'ratings.ids': ratings[:-1][-max_sequence_length:],
                         'ratings.length': len(ratings[:-1][-max_sequence_length:])
                     })
-                    assert len(item_ids[:-1][-max_sequence_length:]) == len(set(item_ids[:-1][-max_sequence_length:]))
+                    # assert len(item_ids[:-1][-max_sequence_length:]) == len(set(item_ids[:-1][-max_sequence_length:]))
                     test_dataset[domain].append({
                         'user.ids': [user_idx],
                         'user.length': 1,
@@ -1170,14 +1084,28 @@ class NegativeRatingsScientificDataset(ScientificDataset, config_name='negative_
                         'ratings.ids': ratings[-max_sequence_length:],
                         'ratings.length': len(ratings[-max_sequence_length:])
                     })
-                    assert len(item_ids[-max_sequence_length:]) == len(set(item_ids[-max_sequence_length:]))
+                    # assert len(item_ids[-max_sequence_length:]) == len(set(item_ids[-max_sequence_length:]))
 
                 max_user_idx_by_domain[domain] = max_user_idx
                 max_item_idx_by_domain[domain] = max_item_idx
-        items_popularity = np.zeros(max_item_idx)
-        for item_id, item_count in count_items.items():
-            items_popularity[item_id - 1] = item_count ** 0.75
-        items_popularity = torch.tensor(items_popularity)
+
+        # negative_items_popularity = np.zeros(max_item_idx)
+        # for item_id, item_count in negative_count_items.items():
+        #     negative_items_popularity[item_id - 1] = item_count ** 0.75
+
+        # negative_items_popularity = torch.tensor([[negative_count_items[i] ** 0.75] if i in negative_count_items.keys() else [0] for i in range(1, max_item_idx + 3)]).to(DEVICE)
+        max_negative_count_items = max(negative_count_items.values())
+        negative_items_popularity = torch.tensor(
+            [[(negative_count_items[i] / max_negative_count_items) ** 0.5] if i in negative_count_items.keys() else [0] for i in
+             range(1, max_item_idx + 3)]).to(DEVICE)
+
+        # all_items_popularity = np.zeros(max_item_idx)
+        # for item_id, item_count in all_count_items.items():
+        #     all_items_popularity[item_id - 1] = item_count ** 0.75
+        # all_items_popularity = torch.tensor(all_items_popularity).to(DEVICE)
+
+        all_items_popularity = torch.tensor(
+            [[all_count_items[i] ** 0.75] if i in all_count_items.keys() else [0] for i in range(1, max_item_idx + 3)]).to(DEVICE)
 
         logger.info('Max user idx: {}'.format(max_user_idx))
         logger.info('Max item idx: {}'.format(max_item_idx))
@@ -1198,7 +1126,8 @@ class NegativeRatingsScientificDataset(ScientificDataset, config_name='negative_
             dataset=train_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx,
-            items_popularity=items_popularity,
+            items_popularity=all_items_popularity,
+            negative_items_popularity=negative_items_popularity,
             positive_domain=positive_domain
         )
         validation_sampler = ValidationSampler.create_from_config(
@@ -1209,7 +1138,8 @@ class NegativeRatingsScientificDataset(ScientificDataset, config_name='negative_
             dataset=validation_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx,
-            items_popularity=items_popularity,
+            items_popularity=all_items_popularity,
+            negative_items_popularity=negative_items_popularity,
             positive_domain=positive_domain
         )
         test_sampler = EvalSampler.create_from_config(
@@ -1220,7 +1150,8 @@ class NegativeRatingsScientificDataset(ScientificDataset, config_name='negative_
             dataset=test_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx,
-            items_popularity=items_popularity,
+            items_popularity=all_items_popularity,
+            negative_items_popularity=negative_items_popularity,
             positive_domain=positive_domain
         )
 
@@ -1232,5 +1163,15 @@ class NegativeRatingsScientificDataset(ScientificDataset, config_name='negative_
             num_items=max_item_idx,
             max_sequence_length=max_sequence_length,
             positive_domain=positive_domain,
-            negative_domain=negative_domain
+            negative_domain=negative_domain,
+            negative_items_popularity=negative_items_popularity
         )
+
+    @property
+    def meta(self):
+        return {
+            'num_users': self.num_users,
+            'num_items': self.num_items,
+            'max_sequence_length': self.max_sequence_length,
+            'negative_items_popularity': self._negative_items_popularity
+        }

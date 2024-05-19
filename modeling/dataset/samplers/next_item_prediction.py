@@ -430,7 +430,9 @@ class NegativeRatingsNextItemPredictionTrainSampler(NegativeRatingsTrainSampler,
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
+        # TODO попробовать оставить обычный random negative sampler
         negative_sampler = BaseNegRatingsNegativeSampler.create_from_config({'type': config['negative_sampler_type']}, **kwargs)
+        # negative_sampler = BaseNegRatingsNegativeSampler.create_from_config({'type': config['negative_sampler_type']}, **kwargs)
 
         return cls(
             dataset=kwargs['dataset'],
@@ -446,13 +448,15 @@ class NegativeRatingsNextItemPredictionTrainSampler(NegativeRatingsTrainSampler,
     def __getitem__(self, index):
         sample_positive_domain = copy.deepcopy(self._dataset[self._positive_domain][index])
         item_sequence_positive_domain = sample_positive_domain['item.ids'][:-1]
-        ratings_positive_domain = sample_positive_domain['ratings.ids'][1:]
-        next_item_sequence = sample_positive_domain['item.ids'][1:]
+        ratings_positive_domain = sample_positive_domain['ratings.ids'][:-1]
+        next_item_sequence_positive_domain = sample_positive_domain['item.ids'][1:]
+        next_ratings_sequence_positive_domain = sample_positive_domain['ratings.ids'][1:]
 
         item_sequence_negative_domain = []
         ratings_negative_domain = []
         if sample_positive_domain['user.ids'][0] in self._user_id_to_index_cross_domain_mapping[self._negative_domain]:
-            domain_index_negative_domain = self._user_id_to_index_cross_domain_mapping[self._negative_domain][sample_positive_domain['user.ids'][0]]
+            domain_index_negative_domain = self._user_id_to_index_cross_domain_mapping[self._negative_domain][
+                sample_positive_domain['user.ids'][0]]
             sample_negative_domain = copy.deepcopy(self._dataset[self._negative_domain][domain_index_negative_domain])
             item_sequence_negative_domain = sample_negative_domain['item.ids'][:-1]
             ratings_negative_domain = sample_negative_domain['ratings.ids'][:-1]
@@ -465,10 +469,13 @@ class NegativeRatingsNextItemPredictionTrainSampler(NegativeRatingsTrainSampler,
 
         if self._num_negatives == -1:
             negatives = self._negative_sampler.generate_negative_samples(sample_positive_domain, len_item_sequence)
+            negative_sequence = self._negative_sampler.generate_negative_samples(sample_positive_domain,
+                                                                                 len(next_item_sequence_positive_domain))
         else:
             negatives = self._negative_sampler.generate_negative_samples(sample_positive_domain, self._num_negatives)
+            negative_sequence = self._negative_sampler.generate_negative_samples(sample_positive_domain,
+                                                                                 self._num_negatives)
 
-        # TODO размерность batch_size * num_negatives должно быть ровно = negatives.ids
         result = {
             'user.ids': sample_positive_domain['user.ids'] * len_item_sequence,
             'user.length': len_item_sequence,
@@ -476,17 +483,29 @@ class NegativeRatingsNextItemPredictionTrainSampler(NegativeRatingsTrainSampler,
             'item.ids': item_sequence,
             'item.length': len_item_sequence,
 
+            'item.negatives.ids': item_sequence_negative_domain,
+            'item.negatives.length': len(item_sequence_negative_domain),
+
             'ratings.ids': ratings,
             'ratings.length': len(ratings),
 
             'negatives.ids': negatives,
             'negatives.length': len(negatives),
 
-            'user.graph.ids': sample_positive_domain['user.ids'],
-            'user.graph.length': len(sample_positive_domain['user.ids']),
+            'user.positive.ids': sample_positive_domain['user.ids'],
+            'user.positive.length': len(sample_positive_domain['user.ids']),
 
-            'item.graph.ids': item_sequence_positive_domain,
-            'item.graph.length': len(item_sequence_positive_domain)
+            'item.positive.ids': item_sequence_positive_domain,
+            'item.positive.length': len(item_sequence_positive_domain),
+
+            'positive.sequence.ids': next_item_sequence_positive_domain,
+            'positive.sequence.length': len(next_item_sequence_positive_domain),
+
+            'ratings.sequence.ids': next_ratings_sequence_positive_domain,
+            'ratings.sequence.length': len(next_ratings_sequence_positive_domain),
+
+            'negative.sequence.ids': negative_sequence,
+            'negative.sequence.length': len(negative_sequence)
         }
 
         return result
@@ -526,6 +545,7 @@ class NegativeRatingsNextItemPredictionValidationSampler(NegativeRatingsValidati
     @classmethod
     def create_from_config(cls, config, **kwargs):
         negative_sampler = BaseNegRatingsNegativeSampler.create_from_config({'type': config['negative_sampler_type']}, **kwargs)
+        # negative_sampler = BaseNegRatingsNegativeSampler.create_from_config({'type': config['negative_sampler_type']}, **kwargs)
 
         return cls(
             dataset=kwargs['dataset'],
@@ -547,7 +567,8 @@ class NegativeRatingsNextItemPredictionValidationSampler(NegativeRatingsValidati
         item_sequence_negative_domain = []
         ratings_negative_domain = []
         if sample_positive_domain['user.ids'][0] in self._user_id_to_index_cross_domain_mapping[self._negative_domain]:
-            domain_index_negative_domain = self._user_id_to_index_cross_domain_mapping[self._negative_domain][sample_positive_domain['user.ids'][0]]
+            domain_index_negative_domain = self._user_id_to_index_cross_domain_mapping[self._negative_domain][
+                sample_positive_domain['user.ids'][0]]
             sample_negative_domain = copy.deepcopy(self._dataset[self._negative_domain][domain_index_negative_domain])
             item_sequence_negative_domain = sample_negative_domain['item.ids'][:-1]
             ratings_negative_domain = sample_negative_domain['ratings.ids'][:-1]
@@ -563,7 +584,10 @@ class NegativeRatingsNextItemPredictionValidationSampler(NegativeRatingsValidati
         else:
             negatives = self._negative_sampler.generate_negative_samples(sample_positive_domain, self._num_negatives)
 
-        candidates_graph = [positive_graph] + negatives.tolist()
+        try:
+            candidates_graph = [positive_graph] + negatives.tolist()
+        except Exception as e:
+            candidates_graph = [positive_graph] + negatives
 
         result = {
             'user.ids': sample_positive_domain['user.ids'] * len_item_sequence,
@@ -575,17 +599,17 @@ class NegativeRatingsNextItemPredictionValidationSampler(NegativeRatingsValidati
             'ratings.ids': ratings,
             'ratings.length': len(ratings),
 
-            'user.graph.ids': sample_positive_domain['user.ids'],
-            'user.graph.length': len(sample_positive_domain['user.ids']),
+            'user.positive.ids': sample_positive_domain['user.ids'],
+            'user.positive.length': len(sample_positive_domain['user.ids']),
 
-            'item.graph.ids': item_sequence_positive_domain,
-            'item.graph.length': len(item_sequence_positive_domain),
+            'item.positive.ids': item_sequence_positive_domain,
+            'item.positive.length': len(item_sequence_positive_domain),
 
-            'candidates.graph.ids': candidates_graph,
-            'candidates.graph.length': len(candidates_graph),
+            'candidates.positive.ids': candidates_graph,
+            'candidates.positive.length': len(candidates_graph),
 
-            'labels.graph.ids': [0],
-            'labels.graph.length': 1
+            'labels.positive.ids': [0],
+            'labels.positive.length': 1
         }
 
         return result
@@ -639,7 +663,8 @@ class NegativeRatingsNextItemPredictionEvalSampler(NegativeRatingsEvalSampler,
         item_sequence_negative_domain = []
         ratings_negative_domain = []
         if sample_positive_domain['user.ids'][0] in self._user_id_to_index_cross_domain_mapping[self._negative_domain]:
-            domain_index_negative_domain = self._user_id_to_index_cross_domain_mapping[self._negative_domain][sample_positive_domain['user.ids'][0]]
+            domain_index_negative_domain = self._user_id_to_index_cross_domain_mapping[self._negative_domain][
+                sample_positive_domain['user.ids'][0]]
             sample_negative_domain = copy.deepcopy(self._dataset[self._negative_domain][domain_index_negative_domain])
             item_sequence_negative_domain = sample_negative_domain['item.ids'][:-1]
             ratings_negative_domain = sample_negative_domain['ratings.ids'][:-1]
@@ -659,14 +684,14 @@ class NegativeRatingsNextItemPredictionEvalSampler(NegativeRatingsEvalSampler,
             'ratings.ids': ratings,
             'ratings.length': len(ratings),
 
-            'user.graph.ids': sample_positive_domain['user.ids'],
-            'user.graph.length': len(sample_positive_domain['user.ids']),
+            'user.positive.ids': sample_positive_domain['user.ids'],
+            'user.positive.length': len(sample_positive_domain['user.ids']),
 
-            'item.graph.ids': item_sequence_positive_domain,
-            'item.graph.length': len(item_sequence_positive_domain),
+            'item.positive.ids': item_sequence_positive_domain,
+            'item.positive.length': len(item_sequence_positive_domain),
 
-            'labels.graph.ids': [next_item_graph],
-            'labels.graph.length': 1
+            'labels.positive.ids': [next_item_graph],
+            'labels.positive.length': 1
         }
 
         return result

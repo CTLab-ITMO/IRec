@@ -11,6 +11,7 @@ class BaseNegRatingsNegativeSampler(metaclass=MetaParent):
             num_users,
             num_items,
             items_popularity,
+            negative_items_popularity,
             positive_domain
     ):
         self._dataset = dataset
@@ -18,6 +19,7 @@ class BaseNegRatingsNegativeSampler(metaclass=MetaParent):
         self._num_items = num_items
         self._all_items = arange(self._num_items)
         self._items_popularity = items_popularity
+        self._negative_items_popularity = negative_items_popularity
         self._positive_domain = positive_domain
 
         self._seen_items = defaultdict(set)

@@ -28,12 +28,23 @@ class SiReNModel(TorchModel, config_name='siren'):
         self._positive_prefix = positive_prefix
         self._negative_prefix = negative_prefix
         self._candidate_prefix = candidate_prefix
+        self._graph = graph
         self._num_users = num_users
         self._num_items = num_items
         self._embedding_dim = embedding_dim
         self._num_layers = num_layers
         self._dropout_rate = dropout
         self._mlp_layers = mlp_layers
+
+        self._user_embeddings = nn.Embedding(
+            num_embeddings=self._num_users + 2,
+            embedding_dim=self._embedding_dim
+        )
+
+        self._item_embeddings = nn.Embedding(
+            num_embeddings=self._num_items + 2,
+            embedding_dim=self._embedding_dim
+        )
 
         self._output_projection = nn.Linear(
             in_features=self._embedding_dim,
@@ -45,34 +56,20 @@ class SiReNModel(TorchModel, config_name='siren'):
             requires_grad=True
         )
 
+        # Attntion model
+        self.attn = nn.Linear(self._embedding_dim, self._embedding_dim, bias=True)
+        self.q = nn.Linear(self._embedding_dim, 1, bias=False)
+        self.attn_softmax = nn.Softmax(dim=1)
+
         self._init_weights(initializer_range)
-
-        self.E = nn.Parameter(torch.empty(self._num_users + self._num_items, self._embedding_dim))
-        nn.init.xavier_normal_(self.E.data)
-
-        self.E2 = nn.Parameter(torch.empty(self._num_users + self._num_items, self._embedding_dim))
-        nn.init.xavier_normal_(self.E2.data)
 
         self.mlps = nn.ModuleList()
         for _ in range(self._mlp_layers):
             self.mlps.append(nn.Linear(self._embedding_dim, self._embedding_dim, bias=True))
             nn.init.xavier_normal_(self.mlps[-1].weight.data)
 
-        # Attntion model
-        self.attn = nn.Linear(self._embedding_dim, self._embedding_dim, bias=True)
-        self.q = nn.Linear(self._embedding_dim, 1, bias=False)
-        self.attn_softmax = nn.Softmax(dim=1)
-
-        self._user_embeddings = nn.Embedding(
-            num_embeddings=self._num_users + 2,
-            embedding_dim=self._embedding_dim
-        )
-
-        self._item_embeddings = nn.Embedding(
-            num_embeddings=self._num_items + 2,
-            embedding_dim=self._embedding_dim
-        )
-        self._graph = graph
+        self.E2 = nn.Parameter(torch.empty(self._num_users + 2 + self._num_items + 2, self._embedding_dim))
+        nn.init.xavier_normal_(self.E2.data)
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -81,14 +78,17 @@ class SiReNModel(TorchModel, config_name='siren'):
             positive_prefix=config['positive_prefix'],
             negative_prefix=config['negative_prefix'],
             candidate_prefix=config['candidate_prefix'],
+            graph=kwargs['graph'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
             embedding_dim=config['embedding_dim'],
+            # num_layers=config.get('num_layers', 2),
+            # mlp_layers=config.get('mlp_layers', 2),
+            # dropout=config.get('dropout', 0.5),
             num_layers=config['num_layers'],
             mlp_layers=config['mlp_layers'],
-            dropout=config.get('dropout', 0.0),
-            initializer_range=config.get('initializer_range', 0.02),
-            graph=kwargs['graph']
+            dropout=config['dropout'],
+            initializer_range=config.get('initializer_range', 0.02)
         )
 
     def _apply_graph_encoder(self):
@@ -115,7 +115,8 @@ class SiReNModel(TorchModel, config_name='siren'):
             norm_embeddings = F.normalize(ego_embeddings, p=2, dim=1)
             all_embeddings += [norm_embeddings]
 
-        all_embeddings = torch.cat(all_embeddings, dim=-1)
+        all_embeddings = torch.stack(all_embeddings, 0).mean(0)
+
         user_final_embeddings, item_final_embeddings = torch.split(
             all_embeddings, [self._num_users + 2, self._num_items + 2]
         )
@@ -142,47 +143,51 @@ class SiReNModel(TorchModel, config_name='siren'):
         return padded_embeddings, padded_ego_embeddings, mask
 
     def forward(self, inputs):
-        # user = inputs['user.ids']
-        # items = inputs['item.ids']
-        # n = inputs['negatives.ids']
-        # w = inputs['ratings.ids']
-        # # TODO z_p = light_gcn
-        # C = [self.E2]
-        # x = F.dropout(F.relu(self.mlps[0](self.E2)), p=0.5, training=self.training)
-        # for i in range(1, self._mlp_layers):
-        #     x = self.mlps[i](x)
-        #     x = F.relu(x)
-        #     x = F.dropout(x, p=0.5, training=self.training)
-        #     C.append(x)
-        # z_n = C[-1]
-        #
-        # # w_p = self.q(F.dropout(torch.tanh((self.attn(z_p))), p=0.5, training=self.training))
-        # # w_n = self.q(F.dropout(torch.tanh((self.attn(z_n))), p=0.5, training=self.training))
-        # # alpha_ = self.attn_softmax(torch.cat([w_p, w_n], dim=1))
-        # # emb = alpha_[:, 0].view(len(z_p), 1) * z_p + alpha_[:, 1].view(len(z_p), 1) * z_n
-        # positivebatch = torch.mul(user, items)
-        # print(n)
-        # print(len(n))
-        # print(user)
-        # print(len(user))
-        # negativebatch = torch.mul(user.view(len(user), 1, self._embedding_dim), n)
-        # # TODO w - ?
-
         # light gcn
-        all_final_user_embeddings, all_final_item_embeddings = \
+        all_user_embeddings, all_item_embeddings = \
             self._apply_graph_encoder()  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
 
         user_embeddings, user_ego_embeddings, user_mask = self._get_embeddings(
-            inputs, self._user_prefix, self._user_embeddings, all_final_user_embeddings
+            inputs, self._user_prefix, self._user_embeddings, all_user_embeddings
         )
         user_embeddings = user_embeddings[user_mask]  # (all_batch_events, embedding_dim)
 
+        # z_p siren
+        all_embeddings_positive = torch.cat((all_user_embeddings, all_item_embeddings), dim=0)
+        # shapes z_p:
+        # [num_users + 2 + num_items + 2; embedding_dim * (num_layers + 1)
+        # например для датасета ml1m и num_layers = 2: [9069; 192], т.е. [6022 + 2 + 3043 + 2; 64 * 3]
+
+        # z_n siren
+        mlp = [self.E2]
+        x = F.dropout(F.relu(self.mlps[0](self.E2)), p=0.5, training=self.training)
+        for i in range(1, self._mlp_layers):
+            x = self.mlps[i](x)
+            x = F.relu(x)
+            x = F.dropout(x, p=0.5, training=self.training)
+            mlp.append(x)
+        embeddings_negative = mlp[-1]
+        # shapes z_n
+        # [num_users + num_items; embedding_dim]
+        # например для датасета ml1m: [9065; 64]
+
+        # Z
+        w_p = self.q(F.dropout(torch.tanh((self.attn(all_embeddings_positive))), p=0.5, training=self.training))
+        w_n = self.q(F.dropout(torch.tanh((self.attn(embeddings_negative))), p=0.5, training=self.training))
+        alpha_ = self.attn_softmax(torch.cat([w_p, w_n], dim=1))
+
+        graph_embeddings = alpha_[:, 0].view(len(all_embeddings_positive), 1) * all_embeddings_positive + alpha_[:, 1].view(
+            len(all_embeddings_positive), 1) * embeddings_negative
+
+        # embeddings light_gcn + negatives siren
+        graph_user_embeddings, graph_item_embeddings = torch.split(graph_embeddings, [self._num_users + 2, self._num_items + 2])
+
         if self.training:  # training mode
             positive_embeddings, _, positive_mask = self._get_embeddings(
-                inputs, self._positive_prefix, self._item_embeddings, all_final_item_embeddings
+                inputs, self._positive_prefix, self._item_embeddings, graph_item_embeddings
             )  # (batch_size, seq_len, embedding_dim)
             negative_embeddings, _, negative_mask = self._get_embeddings(
-                inputs, self._negative_prefix, self._item_embeddings, all_final_item_embeddings
+                inputs, self._negative_prefix, self._item_embeddings, graph_item_embeddings
             )  # (batch_size, seq_len, embedding_dim)
 
             # b - batch_size, s - seq_len, d - embedding_dim
@@ -210,7 +215,7 @@ class SiReNModel(TorchModel, config_name='siren'):
             candidate_scores = torch.einsum(
                 'bd,nd->bn',
                 user_embeddings,
-                all_final_item_embeddings
+                graph_item_embeddings
             )  # (batch_size, num_items + 2)
             candidate_scores[:, 0] = -torch.inf
             candidate_scores[:, self._num_items + 1:] = -torch.inf
