@@ -1,18 +1,17 @@
 {
   "start_from": 0,
   "experiment_name": "light_gcn_beauty_grid",
-  "best_metric": "eval/ndcg@20",
-  "num_exps": 20,
+  "best_metric": "validation/ndcg@20",
+  "num_exps": 60,
   "dataset": {
     "type": "graph",
     "graph_dir_path": "../data/Beauty",
     "dataset": {
-      "type": "scientific",
+      "type": "sequence",
       "path_to_data_dir": "../data",
       "name": "Beauty",
       "max_sequence_length": 50,
       "samplers": {
-        "num_negatives_val": 100,
         "type": "next_item_prediction",
         "negative_sampler_type": "random"
       }
@@ -44,15 +43,21 @@
     "type": "light_gcn",
     "user_prefix": "user",
     "positive_prefix": "positive",
-    "negative_prefix": "negative",
-    "candidate_prefix": "candidates",
     "embedding_dim": 64,
     "initializer_range": 0.02
   },
   "model_params": {
-    "num_layers": [1, 2, 3],
-    "keep_prob": [0.2, 0.4, 0.6, 0.8, 1.0],
-    "dropout": [0.2, 0.4, 0.6, 0.8, 1.0]
+    "num_layers": [
+      2,
+      3],
+    "dropout": [
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8]
   },
   "optimizer": {
     "type": "basic",
@@ -74,14 +79,26 @@
       },
       {
         "type": "regularization",
-        "prefix": ["positive_embeddings", "negative_embeddings", "user_embeddings"],
-        "weight": 0.5,
+        "prefix": [
+          "item_embeddings"],
         "output_prefix": "lightgcn_regularization_loss"
       }
     ],
-    "output_prefix": "lightgcn_loss"
+    "output_prefix": "loss"
   },
   "loss_params": {
+    "losses": [
+      {
+      },
+      {
+        "weight": [
+          1e-5,
+          1e-4,
+          1e-3,
+          1e-2,
+          1e-1]
+      }
+    ]
   },
   "callback": {
     "type": "composite",
@@ -89,17 +106,7 @@
       {
         "type": "metric",
         "on_step": 1,
-        "loss_prefix": "lightgcn_loss"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "lightgcn_downstream_loss"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "lightgcn_regularization_loss"
+        "loss_prefix": "loss"
       },
       {
         "type": "validation",

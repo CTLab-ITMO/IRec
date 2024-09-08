@@ -155,7 +155,6 @@ class BPRLoss(TorchLoss, config_name='bpr'):
     def forward(self, inputs):
         pos_scores = inputs[self._positive_prefix]  # (all_batch_items)
         neg_scores = inputs[self._negative_prefix]  # (all_batch_items)
-        assert neg_scores.shape == pos_scores.shape
 
         loss = -(pos_scores - neg_scores).sigmoid().log().mean()  # (1)
 

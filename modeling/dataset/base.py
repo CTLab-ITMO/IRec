@@ -2,8 +2,7 @@ from collections import defaultdict
 
 from tqdm import tqdm
 
-from dataset.samplers import TrainSampler, ValidationSampler, EvalSampler
-from dataset.samplers import MultiDomainTrainSampler, MultiDomainValidationSampler, MultiDomainEvalSampler
+from dataset.samplers import TrainSampler, EvalSampler
 
 from utils import MetaParent, DEVICE
 
@@ -49,19 +48,19 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
         max_user_idx, max_item_idx, max_sequence_length = 0, 0, 0
 
         train_dataset, train_max_user_idx, train_max_item_idx, train_max_sequence_length = cls._create_dataset(
-            data_dir_path, 'train_new', config['max_sequence_length']
+            data_dir_path, 'train', config['max_sequence_length']
         )
         max_user_idx, max_item_idx = max(max_user_idx, train_max_user_idx), max(max_item_idx, train_max_item_idx)
         max_sequence_length = max(max_sequence_length, train_max_sequence_length)
 
         validation_dataset, validation_max_user_idx, validation_max_item_idx, validation_max_sequence_length = cls._create_dataset(
-            data_dir_path, 'validation_new', config['max_sequence_length']
+            data_dir_path, 'validation', config['max_sequence_length']
         )
         max_user_idx, max_item_idx = max(max_user_idx, validation_max_user_idx), max(max_item_idx, validation_max_item_idx)
         max_sequence_length = max(max_sequence_length, validation_max_sequence_length)
 
         test_dataset, test_max_user_idx, test_max_item_idx, test_max_sequence_length = cls._create_dataset(
-            data_dir_path, 'test_new', config['max_sequence_length']
+            data_dir_path, 'test', config['max_sequence_length']
         )
         max_user_idx, max_item_idx = max(max_user_idx, test_max_user_idx), max(max_item_idx, test_max_item_idx)
         max_sequence_length = max(max_sequence_length, test_max_sequence_length)
@@ -69,7 +68,7 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
         logger.info('Max user idx: {}'.format(max_user_idx))
         logger.info('Max item idx: {}'.format(max_item_idx))
         logger.info('{} dataset sparsity: {}'.format(
-            config['name'], (len(train_dataset) + len(test_dataset)) / max_user_idx / max_item_idx
+            config['name'], (len(train_dataset) + len(validation_dataset) + len(test_dataset)) / max_user_idx / max_item_idx
         ))
 
         train_sampler = TrainSampler.create_from_config(
@@ -78,7 +77,7 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
             num_users=max_user_idx,
             num_items=max_item_idx
         )
-        validation_sampler = ValidationSampler.create_from_config(
+        validation_sampler = EvalSampler.create_from_config(
             config['samplers'],
             dataset=validation_dataset,
             num_users=max_user_idx,
@@ -251,7 +250,7 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
             num_users=max_user_idx,
             num_items=max_item_idx
         )
-        validation_sampler = ValidationSampler.create_from_config(
+        validation_sampler = EvalSampler.create_from_config(
             dict(config['samplers'], 
                  **{'target_domain': target_domain,
                     'other_domains': other_domains
@@ -657,7 +656,7 @@ class ScientificDataset(BaseDataset, config_name='scientific'):
             num_users=max_user_idx,
             num_items=max_item_idx
         )
-        validation_sampler = ValidationSampler.create_from_config(
+        validation_sampler = EvalSampler.create_from_config(
             config['samplers'],
             dataset=validation_dataset,
             num_users=max_user_idx,
@@ -792,7 +791,7 @@ class MultiDomainScientificDataset(ScientificDataset, config_name='multi_domain_
             num_users=max_user_idx,
             num_items=max_item_idx
         )
-        validation_sampler = ValidationSampler.create_from_config(
+        validation_sampler = EvalSampler.create_from_config(
             dict(config['samplers'], 
                  **{'target_domain': target_domain,
                     'other_domains': other_domains

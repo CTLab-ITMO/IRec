@@ -8,13 +8,14 @@ from metric import BaseMetric
 import json
 import numpy as np
 import torch
+import datetime
 
 
 logger = create_logger(name=__name__)
 seed_val = 42
 
 
-def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_path=None):
+def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_path=None, output_params=None):
     running_metrics = {}
     for metric_name, metric_function in metrics.items():
         running_metrics[metric_name] = []
@@ -41,14 +42,45 @@ def inference(dataloader, model, metrics, pred_prefix, labels_prefix, output_pat
 
     logger.debug('Inference procedure has been finished!')
     logger.debug('Metrics are the following:')
-    # TODO add file inference option
     for metric_name, metric_value in running_metrics.items():
         logger.info('{}: {}'.format(metric_name, np.mean(metric_value)))
+
+    if output_path is not None:
+        line = {
+            'datetime': str(datetime.datetime.now().replace(microsecond=0))
+        }
+        
+        if output_params is not None:
+            line.update(output_params)
+        
+        for metric_name, metric_value in running_metrics.items():
+            line[metric_name] = round(np.mean(metric_value), 8)
+
+        with open(output_path, 'a') as output_file:
+            output_file.write('{}\n'.format('\t'.join([param_value for param_value in line.values()])))
 
 
 def main():
     fix_random_seed(seed_val)
     config = parse_args()
+    
+    output_path = '../checkpoints/metrics.tsv'
+    output_params = {
+        'experiment_name': config['experiment_name'],
+        'model': config['model']['type']
+    }
+    if 'dataset' not in config['dataset']:
+        output_params['dataset'] = config['dataset']['name'].split('/')[0]
+        if 'target_domain' in config['dataset']: 
+            output_params['domain'] = config['dataset']['target_domain']
+        else:
+            output_params['domain'] = config['dataset']['name'].split('/')[1]
+    else:
+        output_params['dataset'] = config['dataset']['dataset']['name'].split('/')[0]
+        if 'target_domain' in config['dataset']['dataset']:
+            output_params['domain'] = config['dataset']['dataset']['target_domain']
+        else:
+            output_params['domain'] = config['dataset']['dataset']['name'].split('/')[1]
 
     logger.debug('Inference config: \n{}'.format(json.dumps(config, indent=2)))
 
@@ -73,7 +105,15 @@ def main():
         for metric_name, metric_cfg in config['metrics'].items()
     }
 
-    inference(eval_dataloader, model, metrics, config['pred_prefix'], config['label_prefix'])
+    _ = inference(
+        dataloader=eval_dataloader, 
+        model=model, 
+        metrics=metrics, 
+        pred_prefix=config['pred_prefix'], 
+        labels_prefix=config['label_prefix'], 
+        output_path=output_path, 
+        output_params=output_params
+    )
 
 
 if __name__ == '__main__':

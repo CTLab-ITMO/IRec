@@ -129,10 +129,11 @@ class SequentialTorchModel(TorchModel):
 
 
         if self._is_causal:
-            causal_mask = torch.tril(torch.tile(mask.unsqueeze(1), dims=[self._num_heads, seq_len, 1])).bool().to(DEVICE)  # (seq_len, seq_len)
+            causal_mask = torch.tril(torch.ones(seq_len, seq_len)).bool().to(DEVICE)  # (seq_len, seq_len)
             embeddings = self._encoder(
                 src=embeddings,
                 mask=~causal_mask,
+                src_key_padding_mask=~mask
             )  # (batch_size, seq_len, embedding_dim)
         else:
             embeddings = self._encoder(

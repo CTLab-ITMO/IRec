@@ -10,8 +10,6 @@ class SasRecCeModel(SequentialTorchModel, config_name='sasrec_ce'):
             self,
             sequence_prefix,
             positive_prefix,
-            negative_prefix,
-            candidate_prefix,
             num_items,
             max_sequence_length,
             embedding_dim,
@@ -37,8 +35,6 @@ class SasRecCeModel(SequentialTorchModel, config_name='sasrec_ce'):
         )
         self._sequence_prefix = sequence_prefix
         self._positive_prefix = positive_prefix
-        self._negative_prefix = negative_prefix
-        self._candidate_prefix = candidate_prefix
 
         self._output_projection = nn.Linear(
             in_features=embedding_dim,
@@ -52,8 +48,6 @@ class SasRecCeModel(SequentialTorchModel, config_name='sasrec_ce'):
         return cls(
             sequence_prefix=config['sequence_prefix'],
             positive_prefix=config['positive_prefix'],
-            negative_prefix=config['negative_prefix'],
-            candidate_prefix=config['candidate_prefix'],
             num_items=kwargs['num_items'],
             max_sequence_length=kwargs['max_sequence_length'],
             embedding_dim=config['embedding_dim'],
@@ -76,34 +70,14 @@ class SasRecCeModel(SequentialTorchModel, config_name='sasrec_ce'):
         embeddings = torch.nn.functional.gelu(embeddings)  # (batch_size, seq_len, embedding_dim)
         embeddings = torch.einsum(
             'bsd,nd->bsn', embeddings, self._item_embeddings.weight
-        )  # (batch_size, seq_len, num_items)
+        )  # (batch_size, seq_len, num_items + 2)
 
         if self.training:  # training mode
             return {'logits': embeddings[mask]}
         else:  # eval mode
-            last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
-
-            # b - batch_size, n - num_candidates, d - embedding_dim
-            candidate_scores = torch.einsum(
-                'bd,nd->bn',
-                last_embeddings,
-                self._item_embeddings.weight
-            )  # (batch_size, num_items + 2)
+            candidate_scores = self._get_last_embedding(embeddings, mask)  # (batch_size, num_items + 2)
             candidate_scores[:, 0] = -torch.inf
             candidate_scores[:, self._num_items + 1:] = -torch.inf
-
-            if '{}.ids'.format(self._candidate_prefix) in inputs:
-                candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
-                candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
-
-                batch_size = candidate_lengths.shape[0]
-                num_candidates = candidate_lengths[0]
-
-                candidate_scores = torch.gather(
-                    input=candidate_scores,
-                    dim=1,
-                    index=torch.reshape(candidate_events, [batch_size, num_candidates])
-                )  # (batch_size, num_candidates)
 
             _, indices = torch.topk(
                 candidate_scores,

@@ -1,5 +1,5 @@
-from dataset.samplers.base import TrainSampler, ValidationSampler, EvalSampler
-from dataset.samplers.base import MultiDomainTrainSampler, MultiDomainValidationSampler, MultiDomainEvalSampler
+from dataset.samplers.base import TrainSampler, EvalSampler
+from dataset.samplers.base import MultiDomainTrainSampler, MultiDomainEvalSampler
 from dataset.negative_samplers.base import BaseNegativeSampler
 
 import copy
@@ -54,53 +54,6 @@ class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_predic
 
             'negative.ids': negative_sequence,
             'negative.length': len(negative_sequence)
-        }
-
-
-class NextItemPredictionValidationSampler(ValidationSampler, config_name='next_item_prediction'):
-
-    def __init__(self, dataset, num_users, num_items, negative_sampler, num_negatives=100):
-        super().__init__()
-        self._dataset = dataset
-        self._num_users = num_users
-        self._num_items = num_items
-        self._negative_sampler = negative_sampler
-        self._num_negatives = num_negatives
-
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        negative_sampler = BaseNegativeSampler.create_from_config({'type': config['negative_sampler_type']}, **kwargs)
-
-        return cls(
-            dataset=kwargs['dataset'],
-            num_users=kwargs['num_users'],
-            num_items=kwargs['num_items'],
-            negative_sampler=negative_sampler,
-            num_negatives=config.get('num_negatives_val', 100)
-        )
-
-    def __getitem__(self, index):
-        sample = copy.deepcopy(self._dataset[index])
-
-        item_sequence = sample['item.ids'][:-1]
-
-        positive = sample['item.ids'][-1]
-        negatives = self._negative_sampler.generate_negative_samples(sample, self._num_negatives)
-
-        candidates = [positive] + negatives
-
-        return {
-            'user.ids': sample['user.ids'],
-            'user.length': sample['user.length'],
-
-            'item.ids': item_sequence,
-            'item.length': len(item_sequence),
-
-            'candidates.ids': candidates,
-            'candidates.length': len(candidates),
-
-            'labels.ids': [0],
-            'labels.length': 1,
         }
 
 
@@ -210,113 +163,6 @@ class MultiDomainNextItemPredictionTrainSampler(MultiDomainTrainSampler, config_
 
                 'negative.{}.ids'.format(domain): negative_sequence,
                 'negative.{}.length'.format(domain): len(negative_sequence)
-            })
-
-        return result
-
-
-class MultiDomainNextItemPredictionValidationSampler(MultiDomainValidationSampler, config_name='multi_domain_next_item_prediction'):
-
-    def __init__(
-            self, 
-            dataset, 
-            num_users, 
-            num_items, 
-            target_domain, 
-            other_domains, 
-            negative_sampler, 
-            num_negatives=100
-    ):
-
-        super().__init__(target_domain, other_domains)
-        self._dataset = dataset
-        self._num_users = num_users
-        self._num_items = num_items
-        self._negative_sampler = negative_sampler
-        self._num_negatives = num_negatives
-        self._user_id_to_index_cross_domain_mapping = self.get_user_id_to_index_cross_domain_mapping()
-
-    def get_user_id_to_index_cross_domain_mapping(self):
-        _user_id_to_index_cross_domain_mapping = {domain:{} for domain in self._other_domains}
-        for domain in self._other_domains:
-            for index, sample in enumerate(self._dataset[domain]):
-                user_id = sample['user.ids'][0]
-                _user_id_to_index_cross_domain_mapping[domain][index] = user_id
-
-        return _user_id_to_index_cross_domain_mapping
-
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        domains = [config['target_domain']] + config['other_domains']
-        negative_sampler = {}
-
-        datasets = kwargs['dataset']
-        for domain in domains:
-            kwargs['dataset'] = datasets[domain]
-            negative_sampler[domain] = BaseNegativeSampler.create_from_config(
-                                            {'type': config['negative_sampler_type']}, 
-                                            **kwargs
-                                        )
-        kwargs['dataset'] = datasets
-
-        return cls(
-            dataset=kwargs['dataset'],
-            num_users=kwargs['num_users'],
-            num_items=kwargs['num_items'],
-            negative_sampler=negative_sampler,
-            num_negatives=config.get('num_negatives_val', 100),
-            target_domain=config['target_domain'],
-            other_domains=config['other_domains']
-        )
-
-    def __getitem__(self, index):
-        # target domain
-        sample = copy.deepcopy(self._dataset[self._target_domain][index])
-
-        item_sequence = sample['item.ids'][:-1]
-
-        positive = sample['item.ids'][-1]
-        negatives = self._negative_sampler.generate_negative_samples(sample, self._num_negatives)
-
-        candidates = [positive] + negatives
-        labels = [1] + [0] * len(negatives)
-
-        result = {
-            'user.ids': sample['user.ids'],
-            'user.length': sample['user.length'],
-
-            'item.ids': item_sequence,
-            'item.length': len(item_sequence),
-
-            'candidates.ids': candidates,
-            'candidates.length': len(candidates),
-
-            'labels.ids': labels,
-            'labels.length': len(labels)
-        }
-
-        # other domains
-        for domain in self._other_domains:
-            domain_user_index = self._user_id_to_index_cross_domain_mapping[domain][index]
-            sample = copy.deepcopy(self._dataset[domain][domain_user_index])
-
-            item_sequence = sample['item.ids'][:-1]
-
-            positive = sample['item.ids'][-1]
-            negatives = self._negative_sampler[domain].generate_negative_samples(sample, self._num_negatives)
-
-            candidates = [positive] + negatives
-            labels = [1] + [0] * len(negatives)
-
-            result.update({
-                'item.{}.ids'.format(domain): item_sequence,
-                'item.{}.length'.format(domain): len(item_sequence),
-
-                'candidates.{}.ids'.format(domain): candidates,
-                'candidates.{}.length'.format(domain): len(candidates),
-
-                'labels.{}.ids'.format(domain): labels,
-                'labels.{}.length'.format(domain): len(labels)
             })
 
         return result
