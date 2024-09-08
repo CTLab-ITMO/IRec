@@ -10,6 +10,7 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
             self,
             sequence_prefix,
             labels_prefix,
+            candidate_prefix,
             num_items,
             max_sequence_length,
             embedding_dim,
@@ -35,6 +36,7 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
         )
         self._sequence_prefix = sequence_prefix
         self._labels_prefix = labels_prefix
+        self._candidate_prefix = candidate_prefix
 
         self._output_projection = nn.Linear(
             in_features=embedding_dim,
@@ -55,6 +57,7 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
         return cls(
             sequence_prefix=config['sequence_prefix'],
             labels_prefix=config['labels_prefix'],
+            candidate_prefix=config['candidate_prefix'],
             num_items=kwargs['num_items'],
             max_sequence_length=kwargs['max_sequence_length'],
             embedding_dim=config['embedding_dim'],
