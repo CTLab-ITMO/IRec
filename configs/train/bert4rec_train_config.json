@@ -2,14 +2,13 @@
   "experiment_name": "bert4rec_beauty",
   "best_metric": "eval/ndcg@20",
   "dataset": {
-    "type": "scientific",
+    "type": "sequence",
     "path_to_data_dir": "../data",
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
-      "mask_prob": 0.7,
       "num_negatives_val": 100,
-      "type": "masked_item_prediction",
+      "type": "last_item_prediction",
       "negative_sampler_type": "random"
     }
   },
@@ -60,11 +59,9 @@
     "type": "composite",
     "losses": [
       {
-        "type": "ce",
-        "predictions_prefix": "logits",
-        "labels_prefix": "labels",
-        "output_prefix": "downstream_loss",
-        "weight": 1.0
+        "type": "batch_logsoftmax",
+        "predictions_prefix": "predictions",
+        "candidates_prefix": "candidates"
       }
     ],
     "output_prefix": "loss"

@@ -4,6 +4,7 @@ from utils import MetaParent, get_activation_function, maybe_to_list, DEVICE
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class BaseLoss(metaclass=MetaParent):
@@ -51,6 +52,38 @@ class CompositeLoss(TorchLoss, config_name='composite'):
             inputs[self._output_prefix] = total_loss.cpu().item()
 
         return total_loss
+
+
+class BatchLogSoftmaxLoss(TorchLoss, config_name='batch_logsoftmax'):
+
+    def __init__(self, predictions_prefix, candidates_prefix):
+        super().__init__()
+        self._predictions_prefix = predictions_prefix
+        self._candidates_prefix = candidates_prefix
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        return cls(predictions_prefix=config.get('predictions_prefix'), candidates_prefix=config.get('candidates_prefix'))
+
+    def forward(self, inputs): # use log soft max
+        predictions = inputs[self._predictions_prefix]
+        candidates = inputs[self._candidates_prefix]
+
+        # Step 1: Compute the dot product between each pair of vectors from output and candidates
+        # Result will be of shape (batch_size, batch_size)
+        dot_product_matrix = predictions @ candidates.T
+
+        # Step 2: Apply softmax to each row of the resulting tensor
+        softmax_matrix = F.softmax(dot_product_matrix, dim=1)
+
+        # Step 3: Extract the diagonal elements and take the -log of them
+        diagonal_elements = torch.diag(softmax_matrix)
+        log_diagonal = -torch.log(diagonal_elements)
+
+        # Step 4: Compute the average of the diagonal elements
+        loss = log_diagonal.mean()
+
+        return loss
 
 
 class CrossEntropyLoss(TorchLoss, config_name='ce'):

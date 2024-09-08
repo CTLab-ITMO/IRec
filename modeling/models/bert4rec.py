@@ -54,6 +54,8 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
 
         self._init_weights(initializer_range)
 
+        self._cls_token = nn.Parameter(torch.rand(1, 1, embedding_dim))
+
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
@@ -74,32 +76,28 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
         all_sample_events = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
         all_sample_lengths = inputs['{}.length'.format(self._sequence_prefix)]  # (batch_size)
 
+        add_cls_token = True
         embeddings, mask = self._apply_sequential_encoder(
-            all_sample_events, all_sample_lengths
+            all_sample_events, all_sample_lengths, add_cls_token
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
         embeddings = self._output_projection(embeddings)  # (batch_size, seq_len, embedding_dim)
-        embeddings = torch.nn.functional.gelu(embeddings)  # (batch_size, seq_len, embedding_dim)
-        embeddings = torch.einsum(
-            'bsd,nd->bsn', embeddings, self._item_embeddings.weight
-        )  # (batch_size, seq_len, num_items)
-        embeddings += self._bias[None, None, :]  # (batch_size, seq_len, num_items)
+        predictions = embeddings[:, 0, :] # (batch_size, embedding_dim)
 
         if self.training:  # training mode
-            all_sample_labels = inputs['{}.ids'.format(self._labels_prefix)]  # (all_batch_events)
-            embeddings = embeddings[mask]  # (all_batch_events, num_items)
-            labels_mask = (all_sample_labels != 0).bool()  # (all_batch_events)
+            candidates = self._item_embeddings(inputs['{}.ids'.format(self._labels_prefix)])  # (batch_size, embedding_dim)
 
-            needed_logits = embeddings[labels_mask]  # (non_zero_events, num_items)
-            needed_labels = all_sample_labels[labels_mask]  # (non_zero_events)
-
-            return {'logits': needed_logits, 'labels.ids': needed_labels}
+            return {'predictions': predictions, 'candidates': candidates}
         else:  # eval mode
-            candidate_scores = self._get_last_embedding(embeddings, mask)  # (batch_size, num_items)
+            candidate_scores = torch.einsum(
+                'bd,nd->bn',
+                predictions,
+                self._item_embeddings.weight
+            )  # (batch_size, num_items + 2)
             candidate_scores[:, 0] = -torch.inf
             candidate_scores[:, self._num_items + 1:] = -torch.inf
 
-            if '{}.ids'.format(self._candidate_prefix) in inputs:
+            if '{}.ids'.format(self._candidate_prefix) in inputs: # only validation should be here
                 candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
                 candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
 
