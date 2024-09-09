@@ -63,25 +63,23 @@ class BatchLogSoftmaxLoss(TorchLoss, config_name='batch_logsoftmax'):
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        return cls(predictions_prefix=config.get('predictions_prefix'), candidates_prefix=config.get('candidates_prefix'))
+        return cls(
+            predictions_prefix=config.get('predictions_prefix'),
+            candidates_prefix=config.get('candidates_prefix')
+        )
 
-    def forward(self, inputs): # use log soft max
+    def forward(self, inputs):  # use log soft max
         predictions = inputs[self._predictions_prefix]
         candidates = inputs[self._candidates_prefix]
 
-        # Step 1: Compute the dot product between each pair of vectors from output and candidates
-        # Result will be of shape (batch_size, batch_size)
         dot_product_matrix = predictions @ candidates.T
 
-        # Step 2: Apply softmax to each row of the resulting tensor
-        softmax_matrix = F.softmax(dot_product_matrix, dim=1)
+        m = nn.LogSoftmax(dim=1)
+        softmax_matrix = -m(dot_product_matrix)
 
-        # Step 3: Extract the diagonal elements and take the -log of them
         diagonal_elements = torch.diag(softmax_matrix)
-        log_diagonal = -torch.log(diagonal_elements)
 
-        # Step 4: Compute the average of the diagonal elements
-        loss = log_diagonal.mean()
+        loss = diagonal_elements.mean()
 
         return loss
 
@@ -174,7 +172,7 @@ class RegularizationLoss(TorchLoss, config_name='regularization'):
     def forward(self, inputs):
         loss = 0.0
         for prefix in self._prefix:
-            loss += (1/2) * inputs[prefix].pow(2).mean()
+            loss += (1 / 2) * inputs[prefix].pow(2).mean()
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()

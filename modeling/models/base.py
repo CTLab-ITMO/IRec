@@ -91,7 +91,7 @@ class SequentialTorchModel(TorchModel):
         )
         self._encoder = nn.TransformerEncoder(transformer_encoder_layer, num_layers)
 
-    def _apply_sequential_encoder(self, events, lengths, add_cls_token = False):
+    def _apply_sequential_encoder(self, events, lengths, add_cls_token=False):
         embeddings = self._item_embeddings(events)  # (all_batch_events, embedding_dim)
 
         embeddings, mask = create_masked_tensor(
@@ -123,10 +123,9 @@ class SequentialTorchModel(TorchModel):
         embeddings[~mask] = 0
 
         if add_cls_token:
-            cls_token_expanded = self._cls_token.expand(batch_size, -1, -1) # !!! use torch tile
+            cls_token_expanded = self._cls_token.expand(batch_size, -1, -1)  # !!! use torch tile
             embeddings = torch.cat((cls_token_expanded, embeddings), dim=1)
             mask = torch.cat((torch.ones((batch_size, 1), dtype=torch.bool, device=DEVICE), mask), dim=1)
-
 
         if self._is_causal:
             causal_mask = torch.tril(torch.ones(seq_len, seq_len)).bool().to(DEVICE)  # (seq_len, seq_len)
