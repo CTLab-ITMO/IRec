@@ -50,7 +50,7 @@ class Bert4RecModelCLS(SequentialTorchModel, config_name='bert4rec_cls'):
 
         self._init_weights(initializer_range)
 
-        self._cls_token = nn.Parameter(torch.rand(1, 1, embedding_dim))
+        self._cls_token = nn.Parameter(torch.rand(embedding_dim))
 
     @classmethod
     def create_from_config(cls, config, **kwargs):

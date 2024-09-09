@@ -123,7 +123,8 @@ class SequentialTorchModel(TorchModel):
         embeddings[~mask] = 0
 
         if add_cls_token:
-            cls_token_expanded = self._cls_token.expand(batch_size, -1, -1)  # !!! use torch tile
+            cls_token_tensor = self._cls_token.unsqueeze(0).unsqueeze(0)
+            cls_token_expanded = torch.tile(cls_token_tensor, (batch_size, 1, 1))
             embeddings = torch.cat((cls_token_expanded, embeddings), dim=1)
             mask = torch.cat((torch.ones((batch_size, 1), dtype=torch.bool, device=DEVICE), mask), dim=1)
 
