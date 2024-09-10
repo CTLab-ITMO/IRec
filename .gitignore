@@ -1,9 +1,4 @@
 .idea
 __pycache__
-data/Beauty/test.pkl
-data/Beauty/test.txt
-data/Beauty/train.pkl
-data/Beauty/train.txt
-data/Beauty/validation.pkl
-data/Beauty/validation.txt
+data/*
 tensorboard_logs/*

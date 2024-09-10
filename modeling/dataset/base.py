@@ -56,8 +56,7 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
         validation_dataset, validation_max_user_idx, validation_max_item_idx, validation_max_sequence_length = cls._create_dataset(
             data_dir_path, 'validation', config['max_sequence_length']
         )
-        max_user_idx, max_item_idx = max(max_user_idx, validation_max_user_idx), max(max_item_idx,
-                                                                                     validation_max_item_idx)
+        max_user_idx, max_item_idx = max(max_user_idx, validation_max_user_idx), max(max_item_idx, validation_max_item_idx)
         max_sequence_length = max(max_sequence_length, validation_max_sequence_length)
 
         test_dataset, test_max_user_idx, test_max_item_idx, test_max_sequence_length = cls._create_dataset(
@@ -69,8 +68,7 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
         logger.info('Max user idx: {}'.format(max_user_idx))
         logger.info('Max item idx: {}'.format(max_item_idx))
         logger.info('{} dataset sparsity: {}'.format(
-            config['name'],
-            (len(train_dataset) + len(validation_dataset) + len(test_dataset)) / max_user_idx / max_item_idx
+            config['name'], (len(train_dataset) + len(validation_dataset) + len(test_dataset)) / max_user_idx / max_item_idx
         ))
 
         train_sampler = TrainSampler.create_from_config(
@@ -214,19 +212,16 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
         max_user_idx_by_domain, max_item_idx_by_domain = {}, {}
 
         for domain in domains:
-            train_dataset[
-                domain], train_max_user_idx, train_max_item_idx, train_max_sequence_length = cls._create_dataset(
+            train_dataset[domain], train_max_user_idx, train_max_item_idx, train_max_sequence_length = cls._create_dataset(
                 os.path.join(data_dir_path, domain), 'train_new', config['max_sequence_length']
             )
             max_user_idx, max_item_idx = max(max_user_idx, train_max_user_idx), max(max_item_idx, train_max_item_idx)
             max_sequence_length = max(max_sequence_length, train_max_sequence_length)
 
-            validation_dataset[
-                domain], validation_max_user_idx, validation_max_item_idx, validation_max_sequence_length = cls._create_dataset(
+            validation_dataset[domain], validation_max_user_idx, validation_max_item_idx, validation_max_sequence_length = cls._create_dataset(
                 os.path.join(data_dir_path, domain), 'validation_new', config['max_sequence_length']
             )
-            max_user_idx, max_item_idx = max(max_user_idx, validation_max_user_idx), max(max_item_idx,
-                                                                                         validation_max_item_idx)
+            max_user_idx, max_item_idx = max(max_user_idx, validation_max_user_idx), max(max_item_idx, validation_max_item_idx)
             max_sequence_length = max(max_sequence_length, validation_max_sequence_length)
 
             test_dataset[domain], test_max_user_idx, test_max_item_idx, test_max_sequence_length = cls._create_dataset(
@@ -242,8 +237,7 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
         logger.info('Max item idx: {}'.format(max_item_idx))
         for domain in domains:
             logger.info('{} domain dataset sparsity: {}'.format(
-                domain, (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx_by_domain[domain] /
-                        max_item_idx_by_domain[domain]
+                    domain, (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx_by_domain[domain] / max_item_idx_by_domain[domain]
             ))
 
         # TODO replace unodomain samplers with multidomain ones
@@ -251,7 +245,7 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
             dict(config['samplers'],
                  **{'target_domain': target_domain,
                     'other_domains': other_domains
-                    }),
+            }),
             dataset=train_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx
@@ -260,7 +254,7 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
             dict(config['samplers'],
                  **{'target_domain': target_domain,
                     'other_domains': other_domains
-                    }),
+            }),
             dataset=validation_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx
@@ -269,7 +263,7 @@ class MultiDomainSequenceDataset(SequenceDataset, config_name='multi_domain_sequ
             dict(config['samplers'],
                  **{'target_domain': target_domain,
                     'other_domains': other_domains
-                    }),
+            }),
             dataset=test_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx
@@ -410,8 +404,7 @@ class GraphDataset(BaseDataset, config_name='graph'):
                 # (user, user) graph
                 user2user_connections = csr_matrix(
                     (
-                        np.ones(len(user2user_interactions_fst)),
-                        (user2user_interactions_fst, user2user_interactions_snd)),
+                    np.ones(len(user2user_interactions_fst)), (user2user_interactions_fst, user2user_interactions_snd)),
                     shape=(self._num_users + 2, self._num_users + 2)
                 )
 
@@ -453,8 +446,7 @@ class GraphDataset(BaseDataset, config_name='graph'):
                 # (item, item) graph
                 item2item_connections = csr_matrix(
                     (
-                        np.ones(len(item2item_interactions_fst)),
-                        (item2item_interactions_fst, item2item_interactions_snd)),
+                    np.ones(len(item2item_interactions_fst)), (item2item_interactions_fst, item2item_interactions_snd)),
                     shape=(self._num_items + 2, self._num_items + 2)
                 )
                 self._item_graph = self.get_sparse_graph_layer(
@@ -786,8 +778,7 @@ class MultiDomainScientificDataset(ScientificDataset, config_name='multi_domain_
             logger.info('{} domain Train dataset size: {}'.format(domain, len(train_dataset[domain])))
             logger.info('{} domain Test dataset size: {}'.format(domain, len(test_dataset[domain])))
             logger.info('{} domain dataset sparsity: {}'.format(
-                domain, (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx_by_domain[domain] /
-                        max_item_idx_by_domain[domain]
+                domain, (len(train_dataset[domain]) + len(test_dataset[domain])) / max_user_idx_by_domain[domain] / max_item_idx_by_domain[domain]
             ))
 
         # TODO replace unodomain samplers with multidomain ones
@@ -795,7 +786,7 @@ class MultiDomainScientificDataset(ScientificDataset, config_name='multi_domain_
             dict(config['samplers'],
                  **{'target_domain': target_domain,
                     'other_domains': other_domains
-                    }),
+            }),
             dataset=train_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx
@@ -804,7 +795,7 @@ class MultiDomainScientificDataset(ScientificDataset, config_name='multi_domain_
             dict(config['samplers'],
                  **{'target_domain': target_domain,
                     'other_domains': other_domains
-                    }),
+            }),
             dataset=validation_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx
@@ -813,7 +804,7 @@ class MultiDomainScientificDataset(ScientificDataset, config_name='multi_domain_
             dict(config['samplers'],
                  **{'target_domain': target_domain,
                     'other_domains': other_domains
-                    }),
+            }),
             dataset=test_dataset,
             num_users=max_user_idx,
             num_items=max_item_idx

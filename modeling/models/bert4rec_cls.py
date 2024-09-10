@@ -10,7 +10,6 @@ class Bert4RecModelCLS(SequentialTorchModel, config_name='bert4rec_cls'):
             self,
             sequence_prefix,
             labels_prefix,
-            candidate_prefix,
             num_items,
             max_sequence_length,
             embedding_dim,
@@ -36,7 +35,6 @@ class Bert4RecModelCLS(SequentialTorchModel, config_name='bert4rec_cls'):
         )
         self._sequence_prefix = sequence_prefix
         self._labels_prefix = labels_prefix
-        self._candidate_prefix = candidate_prefix
 
         self._output_projection = nn.Linear(
             in_features=embedding_dim,
@@ -48,16 +46,15 @@ class Bert4RecModelCLS(SequentialTorchModel, config_name='bert4rec_cls'):
             requires_grad=True
         )
 
-        self._init_weights(initializer_range)
-
         self._cls_token = nn.Parameter(torch.rand(embedding_dim))
+
+        self._init_weights(initializer_range)
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
             sequence_prefix=config['sequence_prefix'],
             labels_prefix=config['labels_prefix'],
-            candidate_prefix=config['candidate_prefix'],
             num_items=kwargs['num_items'],
             max_sequence_length=kwargs['max_sequence_length'],
             embedding_dim=config['embedding_dim'],
@@ -94,19 +91,6 @@ class Bert4RecModelCLS(SequentialTorchModel, config_name='bert4rec_cls'):
             )  # (batch_size, num_items + 2)
             candidate_scores[:, 0] = -torch.inf
             candidate_scores[:, self._num_items + 1:] = -torch.inf
-
-            if '{}.ids'.format(self._candidate_prefix) in inputs:  # only validation should be here
-                candidate_events = inputs['{}.ids'.format(self._candidate_prefix)]  # (all_batch_candidates)
-                candidate_lengths = inputs['{}.length'.format(self._candidate_prefix)]  # (batch_size)
-
-                batch_size = candidate_lengths.shape[0]
-                num_candidates = candidate_lengths[0]
-
-                candidate_scores = torch.gather(
-                    input=candidate_scores,
-                    dim=1,
-                    index=torch.reshape(candidate_events, [batch_size, num_candidates])
-                )  # (batch_size, num_candidates)
 
             _, indices = torch.topk(
                 candidate_scores,

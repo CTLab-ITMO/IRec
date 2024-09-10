@@ -74,8 +74,8 @@ class BatchLogSoftmaxLoss(TorchLoss, config_name='batch_logsoftmax'):
 
         dot_product_matrix = predictions @ candidates.T
 
-        m = nn.LogSoftmax(dim=1)
-        softmax_matrix = -m(dot_product_matrix)
+        row_log_softmax = nn.LogSoftmax(dim=1)
+        softmax_matrix = -row_log_softmax(dot_product_matrix)
 
         diagonal_elements = torch.diag(softmax_matrix)
 
