@@ -172,7 +172,7 @@ class RegularizationLoss(TorchLoss, config_name='regularization'):
     def forward(self, inputs):
         loss = 0.0
         for prefix in self._prefix:
-            loss += (1 / 2) * inputs[prefix].pow(2).mean()
+            loss += (1/2) * inputs[prefix].pow(2).mean()
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()
