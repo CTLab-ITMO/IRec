@@ -12,6 +12,6 @@ from .ngcf import NgcfModel
 from .pop import PopModel
 from .pure_mf import PureMF
 from .random import RandomModel
-from .sasrec import SasRecModel
+from .sasrec import SasRecModel, SasRecInBatchModel
 from .sasrec_ce import SasRecCeModel
 from .s3rec import S3RecModel

@@ -285,6 +285,60 @@ class SASRecLoss(TorchLoss, config_name='sasrec'):
         return loss
 
 
+class SamplesSoftmaxLoss(TorchLoss, config_name='sampled_softmax'):
+
+    def __init__(
+            self,
+            queries_prefix,
+            positive_prefix,
+            negative_prefix,
+            output_prefix=None
+    ):
+        super().__init__()
+        self._queries_prefix = queries_prefix
+        self._positive_prefix = positive_prefix
+        self._negative_prefix = negative_prefix
+        self._output_prefix = output_prefix
+
+    def forward(self, inputs):
+        queries_embeddings = inputs[self._queries_prefix]  # (batch_size, embedding_dim)
+        positive_embeddings = inputs[self._positive_prefix]  # (batch_size, embedding_dim)
+        negative_embeddings = inputs[self._negative_prefix]  # (num_negatives, embedding_dim) or (batch_size, num_negatives, embedding_dim)
+
+        # b -- batch_size, d -- embedding_dim
+        positive_scores = torch.einsum(
+            'bd,bd->b',
+            queries_embeddings,
+            positive_embeddings
+        ).unsqueeze(-1)  # (batch_size, 1)
+
+        if negative_embeddings.dim() == 2:  # (num_negatives, embedding_dim)
+            # b -- batch_size, n -- num_negatives, d -- embedding_dim
+            negative_scores = torch.einsum(
+                'bd,nd->bn',
+                queries_embeddings,
+                negative_embeddings
+            )  # (batch_size, num_negatives)
+        else:
+            assert negative_embeddings.dim() == 3  # (batch_size, num_negatives, embedding_dim)
+            # b -- batch_size, n -- num_negatives, d -- embedding_dim
+            negative_scores = torch.einsum(
+                'bd,bnd->bn',
+                queries_embeddings,
+                negative_embeddings
+            )  # (batch_size, num_negatives)
+        all_scores = torch.cat([positive_scores, negative_scores], dim=1)  # (batch_size, 1 + num_negatives)
+
+        logits = torch.log_softmax(all_scores, dim=1)  # (batch_size, 1 + num_negatives)
+        loss = (-logits)[:, 0]  # (batch_size)
+        loss = loss.mean()  # (1)
+
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss
+
+
 class S3RecPretrainLoss(TorchLoss, config_name='s3rec_pretrain'):
 
     def __init__(
