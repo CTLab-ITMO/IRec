@@ -7,7 +7,7 @@ import copy
 
 class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_prediction'):
 
-    def __init__(self, dataset, num_users, num_items, negative_sampler, num_negatives=-1):
+    def __init__(self, dataset, num_users, num_items, negative_sampler, num_negatives=0):
         super().__init__()
         self._dataset = dataset
         self._num_users = num_users
@@ -24,7 +24,7 @@ class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_predic
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
             negative_sampler=negative_sampler,
-            num_negatives=config.get('num_negatives_train', -1)
+            num_negatives=config.get('num_negatives_train', 0)
         )
 
     def __getitem__(self, index):
@@ -33,28 +33,35 @@ class NextItemPredictionTrainSampler(TrainSampler, config_name='next_item_predic
         item_sequence = sample['item.ids'][:-1]
         next_item_sequence = sample['item.ids'][1:]
 
-        if self._num_negatives == -1:
-            negative_sequence = self._negative_sampler.generate_negative_samples(
-                sample, len(next_item_sequence)
-            )
+        if self._num_negatives == 0:
+            return {
+                'user.ids': sample['user.ids'],
+                'user.length': sample['user.length'],
+
+                'item.ids': item_sequence,
+                'item.length': len(item_sequence),
+
+                'positive.ids': next_item_sequence,
+                'positive.length': len(next_item_sequence)
+            }
         else:
             negative_sequence = self._negative_sampler.generate_negative_samples(
                 sample, self._num_negatives
             )
 
-        return {
-            'user.ids': sample['user.ids'],
-            'user.length': sample['user.length'],
+            return {
+                'user.ids': sample['user.ids'],
+                'user.length': sample['user.length'],
 
-            'item.ids': item_sequence,
-            'item.length': len(item_sequence),
+                'item.ids': item_sequence,
+                'item.length': len(item_sequence),
 
-            'positive.ids': next_item_sequence,
-            'positive.length': len(next_item_sequence),
+                'positive.ids': next_item_sequence,
+                'positive.length': len(next_item_sequence),
 
-            'negative.ids': negative_sequence,
-            'negative.length': len(negative_sequence)
-        }
+                'negative.ids': negative_sequence,
+                'negative.length': len(negative_sequence)
+            }
 
 
 class NextItemPredictionEvalSampler(EvalSampler, config_name='next_item_prediction'):
