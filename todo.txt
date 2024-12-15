@@ -1,0 +1,7 @@
+1) no biases on leave one out strategy (обрезаем по строго временному порогу)
+2) data: https://cseweb.ucsd.edu/~jmcauley/datasets/amazon/links.html#:~:text=image%20features-,Beauty,-reviews%20(2%2C023%2C070%20reviews
+
+
+user_id & cb_ids -> repr
+last 'seq' prediction
+dataloader (semantic ids lens)

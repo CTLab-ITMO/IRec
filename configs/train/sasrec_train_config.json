@@ -2,7 +2,7 @@
   "experiment_name": "sasrec_test",
   "best_metric": "eval/ndcg@20",
   "dataset": {
-    "type": "sequence",
+    "type": "scientific",
     "path_to_data_dir": "../data",
     "name": "Beauty",
     "max_sequence_length": 50,
@@ -60,10 +60,9 @@
     "type": "composite",
     "losses": [
       {
-        "type": "sasrec",
-        "positive_prefix": "positive_embeddings",
-        "negative_prefix": "negative_embeddings",
-        "representation_prefix": "current_embeddings",
+        "type": "bpr",
+        "positive_prefix": "positive_scores",
+        "negative_prefix": "negative_scores",
         "output_prefix": "downstream_loss"
       }
     ],
