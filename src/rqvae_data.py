@@ -92,9 +92,9 @@ def search_similar_items(items_with_tuples, clust2search, max_cnt=5):
     random.shuffle(items_with_tuples)
     cnt = 0
     similars = []
-    for item, clust_tuple in items_with_tuples:
+    for asin, item, clust_tuple in items_with_tuples:
         if clust_tuple[: len(clust2search)] == clust2search:
-            similars.append((item, clust_tuple))
+            similars.append((asin, item, clust_tuple))
             cnt += 1
         if cnt >= max_cnt:
             return similars
