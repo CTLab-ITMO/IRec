@@ -17,7 +17,7 @@ class RQVAE(torch.nn.Module):
         super().__init__()
 
         # In original paper it is set to 0.25
-        self.register_buffer("beta", torch.tensor(beta))
+        self.beta = beta
 
         # Kmeans initialization
         self.should_init_codebooks = should_init_codebooks
@@ -54,7 +54,12 @@ class RQVAE(torch.nn.Module):
                 embeddings_np = remainder.cpu().numpy()
                 n_clusters = codebook.shape[0]
 
-                kmeans = faiss.Kmeans(d=embeddings_np.shape[1], k=n_clusters, niter=100)
+                kmeans = faiss.Kmeans(
+                    d=embeddings_np.shape[1],
+                    k=n_clusters,
+                    niter=1000,
+                    gpu=torch.cuda.is_available(),
+                )
                 kmeans.train(embeddings_np)
 
                 codebook.data = torch.from_numpy(kmeans.centroids).to(codebook.device)
