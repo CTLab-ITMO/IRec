@@ -72,11 +72,11 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
         embeddings = self._output_projection(embeddings)  # (batch_size, seq_len, embedding_dim)
-        embeddings = torch.nn.functional.gelu(embeddings)  # (batch_size, seq_len, embedding_dim)
+        # embeddings = torch.nn.functional.gelu(embeddings)  # (batch_size, seq_len, embedding_dim)
         embeddings = torch.einsum(
             'bsd,nd->bsn', embeddings, self._item_embeddings.weight
         )  # (batch_size, seq_len, num_items)
-        embeddings += self._bias[None, None, :]  # (batch_size, seq_len, num_items)
+        # embeddings += self._bias[None, None, :]  # (batch_size, seq_len, num_items)
 
         if self.training:  # training mode
             all_sample_labels = inputs['{}.ids'.format(self._labels_prefix)]  # (all_batch_events)
