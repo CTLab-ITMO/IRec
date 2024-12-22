@@ -96,6 +96,10 @@ def main():
         dataset=test_sampler,
         **dataset.meta
     )
+    
+    print(len(train_dataloader))
+    
+    exit(0)
 
     model = BaseModel.create_from_config(config['model'], **dataset.meta).to(DEVICE)
     if 'checkpoint' in config:

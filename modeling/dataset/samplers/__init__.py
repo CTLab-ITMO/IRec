@@ -9,3 +9,4 @@ from .masked_item_prediction import MaskedItemPredictionTrainSampler, MaskedItem
 from .mclsr import MCLSRTrainSampler, MCLSRPredictionEvalSampler
 from .pop import PopTrainSampler, PopEvalSampler
 from .s3rec import S3RecPretrainTrainSampler, S3RecPretrainEvalSampler
+from .identity import IdentityTrainSampler, IdentityEvalSampler

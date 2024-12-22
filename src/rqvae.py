@@ -57,7 +57,7 @@ class RQVAE(torch.nn.Module):
                 kmeans = faiss.Kmeans(
                     d=embeddings_np.shape[1],
                     k=n_clusters,
-                    niter=1000,
+                    niter=100,
                     gpu=torch.cuda.is_available(),
                 )
                 kmeans.train(embeddings_np)
