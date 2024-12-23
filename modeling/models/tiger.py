@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from modeling.utils import DEVICE
 from models.base import BaseModel, TorchModel
 
-
+# TODO finish tiger model
 class TigerModel(TorchModel, config_name='tiger'):
     def __init__(
         self, 
