@@ -138,6 +138,13 @@ class RqVaeModel(TorchModel, config_name='rqvae'):
             "remainders": remainders,
             "codebooks_vectors": codebooks_vectors
         }
+        
+    def eval_pass(self, embeddings):
+        ind_lists = []
+        for cb in self.codebooks:
+            dist = torch.cdist(self.encoder(embeddings), cb)
+            ind_lists.append(dist.argmin(dim=-1).cpu().numpy())
+        return zip(*ind_lists)
 
     def forward(self, inputs):
         embeddings = inputs["embeddings"]
@@ -145,4 +152,4 @@ class RqVaeModel(TorchModel, config_name='rqvae'):
         if self.training:  # training mode
             return self.train_pass(embeddings)
         else:  # eval mode
-            raise NotImplementedError("No eval mode for RqVae model!")
+            return self.eval_pass(embeddings)
