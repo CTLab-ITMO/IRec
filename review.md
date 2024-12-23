@@ -1,5 +1,9 @@
 # Review
 
+## Todos
+
+- TODO backward on mean loss? in `RqVae`
+
 ## Links
 
 - [dataset](https://cseweb.ucsd.edu/~jmcauley/datasets/amazon/links.html)

@@ -1,6 +1,6 @@
 {
   "experiment_name": "rqvae_beauty",
-  "best_metric": "eval/ndcg@20",
+  "train_steps_num": 6000,
   "dataset": {
     "type": "rqvae",
     "path_to_data_dir": "../data",
@@ -14,7 +14,7 @@
       "type": "torch",
       "batch_size": 128,
       "batch_processor": {
-        "type": "basic"
+        "type": "embed"
       },
       "drop_last": false,
       "shuffle": true
@@ -23,7 +23,7 @@
       "type": "torch",
       "batch_size": 256,
       "batch_processor": {
-        "type": "basic"
+        "type": "embed"
       },
       "drop_last": false,
       "shuffle": false
@@ -31,17 +31,12 @@
   },
   "model": {
     "type": "rqvae",
-    "user_prefix": "user",
-    "sequence_prefix": "item",
-    "labels_prefix": "labels",
-    "candidate_prefix": "candidates",
-    "embedding_dim": 64,
-    "num_heads": 2,
-    "num_layers": 2,
-    "dim_feedforward": 256,
-    "dropout": 0.2,
-    "activation": "gelu",
-    "layer_norm_eps": 1e-9,
+    "input_dim": 512,
+    "hidden_dim": 128,
+    "n_iter": 100,
+    "codebook_sizes": [256, 256, 256, 256],
+    "should_init_codebooks": true,
+    "should_reinit_unused_clusters": false,
     "initializer_range": 0.02
   },
   "optimizer": {
@@ -50,19 +45,16 @@
       "type": "adam",
       "lr": 1e-4
     },
-    "clip_grad_threshold": 5.0
+    "clip_grad_threshold": 5.0,
+    "scheduler": {
+      "type": "step",
+      "step_size": 100, 
+      "gamma": 0.98
+    }
   },
   "loss": {
-    "type": "composite",
-    "losses": [
-      {
-        "type": "ce",
-        "predictions_prefix": "logits",
-        "labels_prefix": "labels",
-        "output_prefix": "downstream_loss",
-        "weight": 1.0
-      }
-    ],
+    "type": "rqvae_loss",
+    "beta": 0.25,
     "output_prefix": "loss"
   },
   "callback": {

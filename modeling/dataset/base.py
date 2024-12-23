@@ -725,7 +725,7 @@ class RqVaeDataset(BaseDataset, config_name='rqvae'):
 
         for _idx, sample in df.iterrows():
             train_dataset.append({
-                'item.id': sample['asin'],
+                'item.id': sample['asin_numeric'],
                 'item.embed': sample["embeddings"]
             })
             
@@ -766,7 +766,8 @@ class RqVaeDataset(BaseDataset, config_name='rqvae'):
     @property
     def meta(self):
         return {
-            'num_items': self.num_items
+            'num_items': self.num_items,
+            'train_sampler': self._train_sampler
         }
 
 

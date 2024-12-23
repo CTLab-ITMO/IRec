@@ -104,6 +104,45 @@ class CrossEntropyLoss(TorchLoss, config_name='ce'):
             inputs[self._output_prefix] = loss.cpu().item()
 
         return loss
+    
+class RqVaeLoss(TorchLoss, config_name='rqvae_loss'):
+
+    def __init__(self, beta, output_prefix=None):
+        super().__init__()
+        self.beta = beta
+        self._output_prefix = output_prefix
+        
+        self._loss = nn.MSELoss()
+        
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        # 0.25 is default Beta in paper
+        return cls(
+            beta = config.get('beta', 0.25),
+            output_prefix = config['output_prefix'],
+        )
+                    
+    def forward(self, inputs):
+        embeddings = inputs["embeddings"]
+        embeddings_restored = inputs["embeddings_restored"]
+        remainders = inputs["remainders"]
+        codebooks_vectors = inputs["codebooks_vectors"]
+        
+        rqvae_loss = 0
+        
+        for remainder, codebook_vectors in zip(remainders, codebooks_vectors):
+            rqvae_loss += self.beta * self._loss(
+                remainder, codebook_vectors.detach()
+            )
+            rqvae_loss += self._loss(codebook_vectors, remainder.detach())
+            
+        recon_loss = self._loss(embeddings_restored, embeddings)
+        loss = (recon_loss + rqvae_loss).mean() # TODO mean?
+        
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+        
+        return loss
 
 
 class BinaryCrossEntropyLoss(TorchLoss, config_name='bce'):

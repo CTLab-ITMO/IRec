@@ -12,6 +12,14 @@ class IdentityBatchProcessor(BaseBatchProcessor, config_name='identity'):
 
     def __call__(self, batch):
         return torch.tensor(batch)
+    
+class EmbedBatchProcessor(BaseBatchProcessor, config_name='embed'):
+
+    def __call__(self, batch):
+        ids = torch.tensor([entry['item.id'] for entry in batch])
+        embeds = torch.stack([entry['item.embed'] for entry in batch])
+        
+        return {'ids': ids, 'embeddings': embeds}
 
 
 class BasicBatchProcessor(BaseBatchProcessor, config_name='basic'):

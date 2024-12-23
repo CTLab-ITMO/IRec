@@ -4,3 +4,4 @@ data/*
 tensorboard_logs/*
 .venv
 papers
+checkpoints/*
