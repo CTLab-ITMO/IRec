@@ -2,8 +2,8 @@
 
 ## Todos
 
-- posterior collapse (как будто все сваливается в один индекс в кодбуке)
-- обязательно использование reinit unused clusters
+- posterior collapse (как будто все сваливается в один индекс в кодбуке) (fixed eval code)
+- обязательно использование reinit unused clusters!
 - в Amazon датасете пофиг на rating? получается учитываются только implicit действия?
 - TODO какой базовый класс использовать для e2e модели? (LastPred?)
 - TODO backward on mean loss? in `RqVae`

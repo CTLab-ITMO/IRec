@@ -1,6 +1,6 @@
 {
   "experiment_name": "rqvae_beauty",
-  "train_steps_num": 2000,
+  "train_steps_num": 1024,
   "dataset": {
     "type": "rqvae",
     "path_to_data_dir": "../data",

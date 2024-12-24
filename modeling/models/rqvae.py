@@ -141,9 +141,12 @@ class RqVaeModel(TorchModel, config_name='rqvae'):
         
     def eval_pass(self, embeddings):
         ind_lists = []
-        for cb in self.codebooks:
-            dist = torch.cdist(self.encoder(embeddings), cb)
-            ind_lists.append(dist.argmin(dim=-1).cpu().numpy())
+        remainder = self.encoder(embeddings)
+        for codebook in self.codebooks:
+            codebook_indices = self.get_codebook_indices(remainder, codebook)
+            codebook_vectors = codebook[codebook_indices]
+            ind_lists.append(codebook_indices.cpu().numpy())
+            remainder = remainder - codebook_vectors
         return zip(*ind_lists)
 
     def forward(self, inputs):
