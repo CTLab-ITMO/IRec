@@ -720,12 +720,12 @@ class RqVaeDataset(BaseDataset, config_name='rqvae'):
         data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
         train_dataset, validation_dataset, test_dataset = [], [], []
 
-        dataset_path = os.path.join(data_dir_path, '{}.pt'.format('all_data'))
+        dataset_path = os.path.join(data_dir_path, '{}.pt'.format('data_full'))
         df = torch.load(dataset_path, weights_only=False)
 
-        for _idx, sample in df.iterrows():
+        for idx, sample in df.iterrows():
             train_dataset.append({
-                'item.id': sample['asin_numeric'],
+                'item.id': idx,
                 'item.embed': sample["embeddings"]
             })
             
