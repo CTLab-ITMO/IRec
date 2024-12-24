@@ -81,7 +81,7 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
         if self.training:  # training mode
             all_sample_labels = inputs['{}.ids'.format(self._labels_prefix)]  # (all_batch_events)
             embeddings = embeddings[mask]  # (all_batch_events, num_items)
-            labels_mask = (all_sample_labels != 0).bool()  # (all_batch_events)
+            labels_mask = (all_sample_labels != 0).bool()  # (all_batch_events) # TODOPK change that it accepts semantic ids (what is nonzero)
 
             needed_logits = embeddings[labels_mask]  # (non_zero_events, num_items)
             needed_labels = all_sample_labels[labels_mask]  # (non_zero_events)

@@ -2,11 +2,20 @@
 
 ## Todos
 
+- check TODOPK
+- у нас авторегрессионный next item prediciton? то есть:
+
+1) items (10)
+2) semantic_ids (40)
+3) prediciting 11th item (next 4 semantic ids)
+4) if single - ok
+5) if several?
+6) if nothing?
+
 - posterior collapse (как будто все сваливается в один индекс в кодбуке) (fixed eval code)
-- обязательно использование reinit unused clusters!
+- обязательно использование reinit unused clusters! (mark)
 - в Amazon датасете пофиг на rating? получается учитываются только implicit действия?
 - TODO какой базовый класс использовать для e2e модели? (LastPred?)
-- TODO backward on mean loss? in `RqVae`
 - TODO имя для модели (tiger)
 
 ## Links

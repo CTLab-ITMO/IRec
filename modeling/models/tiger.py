@@ -3,26 +3,23 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modeling.utils import DEVICE
-from models.base import BaseModel, TorchModel
+from models.base import TorchModel
 
-# TODO finish tiger model
+# TODOPK finish tiger model
 class TigerModel(TorchModel, config_name='tiger'):
     def __init__(
-        self, 
-        rqvae_encoder, 
-        emb_dim, 
-        n_tokens, 
-        n_codebooks, 
-        nhead, 
-        num_encoder_layers, 
-        num_decoder_layers, 
-        dim_feedforward, 
+        self,
+        emb_dim,
+        n_tokens,
+        n_codebooks,
+        nhead,
+        num_encoder_layers,
+        num_decoder_layers,
+        dim_feedforward,
         dropout
     ):
         super().__init__()
         
-        self.rqvae_encoder = rqvae_encoder
         self.emb_dim = emb_dim
         self.n_tokens = n_tokens
         
@@ -30,7 +27,7 @@ class TigerModel(TorchModel, config_name='tiger'):
         self.item_embeddings = nn.Embedding(n_tokens, emb_dim)
         
         self.transformer = nn.Transformer(
-            d_model=emb_dim, 
+            d_model=emb_dim,
             nhead=nhead,
             num_encoder_layers=num_encoder_layers,
             num_decoder_layers=num_decoder_layers,
@@ -42,14 +39,7 @@ class TigerModel(TorchModel, config_name='tiger'):
         
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        rqvae_train_config = json.load(open(config['rqvae_train_config_path']))
-        
-        rqvae_model = BaseModel.create_from_config(rqvae_train_config['model']).to(DEVICE)
-        rqvae_model.load_state_dict(torch.load(config['rqvae_checkpoint_path'], weights_only=True))
-        rqvae_model.eval()
-
         return cls(
-            rqvae_encoder=rqvae_model,
             emb_dim=config['emb_dim'],
             n_tokens=config['n_tokens'],
             n_codebooks=config['n_codebooks'],

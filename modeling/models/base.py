@@ -109,7 +109,7 @@ class SequentialTorchModel(TorchModel):
         batch_size = mask.shape[0]
         seq_len = mask.shape[1]
 
-        positions = torch.arange(
+        positions = torch.arange( # TODOPK why inverted? (not 0...n)
             start=seq_len - 1, end=-1, step=-1, device=mask.device
         )[None].tile([batch_size, 1]).long()  # (batch_size, seq_len)
         positions_mask = positions < lengths[:, None]  # (batch_size, max_seq_len)
@@ -135,7 +135,7 @@ class SequentialTorchModel(TorchModel):
             embeddings = torch.cat((cls_token_expanded, embeddings), dim=1)
             mask = torch.cat((torch.ones((batch_size, 1), dtype=torch.bool, device=DEVICE), mask), dim=1)
 
-        if self._is_causal:
+        if self._is_causal: # TODOPK causal?
             causal_mask = torch.tril(torch.ones(seq_len, seq_len)).bool().to(DEVICE)  # (seq_len, seq_len)
             embeddings = self._encoder(
                 src=embeddings,

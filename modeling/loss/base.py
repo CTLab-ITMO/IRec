@@ -137,7 +137,7 @@ class RqVaeLoss(TorchLoss, config_name='rqvae_loss'):
             rqvae_loss += self._loss(codebook_vectors, remainder.detach())
             
         recon_loss = self._loss(embeddings_restored, embeddings)
-        loss = (recon_loss + rqvae_loss).mean() # TODO mean?
+        loss = (recon_loss + rqvae_loss).mean() # TODOPK mean?
         
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()
