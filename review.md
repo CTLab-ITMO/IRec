@@ -18,6 +18,9 @@
 - TODO какой базовый класс использовать для e2e модели? (LastPred?)
 - TODO имя для модели (tiger)
 
+Почему одинаковые длины?
+![alt text](image.png)
+
 ## Links
 
 - [dataset](https://cseweb.ucsd.edu/~jmcauley/datasets/amazon/links.html)

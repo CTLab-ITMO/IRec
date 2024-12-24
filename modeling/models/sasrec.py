@@ -102,7 +102,7 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
                 k=20, dim=-1, largest=True
             )  # (batch_size, 20)
 
-            return indices
+            return indices.repeat(4, 2) # TODOPK
 
 
 class SasRecInBatchModel(SasRecModel, config_name='sasrec_in_batch'):

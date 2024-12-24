@@ -3,7 +3,7 @@
   "train_steps_num": 1024,
   "best_metric": "eval/ndcg@20",
   "dataset": {
-    "type": "scientific",
+    "type": "rqvae_scientific",
     "path_to_data_dir": "../data",
     "name": "Beauty",
     "max_sequence_length": 50,
@@ -21,7 +21,7 @@
         "type": "rqvae",
         "rqvae_checkpoint_path": "../checkpoints/rqvae_beauty_final_state.pth",
         "rqvae_train_config_path": "../configs/train/rqvae_train_config.json",
-        "embs_extractor_path": "../data/Beauty/embs_extractor.pt"
+        "embs_extractor_path": "../data/Beauty/data_full.pt"
       },
       "drop_last": true,
       "shuffle": true
@@ -33,7 +33,7 @@
         "type": "rqvae",
         "rqvae_checkpoint_path": "../checkpoints/rqvae_beauty_final_state.pth",
         "rqvae_train_config_path": "../configs/train/rqvae_train_config.json",
-        "embs_extractor_path": "../data/Beauty/embs_extractor.pt"
+        "embs_extractor_path": "../data/Beauty/data_full.pt"
       },
       "drop_last": false,
       "shuffle": false

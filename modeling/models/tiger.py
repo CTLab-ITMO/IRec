@@ -1,86 +1,105 @@
-import json
+from models.base import SequentialTorchModel
+
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
-from models.base import TorchModel
 
-# TODOPK finish tiger model
-class TigerModel(TorchModel, config_name='tiger'):
+class TigerModel(SequentialTorchModel, config_name='tiger'):
+
     def __init__(
-        self,
-        emb_dim,
-        n_tokens,
-        n_codebooks,
-        nhead,
-        num_encoder_layers,
-        num_decoder_layers,
-        dim_feedforward,
-        dropout
+            self,
+            sequence_prefix,
+            positive_prefix,
+            num_items,
+            max_sequence_length,
+            embedding_dim,
+            num_heads,
+            num_layers,
+            dim_feedforward,
+            dropout=0.0,
+            activation='relu',
+            layer_norm_eps=1e-9,
+            initializer_range=0.02
     ):
-        super().__init__()
-        
-        self.emb_dim = emb_dim
-        self.n_tokens = n_tokens
-        
-        self.position_embeddings = nn.Embedding(n_codebooks, emb_dim)
-        self.item_embeddings = nn.Embedding(n_tokens, emb_dim)
-        
-        self.transformer = nn.Transformer(
-            d_model=emb_dim,
-            nhead=nhead,
-            num_encoder_layers=num_encoder_layers,
-            num_decoder_layers=num_decoder_layers,
+        super().__init__(
+            num_items=num_items,
+            max_sequence_length=max_sequence_length,
+            embedding_dim=embedding_dim,
+            num_heads=num_heads,
+            num_layers=num_layers,
             dim_feedforward=dim_feedforward,
-            dropout=dropout
+            dropout=dropout,
+            activation=activation,
+            layer_norm_eps=layer_norm_eps,
+            is_causal=True
         )
-        
-        self.proj = nn.Linear(emb_dim, n_tokens)
-        
+        self._sequence_prefix = sequence_prefix
+        self._positive_prefix = positive_prefix
+
+        self._init_weights(initializer_range)
+
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
-            emb_dim=config['emb_dim'],
-            n_tokens=config['n_tokens'],
-            n_codebooks=config['n_codebooks'],
-            nhead=config['nhead'],
-            num_encoder_layers=config['num_encoder_layers'],
-            num_decoder_layers=config['num_decoder_layers'],
-            dim_feedforward=config['dim_feedforward'],
-            dropout=config['dropout']
-        )    
-    
-    def forward(self, user_item_history):
-        # Get item embeddings from RQVAE encoder
-        item_sequence = self.rqvae_encoder(user_item_history)
-        
-        # Convert item sequence to embeddings (embedding size is emb_dim)
-        item_embs = self.item_embeddings(item_sequence)
-        
-        # Add positional embeddings (positions are in the range [0, 3] for each tuple in the sequence)
-        positions = torch.arange(0, item_embs.size(1), device=item_embs.device).unsqueeze(0)
-        position_embs = self.position_embeddings(positions)
-        
-        # Add position embeddings to item embeddings
-        embeddings = item_embs + position_embs
-        
-        # Transformer expects the input to be in (seq_len, batch, embedding_dim) format
-        embeddings = embeddings.permute(1, 0, 2)  # Convert to (seq_len, batch, emb_dim)
-        
-        # Create the target sequence for the transformer decoder
-        # You can shift the sequence for training as needed (e.g., teacher forcing)
-        target = embeddings.clone()  # Use input embeddings as target for now
-        
-        # Pass through the transformer (using embeddings as both input and target)
-        transformer_output = self.transformer(embeddings, target)
-        
-        # Project the output back to token space (256 possible values for each codebook)
-        logits = self.proj(transformer_output)
-        
-        # Apply softmax to get probabilities (for cross-entropy loss)
-        return logits
+            sequence_prefix=config['sequence_prefix'],
+            positive_prefix=config['positive_prefix'],
+            num_items=kwargs['num_items'],
+            max_sequence_length=kwargs['max_sequence_length'],
+            embedding_dim=config['embedding_dim'],
+            num_heads=config.get('num_heads', int(config['embedding_dim'] // 64)),
+            num_layers=config['num_layers'],
+            dim_feedforward=config.get('dim_feedforward', 4 * config['embedding_dim']),
+            dropout=config.get('dropout', 0.0),
+            initializer_range=config.get('initializer_range', 0.02)
+        )
 
-    def compute_loss(self, logits, target):
-        # Compute cross-entropy loss
-        loss = F.cross_entropy(logits.view(-1, self.n_tokens), target.view(-1))
-        return loss
+    def forward(self, inputs):
+        all_sample_events = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
+        all_sample_lengths = inputs['{}.length'.format(self._sequence_prefix)]  # (batch_size)
+
+        embeddings, mask = self._apply_sequential_encoder(
+            all_sample_events, all_sample_lengths
+        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
+
+        if self.training:  # training mode
+            all_positive_sample_events = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
+
+            all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
+            all_positive_sample_embeddings = self._item_embeddings(
+                all_positive_sample_events
+            )  # (all_batch_events, embedding_dim)
+
+            all_embeddings = self._item_embeddings.weight  # (num_items + 2, embedding_dim)
+
+            all_scores = torch.einsum(
+                'ad,nd->an',
+                all_sample_embeddings,
+                all_embeddings
+            )  # (all_batch_events, num_items + 2)
+            positive_scores = torch.gather(
+                input=all_scores,
+                dim=1,
+                index=all_positive_sample_events[..., None]
+            )  # (all_batch_items, 1)
+
+            return {
+                'positive_scores': positive_scores,
+                'negative_scores': all_scores
+            }
+        else:  # eval mode
+            last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
+
+            # b - batch_size, n - num_candidates, d - embedding_dim
+            candidate_scores = torch.einsum(
+                'bd,nd->bn',
+                last_embeddings,
+                self._item_embeddings.weight
+            )  # (batch_size, num_items + 2)
+            candidate_scores[:, 0] = -torch.inf
+            candidate_scores[:, self._num_items + 1:] = -torch.inf
+
+            _, indices = torch.topk(
+                candidate_scores,
+                k=20, dim=-1, largest=True
+            )  # (batch_size, 20)
+
+            return indices.repeat(4, 1)

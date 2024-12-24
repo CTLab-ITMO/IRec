@@ -38,12 +38,12 @@ class RqVaeProcessor(BaseBatchProcessor, config_name='rqvae'):
         rqvae_model.load_state_dict(torch.load(config['rqvae_checkpoint_path'], weights_only=True))
         rqvae_model.eval()
         
-        embs_extractor = torch.load(config['embs_extractor_path'], weights_only=True)
+        embs_extractor = torch.load(config['embs_extractor_path'])
 
         return cls(rqvae_model, embs_extractor)
     
     def get_semantic_ids(self, item_ids):
-        embs = torch.stack([self._embs_extractor[item_id] for item_id in item_ids])
+        embs = torch.stack([self._embs_extractor.loc[item_id]['embeddings'] for item_id in item_ids])
         semantic_ids = self._rqvae({"embeddings": embs})
         return list(semantic_ids)
 
@@ -68,7 +68,7 @@ class RqVaeProcessor(BaseBatchProcessor, config_name='rqvae'):
                     if prefix != 'user':
                         semantic_ids = self.get_semantic_ids(item_ids)
                         item_ids = list(itertools.chain(*semantic_ids))
-                        length = len(semantic_ids)
+                        length = len(item_ids)
                     
                     processed_batch[f'{prefix}.ids'].extend(item_ids)
                     processed_batch[f'{prefix}.length'].append(length)
