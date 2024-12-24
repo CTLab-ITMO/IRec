@@ -75,17 +75,9 @@ def get_data(cached=True):
         with torch.no_grad():
             df["embeddings"] = df["combined_text"].progress_apply(encode_text)
     else:
-        df = torch.load("../data/df_with_embs.pt", weights_only=False)
+        df = torch.load("../data/Beauty/all_data.pt", weights_only=False)
         
     return df
-
-def get_cb_tuples(rqvae, embeddings):
-    ind_lists = []
-    for cb in rqvae.codebooks:
-        dist = torch.cdist(rqvae.encoder(embeddings), cb)
-        ind_lists.append(dist.argmin(dim=-1).cpu().numpy())
-
-    return zip(*ind_lists)
 
 
 def search_similar_items(items_with_tuples, clust2search, max_cnt=5):

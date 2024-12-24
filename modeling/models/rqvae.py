@@ -1,18 +1,16 @@
 from models.base import TorchModel
 
 import torch
-import torch.nn as nn
 
 import torch
 
-from tqdm import tqdm
 import faiss
 
 class RqVaeModel(TorchModel, config_name='rqvae'):
 
     def __init__(
             self,
-            all_data,
+            train_sampler,
             input_dim: int,
             hidden_dim: int,
             n_iter: int,
@@ -43,9 +41,11 @@ class RqVaeModel(TorchModel, config_name='rqvae'):
          
         self._init_weights(initializer_range)
         
-        embeddings = torch.stack([entry['item.embed'] for entry in all_data._dataset])
-        
         if self.should_init_codebooks:
+            if train_sampler is None:
+                raise AttributeError("Train sampler is None")
+            
+            embeddings = torch.stack([entry['item.embed'] for entry in train_sampler._dataset])
             self.init_codebooks(embeddings)
             print('Codebooks initialized with Faiss Kmeans')
             self.should_init_codebooks = False
@@ -53,7 +53,7 @@ class RqVaeModel(TorchModel, config_name='rqvae'):
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
-            all_data=kwargs['train_sampler'],
+            train_sampler=kwargs.get('train_sampler'),
             input_dim=config['input_dim'],
             hidden_dim=config['hidden_dim'],
             n_iter=config['n_iter'],
@@ -141,9 +141,12 @@ class RqVaeModel(TorchModel, config_name='rqvae'):
         
     def eval_pass(self, embeddings):
         ind_lists = []
-        for cb in self.codebooks:
-            dist = torch.cdist(self.encoder(embeddings), cb)
-            ind_lists.append(dist.argmin(dim=-1).cpu().numpy())
+        remainder = self.encoder(embeddings)
+        for codebook in self.codebooks:
+            codebook_indices = self.get_codebook_indices(remainder, codebook)
+            codebook_vectors = codebook[codebook_indices]
+            ind_lists.append(codebook_indices.cpu().numpy())
+            remainder = remainder - codebook_vectors
         return zip(*ind_lists)
 
     def forward(self, inputs):
