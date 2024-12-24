@@ -1,5 +1,6 @@
 {
   "experiment_name": "tiger",
+  "train_steps_num": 1024,
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "scientific",

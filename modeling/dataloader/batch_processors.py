@@ -43,7 +43,7 @@ class RqVaeProcessor(BaseBatchProcessor, config_name='rqvae'):
         return cls(rqvae_model, embs_extractor)
     
     def get_semantic_ids(self, item_ids):
-        embs = torch.stack([self._embs_extractor.get(item_id, torch.ones((512,))) for item_id in item_ids]) # TODOPK fix
+        embs = torch.stack([self._embs_extractor[item_id] for item_id in item_ids])
         semantic_ids = self._rqvae({"embeddings": embs})
         return list(semantic_ids)
 
