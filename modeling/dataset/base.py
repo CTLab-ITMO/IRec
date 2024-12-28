@@ -52,14 +52,12 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
             max_sequence_length=config['max_sequence_length'],
             use_cached=config.get('use_cached', False)
         )
-
         validation_dataset, valid_max_user_id, valid_max_item_id, valid_seq_len = cls._create_dataset(
             dir_path=data_dir_path,
             part='valid',
             max_sequence_length=config['max_sequence_length'],
             use_cached=config.get('use_cached', False)
         )
-
         test_dataset, test_max_user_id, test_max_item_id, test_seq_len = cls._create_dataset(
             dir_path=data_dir_path,
             part='test',
