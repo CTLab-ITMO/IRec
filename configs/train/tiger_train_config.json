@@ -9,7 +9,7 @@
     "max_sequence_length": 50,
     "samplers": {
       "num_negatives_val": 100,
-      "type": "next_item_prediction",
+      "type": "last_item_prediction",
       "negative_sampler_type": "random"
     }
   },
@@ -40,8 +40,9 @@
     }
   },
   "model": {
-    "type": "sasrec",
+    "type": "tiger",
     "sequence_prefix": "item",
+    "predictions_prefix": "predictions",
     "positive_prefix": "positive",
     "negative_prefix": "negative",
     "candidate_prefix": "candidates",

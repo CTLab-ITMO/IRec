@@ -53,6 +53,8 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
         )
 
     def forward(self, inputs):
+        print(inputs)
+        
         all_sample_events = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
         all_sample_lengths = inputs['{}.length'.format(self._sequence_prefix)]  # (batch_size)
 

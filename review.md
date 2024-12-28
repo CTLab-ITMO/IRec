@@ -2,24 +2,32 @@
 
 ## Todos
 
-- check TODOPK
-- у нас авторегрессионный next item prediciton? то есть:
+- next_item_pred / last_item_pred (какие задачи учим и как именно) # can be both tasks
+- предсказываем item = предсказываем 4 semantic id? # yes
+- как составить датасет для обучения # (map item seq -> semantic id seq)
+- берем правдивые semantic id # yes
+
+- у нас авторегрессионный next item prediction? # no (teacher learning)
+
+то есть:
 
 1) items (10)
-2) semantic_ids (40)
-3) prediciting 11th item (next 4 semantic ids)
+2) semantic_ids (40) -> (1, 2, 3, 4)
+3) predicting 11th item (next 4 semantic ids)
 4) if single - ok
-5) if several?
-6) if nothing?
+5) if several? -> dedup # let length be 5 in rqvae, dedup -> 4 + closest by dist
+6) if nothing? take all by longest prefix (closest by L^2 / COS / dot)
+
+encoder -> (b_size x 40 x emb_dim)
+target  -> (b_size x 4) [(1, 2, 3, 4); (29, 6, 7, 4); ...]
+decoder: (bos, 1, 2, 3) -> (1, 2, 3, 4) # causal mask so (bos -> 1), (bos, 1 -> 2), ...
+           \___ learnable embed
 
 - posterior collapse (как будто все сваливается в один индекс в кодбуке) (fixed eval code)
 - обязательно использование reinit unused clusters! (mark)
-- в Amazon датасете пофиг на rating? получается учитываются только implicit действия?
-- TODO какой базовый класс использовать для e2e модели? (LastPred?)
-- TODO имя для модели (tiger)
-
-Почему одинаковые длины?
-![alt text](image.png)
+- в Amazon датасете пофиг на rating? получается учитываются только implicit действия? # байтовый датасет (любое взаимодействие)
+- TODO какой базовый класс использовать для seq2seq модели? (LastPred?) # use encoder from SequentialTorchModel
+- TODO имя для модели (tiger) # tmp
 
 ## Links
 
