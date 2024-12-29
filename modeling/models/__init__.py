@@ -1,4 +1,4 @@
-from .base import BaseModel, TorchModel
+from .base import BaseModel, SequentialTorchModel, TorchModel
 from .bert4rec import Bert4RecModel
 from .bert4rec_cls import Bert4RecModelCLS
 from .cl4srec import Cl4SRecModel
