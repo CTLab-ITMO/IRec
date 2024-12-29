@@ -144,7 +144,7 @@ class CheckpointCallback(BaseCallback, config_name='checkpoint'):
             logger.debug('Saving done!')
 
 
-class ValidationCallback(BaseCallback, config_name='validation'):
+class InferenceCallback(BaseCallback):
 
     def __init__(
             self,
@@ -193,7 +193,7 @@ class ValidationCallback(BaseCallback, config_name='validation'):
 
     def __call__(self, inputs, step_num):
         if step_num % self._on_step == 0:  # TODO Add time monitoring
-            logger.debug('Validation on step {}...'.format(step_num))
+            logger.debug(f'Running {self._get_name()} on step {step_num}...')
             running_params = {}
             for metric_name, metric_function in self._metrics.items():
                 running_params[metric_name] = []
@@ -202,7 +202,7 @@ class ValidationCallback(BaseCallback, config_name='validation'):
 
             self._model.eval()
             with torch.no_grad():
-                for batch in self._validation_dataloader:
+                for batch in self._get_dataloader():
 
                     for key, value in batch.items():
                         batch[key] = value.to(utils.DEVICE)
@@ -223,45 +223,24 @@ class ValidationCallback(BaseCallback, config_name='validation'):
                         running_params[self._loss_prefix] += batch[self._loss_prefix].item()
 
             for label, value in running_params.items():
-                inputs['validation/{}'.format(label)] = np.mean(value)
+                inputs[f'{self._get_name()}/{label}'] = np.mean(value)
                 utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
-                    'validation/{}'.format(label),
+                    f'{self._get_name()}/{label}',
                     np.mean(value),
                     step_num
                 )
             utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.flush()
 
-            logger.debug('Validation on step {} is done!'.format(step_num))
+            logger.debug(f'Running {self._get_name()} on step {step_num} is done!')
+        
+    def _get_name(self):
+        return self.config_name
+
+    def _get_dataloader(self):
+        raise NotImplementedError
 
 
-# TODO put into validation
-class EvalCallback(BaseCallback, config_name='eval'):
-
-    def __init__(
-            self,
-            model,
-            train_dataloader,
-            validation_dataloader,
-            eval_dataloader,
-            optimizer,
-            on_step,
-            pred_prefix,
-            labels_prefix,
-            metrics=None,
-            loss_prefix=None,
-    ):
-        super().__init__(
-            model,
-            train_dataloader,
-            validation_dataloader,
-            eval_dataloader,
-            optimizer
-        )
-        self._on_step = on_step
-        self._metrics = metrics if metrics is not None else {}
-        self._pred_prefix = pred_prefix
-        self._labels_prefix = labels_prefix
-        self._loss_prefix = loss_prefix
+class ValidationCallback(InferenceCallback, config_name='validation'):
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -282,47 +261,33 @@ class EvalCallback(BaseCallback, config_name='eval'):
             labels_prefix=config['labels_prefix']
         )
 
-    def __call__(self, inputs, step_num):
-        if step_num % self._on_step == 0:  # TODO Add time monitoring
-            logger.debug('Eval on step {}...'.format(step_num))
-            running_params = {}
-            for metric_name, metric_function in self._metrics.items():
-                running_params[metric_name] = []
-            if self._loss_prefix is not None:
-                running_params[self._loss_prefix] = []
+    def _get_dataloader(self):
+        return self._validation_dataloader
 
-            self._model.eval()
-            with torch.no_grad():
-                for batch in self._eval_dataloader:
 
-                    for key, value in batch.items():
-                        batch[key] = value.to(utils.DEVICE)
+class EvalCallback(InferenceCallback, config_name='eval'):
 
-                    batch[self._pred_prefix] = self._model(batch)
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        metrics = {
+            metric_name: BaseMetric.create_from_config(metric_cfg, **kwargs)
+            for metric_name, metric_cfg in config['metrics'].items()
+        }
 
-                    for key, values in batch.items():
-                        batch[key] = values.cpu()
+        return cls(
+            model=kwargs['model'],
+            train_dataloader=kwargs['train_dataloader'],
+            validation_dataloader=kwargs['validation_dataloader'],
+            eval_dataloader=kwargs['eval_dataloader'],
+            optimizer=kwargs['optimizer'],
+            on_step=config['on_step'],
+            metrics=metrics,
+            pred_prefix=config['pred_prefix'],
+            labels_prefix=config['labels_prefix']
+        )
 
-                    for metric_name, metric_function in self._metrics.items():
-                        running_params[metric_name].extend(metric_function(
-                            inputs=batch,
-                            pred_prefix=self._pred_prefix,
-                            labels_prefix=self._labels_prefix,
-                        ))
-
-                    if self._loss_prefix is not None:
-                        running_params[self._loss_prefix] += batch[self._loss_prefix].item()
-
-            for label, value in running_params.items():
-                inputs['eval/{}'.format(label)] = np.mean(value)
-                utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
-                    'eval/{}'.format(label),
-                    np.mean(value),
-                    step_num
-                )
-            utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.flush()
-
-            logger.debug('Eval on step {} is done!'.format(step_num))
+    def _get_dataloader(self):
+        return self._eval_dataloader
 
 
 class CompositeCallback(BaseCallback, config_name='composite'):

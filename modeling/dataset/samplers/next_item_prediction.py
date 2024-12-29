@@ -1,5 +1,4 @@
 from dataset.samplers.base import TrainSampler, EvalSampler
-from dataset.samplers.base import MultiDomainTrainSampler, MultiDomainEvalSampler
 from dataset.negative_samplers.base import BaseNegativeSampler
 
 import copy
