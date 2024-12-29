@@ -1,1 +1,1 @@
-from .base import BaseMetric, StaticMetric
+from .base import BaseMetric, StatefullMetric, StaticMetric
