@@ -153,8 +153,7 @@ class BPRLoss(TorchLoss, config_name='bpr'):
     def forward(self, inputs):
         pos_scores = inputs[self._positive_prefix]  # (all_batch_items)
         neg_scores = inputs[self._negative_prefix]  # (all_batch_items)
-
-        loss = -(pos_scores - neg_scores).sigmoid().log().mean()  # (1)
+        loss = -torch.log((pos_scores - neg_scores).sigmoid() + 1e-9).mean()  # (1)
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()

@@ -24,7 +24,7 @@ class PopEvalSampler(EvalSampler, config_name='pop'):
 
         self._candidates_counts = [0] + [
             self._item_2_count[item_id] for item_id in range(1, self._num_items + 1)
-        ]
+        ] + [0]
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
