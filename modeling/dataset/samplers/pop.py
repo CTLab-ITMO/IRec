@@ -2,6 +2,8 @@ from dataset.samplers.base import TrainSampler, EvalSampler
 
 import copy
 
+from collections import Counter
+
 
 CANDIDATE_COUNTS = None
 
@@ -14,19 +16,16 @@ class PopTrainSampler(TrainSampler, config_name='pop'):
         global CANDIDATE_COUNTS
 
         if CANDIDATE_COUNTS is None:
-            item_2_count = {}
-            for i in range(1, num_items + 1):
-                item_2_count[i] = 0
+            item_2_count = Counter()
 
             for sample in dataset:
-                # items = sample['item.ids'][:-1]
                 items = sample['item.ids']
                 for item in items:
                     item_2_count[item] += 1
 
             CANDIDATE_COUNTS = [0] + [
-                item_2_count[item_id] for item_id in range(1, num_items + 1)
-            ] + [0]
+                self._item_2_count[item_id] for item_id in range(1, self._num_items + 1)
+            ] + [0]  # Mask + items + padding
         
     @classmethod
     def create_from_config(cls, config, **kwargs):
