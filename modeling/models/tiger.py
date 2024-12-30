@@ -1,6 +1,8 @@
+from utils import create_masked_tensor
 from models.base import SequentialTorchModel
 
 import torch
+from torch import nn
 
 
 class TigerModel(SequentialTorchModel, config_name='tiger'):
@@ -15,6 +17,7 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
             num_heads,
             num_layers,
             dim_feedforward,
+            semantic_id_length,
             dropout=0.0,
             activation='relu',
             layer_norm_eps=1e-9,
@@ -34,6 +37,12 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
         )
         self._sequence_prefix = sequence_prefix
         self._positive_prefix = positive_prefix
+        self._semantic_id_length = semantic_id_length
+        
+        self._codebook_embeddings = nn.Embedding(
+            num_embeddings=semantic_id_length,  # in order to include `max_sequence_length` value
+            embedding_dim=embedding_dim
+        )
 
         self._init_weights(initializer_range)
 
@@ -48,18 +57,17 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
             num_heads=config.get('num_heads', int(config['embedding_dim'] // 64)),
             num_layers=config['num_layers'],
             dim_feedforward=config.get('dim_feedforward', 4 * config['embedding_dim']),
+            semantic_id_length=kwargs['semantic_id_length'],
             dropout=config.get('dropout', 0.0),
             initializer_range=config.get('initializer_range', 0.02)
         )
 
     def forward(self, inputs):
-        print(inputs)
-        
         all_sample_events = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
         all_sample_lengths = inputs['{}.length'.format(self._sequence_prefix)]  # (batch_size)
-
+        
         embeddings, mask = self._apply_sequential_encoder(
-            all_sample_events, all_sample_lengths
+            all_sample_events, all_sample_lengths, add_codebook_embeddings=True
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
         if self.training:  # training mode
@@ -104,4 +112,25 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
                 k=20, dim=-1, largest=True
             )  # (batch_size, 20)
 
-            return indices.repeat(4, 1)
+            return indices.repeat(self._semantic_id_length, 1)
+        
+    def _get_codebook_embeddings(self, embeddings, lengths, mask, batch_size, seq_len):
+        positions = torch.arange( # TODOPK invert decoder (position.reverse)
+            start=seq_len - 1, end=-1, step=-1, device=mask.device
+        )[None].tile([batch_size, 1]).long()  # (batch_size, seq_len)
+        
+        positions_mask = positions < lengths[:, None]  # (batch_size, max_seq_len)
+
+        positions = positions[positions_mask]  # (all_batch_events)
+        
+        positions = positions.flip(-1) % self._semantic_id_length # (all_batch_events)
+        # flip so first item has (0, 1, 2, 3) not (3, 2, 1, 0) semantic_id embeddings
+        
+        position_embeddings = self._codebook_embeddings(positions)  # (all_batch_events, embedding_dim)
+        position_embeddings, _ = create_masked_tensor(
+            data=position_embeddings,
+            lengths=lengths
+        )  # (batch_size, seq_len, embedding_dim)
+        assert torch.allclose(position_embeddings[~mask], embeddings[~mask])
+        
+        return position_embeddings

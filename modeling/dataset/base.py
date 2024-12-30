@@ -1,4 +1,5 @@
 from collections import defaultdict
+import json
 
 from tqdm import tqdm
 
@@ -710,7 +711,8 @@ class RqvaeScientificDataset(BaseDataset, config_name='rqvae_scientific'):
             test_sampler,
             num_users,
             num_items,
-            max_sequence_length
+            max_sequence_length,
+            semantic_id_length
     ):
         self._train_sampler = train_sampler
         self._validation_sampler = validation_sampler
@@ -718,6 +720,7 @@ class RqvaeScientificDataset(BaseDataset, config_name='rqvae_scientific'):
         self._num_users = num_users
         self._num_items = num_items
         self._max_sequence_length = max_sequence_length
+        self._semantic_id_length = semantic_id_length
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -789,6 +792,9 @@ class RqvaeScientificDataset(BaseDataset, config_name='rqvae_scientific'):
             num_users=max_user_idx,
             num_items=max_item_idx
         )
+        
+        rqvae_config = json.load(open(config['rqvae_train_config_path']))
+        semantic_id_length = len(rqvae_config['model']['codebook_sizes'])
 
         return cls(
             train_sampler=train_sampler,
@@ -796,7 +802,8 @@ class RqvaeScientificDataset(BaseDataset, config_name='rqvae_scientific'):
             test_sampler=test_sampler,
             num_users=max_user_idx,
             num_items=max_item_idx,
-            max_sequence_length=max_sequence_length
+            max_sequence_length=max_sequence_length,
+            semantic_id_length=semantic_id_length
         )
 
     def get_samplers(self):
@@ -818,8 +825,9 @@ class RqvaeScientificDataset(BaseDataset, config_name='rqvae_scientific'):
     def meta(self):
         return {
             'num_users': self.num_users,
-            'num_items': self.num_items * 4, # TODOPK
-            'max_sequence_length': self.max_sequence_length * 4 # TODOPK
+            'num_items': self.num_items * self._semantic_id_length,
+            'max_sequence_length': self.max_sequence_length * self._semantic_id_length,
+            'semantic_id_length': self._semantic_id_length
         }
         
 class RqVaeDataset(BaseDataset, config_name='rqvae'):

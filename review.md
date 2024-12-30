@@ -2,6 +2,8 @@
 
 ## Todos
 
+- max_sequence_length (TODOPK), why +1? не смог найти где дописывается в батч сама длина
+
 - next_item_pred / last_item_pred (какие задачи учим и как именно) # can be both tasks
 - предсказываем item = предсказываем 4 semantic id? # yes
 - как составить датасет для обучения # (map item seq -> semantic id seq)
