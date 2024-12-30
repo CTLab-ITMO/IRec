@@ -10,7 +10,6 @@ class PopTrainSampler(TrainSampler, config_name='pop'):
 
     def __init__(self, dataset, num_items):
         super().__init__()
-        print('Run train pop sampler')
 
         global CANDIDATE_COUNTS
 
@@ -41,8 +40,6 @@ class PopEvalSampler(EvalSampler, config_name='pop'):
 
     def __init__(self, dataset, num_users, num_items):
         super().__init__(dataset, num_users, num_items)
-        print('Run eval pop sampler')
-    
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
