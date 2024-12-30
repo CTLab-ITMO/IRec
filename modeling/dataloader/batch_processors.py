@@ -58,6 +58,9 @@ class RqVaeProcessor(BaseBatchProcessor, config_name='rqvae'):
                 processed_batch[f'{prefix}.ids'] = []
                 processed_batch[f'{prefix}.length'] = []
                 
+                processed_batch[f'semantic.{prefix}.ids'] = []
+                processed_batch[f'semantic.{prefix}.length'] = []
+                
                 # item_ids = list(itertools.chain(*semantic_ids))
                 # length = len(item_ids) # sample[f'{prefix}.length']
 
@@ -65,13 +68,14 @@ class RqVaeProcessor(BaseBatchProcessor, config_name='rqvae'):
                     item_ids = sample[f'{prefix}.ids']
                     length = sample[f'{prefix}.length']
                     
-                    if prefix != 'user':
-                        semantic_ids = self.get_semantic_ids(item_ids)
-                        item_ids = list(itertools.chain(*semantic_ids))
-                        length = len(item_ids)
-                    
                     processed_batch[f'{prefix}.ids'].extend(item_ids)
                     processed_batch[f'{prefix}.length'].append(length)
+                    
+                    if prefix != 'user':
+                        semantic_ids = self.get_semantic_ids(item_ids)
+                        semantic_ids = list(itertools.chain(*semantic_ids))
+                        processed_batch[f'semantic.{prefix}.ids'].extend(semantic_ids)
+                        processed_batch[f'semantic.{prefix}.length'].append(len(semantic_ids))
                     
         for part, values in processed_batch.items():
             processed_batch[part] = torch.tensor(values, dtype=torch.long)

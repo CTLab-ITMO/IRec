@@ -3,6 +3,18 @@
 ## Todos
 
 - max_sequence_length (TODOPK), why +1? не смог найти где дописывается в батч сама длина
+- positions = positions // self._semantic_id_length или reverse?
+как именно учитываем codebook_post & item_pos (тот же порядок или inverted)
+- как именно находим ближайшего при пересечении по embedding? (не понял о каком embedding речь)
+- почему
+
+```python
+candidate_scores = torch.einsum(
+    'bd,nd->bn',
+    predictions,
+    self._item_embeddings.weight
+)
+```
 
 - next_item_pred / last_item_pred (какие задачи учим и как именно) # can be both tasks
 - предсказываем item = предсказываем 4 semantic id? # yes

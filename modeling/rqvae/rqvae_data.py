@@ -75,7 +75,7 @@ def get_data(cached=True):
         with torch.no_grad():
             df["embeddings"] = df["combined_text"].progress_apply(encode_text)
     else:
-        df = torch.load("../data/Beauty/all_data.pt", weights_only=False)
+        df = torch.load("../data/Beauty/data_full.pt", weights_only=False)
         
     return df
 

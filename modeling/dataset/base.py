@@ -702,132 +702,60 @@ class ScientificDataset(BaseDataset, config_name='scientific'):
             'max_sequence_length': self.max_sequence_length
         }
         
-class RqvaeScientificDataset(BaseDataset, config_name='rqvae_scientific'):
+class RqvaeScientificDataset(ScientificDataset, config_name='rqvae_scientific'):
 
     def __init__(
-            self,
-            train_sampler,
-            validation_sampler,
-            test_sampler,
-            num_users,
-            num_items,
-            max_sequence_length,
-            semantic_id_length
+        self,
+        train_sampler,
+        validation_sampler,
+        test_sampler,
+        num_users,
+        num_items,
+        max_sequence_length,
+        semantic_id_arr
     ):
-        self._train_sampler = train_sampler
-        self._validation_sampler = validation_sampler
-        self._test_sampler = test_sampler
-        self._num_users = num_users
-        self._num_items = num_items
-        self._max_sequence_length = max_sequence_length
-        self._semantic_id_length = semantic_id_length
-
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
-        max_sequence_length = config['max_sequence_length']
-        max_user_idx, max_item_idx = 0, 0
-        train_dataset, validation_dataset, test_dataset = [], [], []
-
-        dataset_path = os.path.join(data_dir_path, '{}.txt'.format('all_data'))
-        with open(dataset_path, 'r') as f:
-            data = f.readlines()
-
-        for sample in data:
-            sample = sample.strip('\n').split(' ')
-            user_idx = int(sample[0])
-            item_ids = [int(item_id) for item_id in sample[1:]]
-
-            max_user_idx = max(max_user_idx, user_idx)
-            max_item_idx = max(max_item_idx, max(item_ids))
-
-            assert len(item_ids) >= 5
-
-            train_dataset.append({
-                'user.ids': [user_idx],
-                'user.length': 1,
-                'item.ids': item_ids[:-2][-max_sequence_length:],
-                'item.length': len(item_ids[:-2][-max_sequence_length:])
-            })
-            assert len(item_ids[:-2][-max_sequence_length:]) == len(set(item_ids[:-2][-max_sequence_length:]))
-            validation_dataset.append({
-                'user.ids': [user_idx],
-                'user.length': 1,
-                'item.ids': item_ids[:-1][-max_sequence_length:],
-                'item.length': len(item_ids[:-1][-max_sequence_length:])
-            })
-            assert len(item_ids[:-1][-max_sequence_length:]) == len(set(item_ids[:-1][-max_sequence_length:]))
-            test_dataset.append({
-                'user.ids': [user_idx],
-                'user.length': 1,
-                'item.ids': item_ids[-max_sequence_length:],
-                'item.length': len(item_ids[-max_sequence_length:])
-            })
-            assert len(item_ids[-max_sequence_length:]) == len(set(item_ids[-max_sequence_length:]))
-
-        logger.info('Train dataset size: {}'.format(len(train_dataset)))
-        logger.info('Test dataset size: {}'.format(len(test_dataset)))
-        logger.info('Max user idx: {}'.format(max_user_idx))
-        logger.info('Max item idx: {}'.format(max_item_idx))
-        logger.info('Max sequence length: {}'.format(max_sequence_length))
-        logger.info('{} dataset sparsity: {}'.format(
-            config['name'], (len(train_dataset) + len(test_dataset)) / max_user_idx / max_item_idx
-        ))
-
-        train_sampler = TrainSampler.create_from_config(
-            config['samplers'],
-            dataset=train_dataset,
-            num_users=max_user_idx,
-            num_items=max_item_idx
-        )
-        validation_sampler = EvalSampler.create_from_config(
-            config['samplers'],
-            dataset=validation_dataset,
-            num_users=max_user_idx,
-            num_items=max_item_idx
-        )
-        test_sampler = EvalSampler.create_from_config(
-            config['samplers'],
-            dataset=test_dataset,
-            num_users=max_user_idx,
-            num_items=max_item_idx
-        )
-        
-        rqvae_config = json.load(open(config['rqvae_train_config_path']))
-        semantic_id_length = len(rqvae_config['model']['codebook_sizes'])
-
-        return cls(
+        super().__init__(
             train_sampler=train_sampler,
             validation_sampler=validation_sampler,
             test_sampler=test_sampler,
-            num_users=max_user_idx,
-            num_items=max_item_idx,
+            num_users=num_users,
+            num_items=num_items,
             max_sequence_length=max_sequence_length,
-            semantic_id_length=semantic_id_length
         )
+        self._semantic_id_arr = semantic_id_arr
 
-    def get_samplers(self):
-        return self._train_sampler, self._validation_sampler, self._test_sampler
-
-    @property
-    def num_users(self):
-        return self._num_users
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        rqvae_config = json.load(open(config['rqvae_train_config_path']))
+        semantic_id_arr = rqvae_config['model']['codebook_sizes']
+        
+        scientific_instance = ScientificDataset.create_from_config(config, **kwargs)
+        
+        return cls(
+            train_sampler=scientific_instance._train_sampler,
+            validation_sampler=scientific_instance._validation_sampler,
+            test_sampler=scientific_instance._test_sampler,
+            num_users=scientific_instance.num_users,
+            num_items=scientific_instance.num_items,
+            max_sequence_length=scientific_instance.max_sequence_length,
+            semantic_id_arr=semantic_id_arr,
+        )
 
     @property
     def num_items(self):
-        return self._num_items
+        return self._semantic_id_arr[0] # TODOPK?
 
     @property
     def max_sequence_length(self):
-        return self._max_sequence_length
+        return self._max_sequence_length * len(self._semantic_id_arr)
 
     @property
     def meta(self):
         return {
             'num_users': self.num_users,
-            'num_items': self.num_items * self._semantic_id_length,
-            'max_sequence_length': self.max_sequence_length * self._semantic_id_length,
-            'semantic_id_length': self._semantic_id_length
+            'num_items': self.num_items,
+            'max_sequence_length': self.max_sequence_length,
+            'semantic_id_arr': self._semantic_id_arr
         }
         
 class RqVaeDataset(BaseDataset, config_name='rqvae'):

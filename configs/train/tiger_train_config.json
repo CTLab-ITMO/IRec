@@ -42,11 +42,10 @@
   },
   "model": {
     "type": "tiger",
+    "trie": "../data/Beauty/trie.pkl",
     "sequence_prefix": "item",
-    "predictions_prefix": "predictions",
-    "positive_prefix": "positive",
-    "negative_prefix": "negative",
-    "candidate_prefix": "candidates",
+    "predictions_prefix": "logits",
+    "labels_prefix": "labels",
     "embedding_dim": 64,
     "num_heads": 2,
     "num_layers": 2,
@@ -69,10 +68,11 @@
     "type": "composite",
     "losses": [
       {
-        "type": "bpr",
-        "positive_prefix": "positive_scores",
-        "negative_prefix": "negative_scores",
-        "output_prefix": "downstream_loss"
+        "type": "ce",
+        "predictions_prefix": "logits",
+        "labels_prefix": "semantic.labels",
+        "output_prefix": "downstream_loss",
+        "weight": 1.0
       }
     ],
     "output_prefix": "loss"
