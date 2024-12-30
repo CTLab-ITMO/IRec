@@ -103,15 +103,14 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
             }
         else:  # eval mode
             last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
-
             # b - batch_size, n - num_candidates, d - embedding_dim
             candidate_scores = torch.einsum(
                 'bd,nd->bn',
                 last_embeddings,
                 self._item_embeddings.weight
             )  # (batch_size, num_items + 2)
-            candidate_scores[:, 0] = -torch.inf
-            candidate_scores[:, self._num_items + 1:] = -torch.inf
+            candidate_scores[:, 0] = -torch.inf  # Padding id
+            candidate_scores[:, self._num_items + 1:] = -torch.inf  # Mask id
 
             _, indices = torch.topk(
                 candidate_scores,

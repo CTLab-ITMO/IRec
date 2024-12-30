@@ -1,15 +1,14 @@
 {
   "pred_prefix": "logits",
   "label_prefix": "labels",
-  "experiment_name": "bert4rec_beauty_grid_0-5_0-1__",
+  "experiment_name": "gru4rec_beauty_grid__0-2__",
   "dataset": {
     "type": "sequence",
     "path_to_data_dir": "../data",
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
-      "mask_prob": 0.5,
-      "type": "masked_item_prediction",
+      "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
   },
@@ -34,15 +33,15 @@
     }
   },
   "model": {
-    "type": "bert4rec",
+    "type": "gru4rec",
     "sequence_prefix": "item",
-    "labels_prefix": "labels",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
     "candidate_prefix": "candidates",
     "embedding_dim": 64,
-    "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
-    "dropout": 0.1,
+    "dropout": 0.2,
     "activation": "gelu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02

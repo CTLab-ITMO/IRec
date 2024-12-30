@@ -115,7 +115,8 @@ def main():
         train_dataloader=train_dataloader,
         validation_dataloader=validation_dataloader,
         eval_dataloader=eval_dataloader,
-        optimizer=optimizer
+        optimizer=optimizer,
+        **dataset.meta
     )
 
     # TODO add verbose option for all callbacks, multiple optimizer options (???)

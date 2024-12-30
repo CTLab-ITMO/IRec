@@ -1,4 +1,4 @@
-from metric import BaseMetric
+from metric import BaseMetric, StatefullMetric
 
 import utils
 from utils import MetaParent, create_logger
@@ -221,6 +221,10 @@ class InferenceCallback(BaseCallback):
 
                     if self._loss_prefix is not None:
                         running_params[self._loss_prefix] += batch[self._loss_prefix].item()
+            
+            for metric_name, metric_function in self._metrics.items():
+                if isinstance(metric_function, StatefullMetric):
+                    running_params[metric_name] = metric_function.reduce(running_params[metric_name])
 
             for label, value in running_params.items():
                 inputs[f'{self._get_name()}/{label}'] = np.mean(value)

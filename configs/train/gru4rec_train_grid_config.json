@@ -1,6 +1,6 @@
 {
   "start_from": 0,
-  "experiment_name": "sasrec_beauty_grid",
+  "experiment_name": "gru4rec_beauty_grid",
   "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "sequence",
@@ -35,13 +35,12 @@
     }
   },
   "model": {
-    "type": "sasrec",
+    "type": "gru4rec",
     "sequence_prefix": "item",
     "positive_prefix": "positive",
     "negative_prefix": "negative",
     "candidate_prefix": "candidates",
     "embedding_dim": 64,
-    "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
     "activation": "gelu",
@@ -74,7 +73,7 @@
     "type": "composite",
     "losses": [
       {
-        "type": "sasrec",
+        "type": "bpr",
         "positive_prefix": "positive_scores",
         "negative_prefix": "negative_scores",
         "output_prefix": "downstream_loss"
