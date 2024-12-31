@@ -25,9 +25,8 @@ class EmbedBatchProcessor(BaseBatchProcessor, config_name='embed'):
         return {'ids': ids, 'embeddings': embeds}
     
 class RqVaeProcessor(BaseBatchProcessor, config_name='rqvae'):
-    def __init__(self, rqvae, embs_extractor):
-        self._rqvae = rqvae
-        self._embs_extractor = embs_extractor
+    def __init__(self, item_id_to_semantic_id):
+        self._item_id_to_semantic_id = item_id_to_semantic_id
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -39,13 +38,22 @@ class RqVaeProcessor(BaseBatchProcessor, config_name='rqvae'):
         rqvae_model.eval()
         
         embs_extractor = torch.load(config['embs_extractor_path'])
+        
+        item_ids = embs_extractor.index.tolist()
+        embeddings = torch.stack([emb for emb in embs_extractor['embeddings'].tolist()])
+        semantic_ids = list(rqvae_model({"embeddings": embeddings}))
+        
+        item_id_to_semantic_id = {
+            item_id: semantic_id for (item_id, semantic_id) in zip(item_ids, semantic_ids)
+        }
 
-        return cls(rqvae_model, embs_extractor)
+        return cls(item_id_to_semantic_id)
     
     def get_semantic_ids(self, item_ids):
-        embs = torch.stack([self._embs_extractor.loc[item_id]['embeddings'] for item_id in item_ids])
-        semantic_ids = self._rqvae({"embeddings": embs})
-        return list(semantic_ids)
+        semantic_ids = []
+        for item_id in item_ids:
+            semantic_ids.append(self._item_id_to_semantic_id[item_id])
+        return semantic_ids
 
     def __call__(self, batch):
         processed_batch = {}

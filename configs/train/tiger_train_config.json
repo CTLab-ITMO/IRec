@@ -1,6 +1,6 @@
 {
   "experiment_name": "tiger",
-  "train_steps_num": 1024,
+  "train_steps_num": 50,
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "rqvae_scientific",
@@ -22,7 +22,7 @@
         "type": "rqvae",
         "rqvae_checkpoint_path": "../checkpoints/rqvae_beauty_final_state.pth",
         "rqvae_train_config_path": "../configs/train/rqvae_train_config.json",
-        "embs_extractor_path": "../data/Beauty/data_full.pt"
+        "embs_extractor_path": "../data/Beauty/rqvae/data_full.pt"
       },
       "drop_last": true,
       "shuffle": true
@@ -34,7 +34,7 @@
         "type": "rqvae",
         "rqvae_checkpoint_path": "../checkpoints/rqvae_beauty_final_state.pth",
         "rqvae_train_config_path": "../configs/train/rqvae_train_config.json",
-        "embs_extractor_path": "../data/Beauty/data_full.pt"
+        "embs_extractor_path": "../data/Beauty/rqvae/data_full.pt"
       },
       "drop_last": false,
       "shuffle": false
@@ -42,7 +42,7 @@
   },
   "model": {
     "type": "tiger",
-    "trie": "../data/Beauty/trie.pkl",
+    "trie": "../data/Beauty/rqvae/trie.pkl",
     "sequence_prefix": "item",
     "predictions_prefix": "logits",
     "labels_prefix": "labels",
