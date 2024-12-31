@@ -101,18 +101,20 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
             all_sample_events, all_sample_lengths, add_codebook_embeddings=True
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
         
-        decoder_outputs = self._apply_decoder(label_events, label_lengths, embeddings, mask)
+        decoder_outputs = self._apply_decoder(label_events, label_lengths, embeddings, mask) # (batch_size, label_len, embedding_dim)
+        # todo pk correct place for projection? or view -> projection
+        logits = self._projection(decoder_outputs)  # (batch_size, seq_len, _semantic_id_arr[0])
         
-        logits = self._projection(decoder_outputs)  # Shape: (batch_size, seq_len, _semantic_id_arr[0])
-
+        logits = logits.view(-1, self._semantic_id_arr[0]) # (batch_size * seq_len, _semantic_id_arr[0])
+        
         if self.training:
             return {
                 self._pred_prefix: logits
             }
         else:
             preds = logits.argmax(dim=-1).view(len(all_sample_lengths), len(self._semantic_id_arr)) # Shape: (batch_size, seq_len)
-            ids = self._apply_trie(preds)
-            return torch.tensor(ids)
+            ids = torch.tensor(self._apply_trie(preds))
+            return ids
     
     def _apply_trie(self, preds): # TODOPK make this faster (how?)
         native_repr = [tuple(row.tolist()) for row in preds]
@@ -128,6 +130,9 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
                     cur_result.add(id)
                     if len(cur_result) >= 20:
                         break
+                if len(cur_result) >= 20:
+                    break
+            
             cur_result = list(cur_result)
             while len(cur_result) < 20:
                 cur_result.append(0) # solve empty event if shortest prefix
@@ -172,8 +177,6 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
             memory_key_padding_mask=~encoder_mask,
             tgt_key_padding_mask=~mask
         )  # (batch_size, label_len, embedding_dim)
-        
-        decoder_outputs = decoder_outputs.view(-1, self._embedding_dim)
         
         return decoder_outputs
         
