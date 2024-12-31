@@ -1,6 +1,6 @@
 {
   "experiment_name": "tiger",
-  "train_steps_num": 50,
+  "train_epochs_num": 10,
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "rqvae_scientific",
@@ -119,7 +119,7 @@
       },
       {
         "type": "eval",
-        "on_step": 256,
+        "on_step": 64,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {
