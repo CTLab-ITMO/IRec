@@ -97,16 +97,23 @@ def create_masked_tensor(data, lengths):
     batch_size = lengths.shape[0]
     max_sequence_length = lengths.max().item()
 
-    padded_embeddings = torch.zeros(
-        batch_size, max_sequence_length, data.shape[-1],
-        dtype=torch.float, device=DEVICE
-    )  # (batch_size, max_seq_len, emb_dim)
+    if len(data.shape) == 1:  # only indices
+        padded_tensor = torch.zeros(
+            batch_size, max_sequence_length,
+            dtype=data.dtype, device=DEVICE
+        )  # (batch_size, max_seq_len)
+    else:
+        assert len(data.shape) == 2  # embeddings
+        padded_tensor = torch.zeros(
+            batch_size, max_sequence_length, data.shape[-1],
+            dtype=data.dtype, device=DEVICE
+        )  # (batch_size, max_seq_len, emb_dim)
 
     mask = torch.arange(
         end=max_sequence_length,
         device=DEVICE
     )[None].tile([batch_size, 1]) < lengths[:, None]  # (batch_size, max_seq_len)
 
-    padded_embeddings[mask] = data
+    padded_tensor[mask] = data
 
-    return padded_embeddings, mask
+    return padded_tensor, mask

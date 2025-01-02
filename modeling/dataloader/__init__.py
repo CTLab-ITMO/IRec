@@ -1,2 +1,2 @@
-from .base import BaseDataloader, SplitDataloader
+from .base import BaseDataloader
 from .batch_processors import BaseBatchProcessor, IdentityBatchProcessor, RqVaeProcessor

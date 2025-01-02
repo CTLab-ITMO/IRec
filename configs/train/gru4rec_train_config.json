@@ -1,13 +1,12 @@
 {
-  "experiment_name": "gru4rec_beauty_test",
-  "best_metric": "eval/ndcg@20",
+  "experiment_name": "gru4rec_beauty",
+  "best_metric": "validation/ndcg@20",
   "dataset": {
-    "type": "scientific",
+    "type": "sequence",
     "path_to_data_dir": "../data",
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
-      "num_negatives_val": 100,
       "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
@@ -35,7 +34,6 @@
   "model": {
     "type": "gru4rec",
     "sequence_prefix": "item",
-    "labels_prefix": "labels",
     "positive_prefix": "positive",
     "negative_prefix": "negative",
     "candidate_prefix": "candidates",
@@ -43,7 +41,7 @@
     "num_layers": 2,
     "dim_feedforward": 256,
     "dropout": 0.3,
-    "activation": "relu",
+    "activation": "gelu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },
@@ -52,7 +50,8 @@
     "optimizer": {
       "type": "adam",
       "lr": 0.001
-    }
+    },
+    "clip_grad_threshold": 5.0
   },
   "loss": {
     "type": "composite",
@@ -103,6 +102,18 @@
           "recall@20": {
             "type": "recall",
             "k": 20
+          },
+          "coverage@5": {
+            "type": "coverage",
+            "k": 5
+          },
+          "coverage@10": {
+            "type": "coverage",
+            "k": 10
+          },
+          "coverage@20": {
+            "type": "coverage",
+            "k": 20
           }
         }
       },
@@ -134,6 +145,18 @@
           },
           "recall@20": {
             "type": "recall",
+            "k": 20
+          },
+          "coverage@5": {
+            "type": "coverage",
+            "k": 5
+          },
+          "coverage@10": {
+            "type": "coverage",
+            "k": 10
+          },
+          "coverage@20": {
+            "type": "coverage",
             "k": 20
           }
         }

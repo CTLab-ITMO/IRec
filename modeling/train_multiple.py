@@ -49,6 +49,7 @@ def main():
         random.shuffle(list_of_params)
 
     cnt = 0
+
     for dataset_param, model_param, loss_param, optimizer_param in list_of_params[start_from:num]:
         cnt += 1
         if cnt < start_from:
@@ -100,7 +101,8 @@ def main():
             train_dataloader=train_dataloader,
             validation_dataloader=validation_dataloader,
             eval_dataloader=eval_dataloader,
-            optimizer=optimizer
+            optimizer=optimizer,
+            **dataset.meta
         )
 
         best_model_checkpoint = train(

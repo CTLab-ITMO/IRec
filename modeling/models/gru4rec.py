@@ -160,29 +160,42 @@ class GRU4RecModel(GRUModel, config_name='gru4rec'):
 
         if self.training:  # training mode
             all_positive_sample_events = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
-            all_negative_sample_events = inputs['{}.ids'.format(self._negative_prefix)]  # (all_batch_events)
-
-            all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
             all_positive_sample_embeddings = self._item_embeddings(
                 all_positive_sample_events
             )  # (all_batch_events, embedding_dim)
-            all_negative_sample_embeddings = self._item_embeddings(
-                all_negative_sample_events
-            )  # (all_batch_events, embedding_dim)
 
+            all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
+
+            sample_end_idx = torch.cumsum(all_sample_lengths, dim=0)  # (batch_size)
+            sample_begin_idx = sample_end_idx - all_sample_lengths  # (batch_size)
+
+            sample_end_idx = sample_end_idx[:, None]  # (batch_size, 1)
+            sample_begin_idx = sample_begin_idx[:, None]  # (batch_size, 1)
+
+            negative_indices = torch.tile(
+                torch.arange(start=0, end=all_positive_sample_events.shape[0], device=all_sample_lengths.device).long()[None],
+                dims=[all_sample_lengths.shape[0], 1]
+            )  # (batch_size, all_batch_events)
+
+            negative_mask = (negative_indices >= sample_begin_idx) & (negative_indices < sample_end_idx)
+            negative_mask = torch.repeat_interleave(
+                negative_mask, all_sample_lengths, dim=0
+            )
+
+            negative_scores = torch.einsum(
+                'ad,bd->ab',
+                all_sample_embeddings,
+                self._item_embeddings(all_sample_events)
+            )  # (all_batch_events, all_batch_events)
+            
             positive_scores = torch.einsum(
                 'ad,ad->a',
                 all_sample_embeddings,
                 all_positive_sample_embeddings
-            )
-            negative_scores = torch.einsum(
-                'ad,ad->a',
-                all_sample_embeddings,
-                all_negative_sample_embeddings
-            )
+            )  # (all_batch_events)
 
             return {
-                'positive_scores': positive_scores,
+                'positive_scores': positive_scores[..., None],
                 'negative_scores': negative_scores,
             }
         else:  # eval mode
