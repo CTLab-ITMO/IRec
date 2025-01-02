@@ -618,6 +618,62 @@ class ScientificDataset(BaseDataset, config_name='scientific'):
             'max_sequence_length': self.max_sequence_length
         }
         
+class RqvaeSequenceDataset(SequenceDataset, config_name='rqvae_sequence'):
+
+    def __init__(
+        self,
+        train_sampler,
+        validation_sampler,
+        test_sampler,
+        num_users,
+        num_items,
+        max_sequence_length,
+        semantic_id_arr
+    ):
+        super().__init__(
+            train_sampler=train_sampler,
+            validation_sampler=validation_sampler,
+            test_sampler=test_sampler,
+            num_users=num_users,
+            num_items=num_items,
+            max_sequence_length=max_sequence_length,
+        )
+        self._semantic_id_arr = semantic_id_arr
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        rqvae_config = json.load(open(config['rqvae_train_config_path']))
+        semantic_id_arr = rqvae_config['model']['codebook_sizes']
+        
+        scientific_instance = SequenceDataset.create_from_config(config, **kwargs)
+        
+        return cls(
+            train_sampler=scientific_instance._train_sampler,
+            validation_sampler=scientific_instance._validation_sampler,
+            test_sampler=scientific_instance._test_sampler,
+            num_users=scientific_instance.num_users,
+            num_items=scientific_instance.num_items,
+            max_sequence_length=scientific_instance.max_sequence_length,
+            semantic_id_arr=semantic_id_arr,
+        )
+
+    @property
+    def num_items(self):
+        return self._semantic_id_arr[0] # TODOPK?
+
+    @property
+    def max_sequence_length(self):
+        return self._max_sequence_length * len(self._semantic_id_arr)
+
+    @property
+    def meta(self):
+        return {
+            'num_users': self.num_users,
+            'num_items': self.num_items,
+            'max_sequence_length': self.max_sequence_length,
+            'semantic_id_arr': self._semantic_id_arr
+        }
+        
 class RqvaeScientificDataset(ScientificDataset, config_name='rqvae_scientific'):
 
     def __init__(

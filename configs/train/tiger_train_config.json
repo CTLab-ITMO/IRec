@@ -3,7 +3,7 @@
   "train_epochs_num": 10,
   "best_metric": "validation/ndcg@20",
   "dataset": {
-    "type": "rqvae_scientific",
+    "type": "rqvae_sequence",
     "path_to_data_dir": "../data",
     "rqvae_train_config_path": "../configs/train/rqvae_train_config.json",
     "name": "Beauty",
@@ -114,6 +114,18 @@
           "recall@20": {
             "type": "recall",
             "k": 20
+          },
+          "coverage@5": {
+            "type": "coverage",
+            "k": 5
+          },
+          "coverage@10": {
+            "type": "coverage",
+            "k": 10
+          },
+          "coverage@20": {
+            "type": "coverage",
+            "k": 20
           }
         }
       },
@@ -145,6 +157,18 @@
           },
           "recall@20": {
             "type": "recall",
+            "k": 20
+          },
+          "coverage@5": {
+            "type": "coverage",
+            "k": 5
+          },
+          "coverage@10": {
+            "type": "coverage",
+            "k": 10
+          },
+          "coverage@20": {
+            "type": "coverage",
             "k": 20
           }
         }
