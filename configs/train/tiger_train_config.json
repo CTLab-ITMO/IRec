@@ -9,7 +9,6 @@
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
-      "num_negatives_val": 100,
       "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
@@ -45,6 +44,7 @@
     "trie": "../data/Beauty/rqvae/trie.pkl",
     "sequence_prefix": "item",
     "predictions_prefix": "logits",
+    "positive_prefix": "positive",
     "labels_prefix": "labels",
     "embedding_dim": 64,
     "num_heads": 2,
@@ -70,7 +70,7 @@
       {
         "type": "ce",
         "predictions_prefix": "logits",
-        "labels_prefix": "semantic.labels",
+        "labels_prefix": "semantic.positive",
         "output_prefix": "downstream_loss",
         "weight": 1.0
       }

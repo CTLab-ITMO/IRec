@@ -13,6 +13,7 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
             trie,
             sequence_prefix,
             pred_prefix,
+            positive_prefix,
             labels_prefix,
             num_items,
             max_sequence_length,
@@ -56,6 +57,7 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
         
         self._sequence_prefix = sequence_prefix
         self._pred_prefix = pred_prefix
+        self._positive_prefix = positive_prefix
         self._labels_prefix = labels_prefix
         
         self._semantic_id_arr = semantic_id_arr
@@ -76,6 +78,7 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
             trie=trie,
             sequence_prefix=config['sequence_prefix'],
             pred_prefix=config['predictions_prefix'],
+            positive_prefix=config['positive_prefix'],
             labels_prefix=config['labels_prefix'],
             num_items=kwargs['num_items'],
             max_sequence_length=kwargs['max_sequence_length'],
@@ -87,31 +90,40 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
             dropout=config.get('dropout', 0.0),
             initializer_range=config.get('initializer_range', 0.02)
         )
-
-    def forward(self, inputs):
-        all_sample_events = inputs['semantic.{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
-        all_sample_lengths = inputs['semantic.{}.length'.format(self._sequence_prefix)]  # (batch_size)
         
+    def get_logits(self, inputs, prefix, all_sample_events, all_sample_lengths):
         # TODOPK pass parameter as args (self._semantic_prefix)
         
-        label_events = inputs['semantic.{}.ids'.format(self._labels_prefix)]
-        label_lengths = inputs['semantic.{}.length'.format(self._labels_prefix)]
+        label_events = inputs['semantic.{}.ids'.format(prefix)]
+        label_lengths = inputs['semantic.{}.length'.format(prefix)]
     
         embeddings, mask = self._apply_sequential_encoder(
             all_sample_events, all_sample_lengths, add_codebook_embeddings=True
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
         
-        decoder_outputs = self._apply_decoder(label_events, label_lengths, embeddings, mask) # (batch_size, label_len, embedding_dim)
+        decoder_outputs = self._apply_decoder(
+            label_events, label_lengths, embeddings, mask
+        ) # (batch_size, label_len, embedding_dim)
         # todo pk correct place for projection? or view -> projection
         logits = self._projection(decoder_outputs)  # (batch_size, seq_len, _semantic_id_arr[0])
         
-        logits = logits.view(-1, self._semantic_id_arr[0]) # (batch_size * seq_len, _semantic_id_arr[0])
+        return logits, mask
+
+    def forward(self, inputs):
+        all_sample_events = inputs['semantic.{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
+        all_sample_lengths = inputs['semantic.{}.length'.format(self._sequence_prefix)]  # (batch_size)
         
         if self.training:
+            logits, mask = self.get_logits(inputs, self._positive_prefix, all_sample_events, all_sample_lengths)
+            
+            logits = logits[mask] # TODOPK correct?
+            
             return {
                 self._pred_prefix: logits
             }
         else:
+            logits, mask = self.get_logits(inputs, self._labels_prefix, all_sample_events, all_sample_lengths)
+            
             preds = logits.argmax(dim=-1).view(len(all_sample_lengths), len(self._semantic_id_arr)) # Shape: (batch_size, seq_len)
             ids = torch.tensor(self._apply_trie(preds))
             return ids

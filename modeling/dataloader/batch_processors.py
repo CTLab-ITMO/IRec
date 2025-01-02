@@ -1,3 +1,4 @@
+from collections import defaultdict
 import json
 import torch
 from models.base import BaseModel
@@ -56,21 +57,12 @@ class RqVaeProcessor(BaseBatchProcessor, config_name='rqvae'):
         return semantic_ids
 
     def __call__(self, batch):
-        processed_batch = {}
+        processed_batch = defaultdict(list)
 
         for key in batch[0].keys():
             if key.endswith('.ids'):
                 prefix = key.split('.')[0]
                 assert '{}.length'.format(prefix) in batch[0]
-
-                processed_batch[f'{prefix}.ids'] = []
-                processed_batch[f'{prefix}.length'] = []
-                
-                processed_batch[f'semantic.{prefix}.ids'] = []
-                processed_batch[f'semantic.{prefix}.length'] = []
-                
-                # item_ids = list(itertools.chain(*semantic_ids))
-                # length = len(item_ids) # sample[f'{prefix}.length']
 
                 for sample in batch:
                     item_ids = sample[f'{prefix}.ids']
