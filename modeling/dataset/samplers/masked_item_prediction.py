@@ -61,7 +61,10 @@ class MaskedItemPredictionTrainSampler(TrainSampler, config_name='masked_item_pr
             'item.length': len(masked_sequence),
 
             'labels.ids': labels,
-            'labels.length': len(labels)
+            'labels.length': len(labels),
+
+            'not_masked_item.ids': item_sequence,
+            'not_masked_item.length': len(item_sequence)
         }
 
 
