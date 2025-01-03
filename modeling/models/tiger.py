@@ -1,9 +1,9 @@
+import json
 from utils import DEVICE, create_masked_tensor, get_activation_function
 from models.base import SequentialTorchModel
 import pickle
 import torch
 from torch import nn
-import random
 
 
 class TigerModel(SequentialTorchModel, config_name='tiger'):
@@ -52,7 +52,6 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
         self._decoder = nn.TransformerDecoder(transformer_decoder_layer, num_layers)
         self._trie = trie
         
-        assert all([book_size == semantic_id_arr[0] for book_size in semantic_id_arr])
         self._projection = nn.Linear(embedding_dim, semantic_id_arr[0])
         
         self._sequence_prefix = sequence_prefix
@@ -73,6 +72,10 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
     def create_from_config(cls, config, **kwargs):
         with open(config['trie'], 'rb') as f:
             trie = pickle.load(f)
+            
+        rqvae_config = json.load(open(config['rqvae_train_config_path']))
+        semantic_id_arr = rqvae_config['model']['codebook_sizes']
+        assert all([book_size == semantic_id_arr[0] for book_size in semantic_id_arr])
     
         return cls(
             trie=trie,
@@ -80,13 +83,13 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
             pred_prefix=config['predictions_prefix'],
             positive_prefix=config['positive_prefix'],
             labels_prefix=config['labels_prefix'],
-            num_items=kwargs['num_items'],
-            max_sequence_length=kwargs['max_sequence_length'],
+            num_items=semantic_id_arr[0],
+            max_sequence_length=kwargs['max_sequence_length'] * len(semantic_id_arr),
             embedding_dim=config['embedding_dim'],
             num_heads=config.get('num_heads', int(config['embedding_dim'] // 64)),
             num_layers=config['num_layers'],
             dim_feedforward=config.get('dim_feedforward', 4 * config['embedding_dim']),
-            semantic_id_arr=kwargs['semantic_id_arr'],
+            semantic_id_arr=semantic_id_arr,
             dropout=config.get('dropout', 0.0),
             initializer_range=config.get('initializer_range', 0.02)
         )
