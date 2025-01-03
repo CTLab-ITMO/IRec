@@ -1,9 +1,6 @@
 from models.base import TorchModel
 
 import torch
-
-import torch
-
 import faiss
 
 class RqVaeModel(TorchModel, config_name='rqvae'):

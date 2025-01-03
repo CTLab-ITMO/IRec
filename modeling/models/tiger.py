@@ -107,7 +107,7 @@ class TigerModel(SequentialTorchModel, config_name='tiger'):
         decoder_outputs = self._apply_decoder(
             label_events, label_lengths, embeddings, mask
         ) # (batch_size, label_len, embedding_dim)
-        # todo pk correct place for projection? or view -> projection
+        # todopk correct place for projection? or view -> projection
         logits = self._projection(decoder_outputs)  # (batch_size, seq_len, _semantic_id_arr[0])
         
         return logits, mask

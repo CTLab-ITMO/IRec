@@ -52,7 +52,6 @@
     "dim_feedforward": 256,
     "dropout": 0.3,
     "activation": "gelu",
-    "use_ce": true,
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },
