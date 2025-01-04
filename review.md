@@ -2,7 +2,8 @@
 
 ## Todos
 
-- restore my amazon beauty changes (`data_full.pt`)
+- check enc / dec model
+- correct logits indexing with tgt_mask?
 - max_sequence_length (TODOPK), why +1? не смог найти где дописывается в батч сама длина
 - positions = positions // self._semantic_id_length или reverse?
 как именно учитываем codebook_post & item_pos (тот же порядок или inverted)
