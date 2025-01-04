@@ -2,29 +2,11 @@
 
 ## Todos
 
+- sos / bos embedding correct train fix
 - level embeddings
-- fix dataset (take last max_seq items)
-- single sample from single user (honest comparison)
-- correct logits indexing with tgt_mask? (upper remark fixes)
 - positions = positions // self._semantic_id_length или reverse?
 как именно учитываем codebook_post & item_pos (тот же порядок или inverted)
 - как именно находим ближайшего при пересечении по embedding? (не понял о каком embedding речь)
-- почему
-
-```python
-candidate_scores = torch.einsum(
-    'bd,nd->bn',
-    predictions,
-    self._item_embeddings.weight
-)
-```
-
-- next_item_pred / last_item_pred (какие задачи учим и как именно) # can be both tasks
-- предсказываем item = предсказываем 4 semantic id? # yes
-- как составить датасет для обучения # (map item seq -> semantic id seq)
-- берем правдивые semantic id # yes
-
-- у нас авторегрессионный next item prediction? # no (teacher learning)
 
 то есть:
 
@@ -40,11 +22,26 @@ target  -> (b_size x 4) [(1, 2, 3, 4); (29, 6, 7, 4); ...]
 decoder: (bos, 1, 2, 3) -> (1, 2, 3, 4) # causal mask so (bos -> 1), (bos, 1 -> 2), ...
            \___ learnable embed
 
+## Fixed
+
+- next_item_pred / last_item_pred (какие задачи учим и как именно) # can be both tasks
+- предсказываем item = предсказываем 4 semantic id? # yes
+- как составить датасет для обучения # (map item seq -> semantic id seq)
+- берем правдивые semantic id # yes
+- у нас авторегрессионный next item prediction? # no (teacher learning)
+
+- fix dataset (take last max_seq items) (last_item fixed)
+- single sample from single user (honest comparison)
+- correct logits indexing with tgt_mask? (upper remark fixes)
+
 - posterior collapse (как будто все сваливается в один индекс в кодбуке) (fixed eval code)
-- обязательно использование reinit unused clusters! (mark)
 - в Amazon датасете пофиг на rating? получается учитываются только implicit действия? # байтовый датасет (любое взаимодействие)
 - TODO какой базовый класс использовать для seq2seq модели? (LastPred?) # use encoder from SequentialTorchModel
 - TODO имя для модели (tiger) # tmp
+
+## Remarks
+
+- обязательно использование reinit unused clusters! (mark)
 
 ## Links
 

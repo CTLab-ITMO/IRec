@@ -20,7 +20,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         max_sequence_length,
         embedding_dim,
         num_heads,
-        num_layers,
+        num_encoder_layers,
+        num_decoder_layers,
         dim_feedforward,
         semantic_id_arr,
         dropout=0.0,
@@ -33,7 +34,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             max_sequence_length=max_sequence_length,
             embedding_dim=embedding_dim,
             num_heads=num_heads,
-            num_layers=num_layers,
+            num_layers=num_encoder_layers,
             dim_feedforward=dim_feedforward,
             dropout=dropout,
             activation=activation,
@@ -58,7 +59,9 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             layer_norm_eps=layer_norm_eps,
             batch_first=True,
         )
-        self._decoder = nn.TransformerDecoder(transformer_decoder_layer, num_layers)
+        self._decoder = nn.TransformerDecoder(
+            transformer_decoder_layer, num_decoder_layers
+        )
         self._trie = trie
 
         self._projection = nn.Linear(embedding_dim, semantic_id_arr[0])
@@ -69,6 +72,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._labels_prefix = labels_prefix
 
         self._semantic_id_arr = semantic_id_arr
+
+        self._bos_embedding = nn.Embedding(1, embedding_dim)
 
         self._codebook_embeddings = nn.Embedding(
             num_embeddings=len(semantic_id_arr), embedding_dim=embedding_dim
@@ -98,7 +103,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             max_sequence_length=kwargs["max_sequence_length"],
             embedding_dim=config["embedding_dim"],
             num_heads=config.get("num_heads", int(config["embedding_dim"] // 64)),
-            num_layers=config["num_layers"],
+            num_encoder_layers=config["num_encoder_layers"],
+            num_decoder_layers=config["num_decoder_layers"],
             dim_feedforward=config.get("dim_feedforward", 4 * config["embedding_dim"]),
             semantic_id_arr=semantic_id_arr,
             dropout=config.get("dropout", 0.0),
@@ -135,7 +141,10 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         if self.training:
             logits = self.get_logits(
                 inputs, self._positive_prefix, all_sample_events, all_sample_lengths
-            )
+            ) # (batch_size, dec_seq_len, _semantic_id_arr[0])
+
+            logits = logits.view(-1, self._semantic_id_arr[0])
+            # TODOPK check if correct flattening
 
             return {self._pred_prefix: logits}
         else:
@@ -173,6 +182,16 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
     def _apply_decoder(
         self, label_events, label_lengths, encoder_embeddings, encoder_mask
     ):
+        matrix_label_events = label_events.view(-1, label_lengths[0])
+        matrix_label_events = torch.cat(
+            [torch.full((len(label_lengths), 1), 256), matrix_label_events], dim=1
+        )
+        # TODOPK 256 hardcoded
+
+        label_events = matrix_label_events.view(-1)
+        
+        label_lengths = label_lengths + 1
+
         tgt_embeddings = self._item_embeddings(
             label_events
         )  # (all_batch_events, embedding_dim)
@@ -184,7 +203,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         label_len = tgt_mask.shape[1]
 
-        assert label_len == len(self._semantic_id_arr)
+        assert label_len == len(self._semantic_id_arr) + 1 # TODOPK
 
         position_embeddings = self._decoder_pos_embeddings(label_lengths, tgt_mask)
         assert torch.allclose(position_embeddings[~tgt_mask], tgt_embeddings[~tgt_mask])
@@ -212,6 +231,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             memory_key_padding_mask=~encoder_mask,
             tgt_key_padding_mask=~tgt_mask,
         )  # (batch_size, label_len, embedding_dim)
+        
+        decoder_outputs = decoder_outputs[:, 1:, :]  # TODOPK remove bos token
 
         return decoder_outputs
 
@@ -226,9 +247,11 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         def codebook_lambda(x):
             return x % len(self._semantic_id_arr)  # 2 1 0 2 1 0 ...
 
-        codebook_embeddings = self._get_codebook_embeddings(
+        codebook_embeddings = self._get_position_embeddings(
             lengths, mask, codebook_lambda, self._decoder_codebook_embeddings
         )
+
+        # TODOPK fix codebook indexing
 
         return position_embeddings + codebook_embeddings
 
@@ -243,7 +266,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         def codebook_lambda(x):
             return x % len(self._semantic_id_arr)  # 2 1 0 2 1 0 ...
 
-        codebook_embeddings = self._get_codebook_embeddings(
+        codebook_embeddings = self._get_position_embeddings(
             lengths, mask, codebook_lambda, self._codebook_embeddings
         )
 
