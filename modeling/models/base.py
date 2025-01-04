@@ -4,6 +4,7 @@ from utils import DEVICE, create_masked_tensor, get_activation_function
 
 import torch
 import torch.nn as nn
+from utils import DEVICE, MetaParent, create_masked_tensor, get_activation_function
 
 
 class BaseModel(metaclass=MetaParent):
@@ -109,17 +110,7 @@ class SequentialTorchModel(TorchModel):
         batch_size = mask.shape[0]
         seq_len = mask.shape[1]
 
-        positions = torch.arange(
-            start=seq_len - 1, end=-1, step=-1, device=mask.device
-        )[None].tile([batch_size, 1]).long()  # (batch_size, seq_len)
-        positions_mask = positions < lengths[:, None]  # (batch_size, max_seq_len)
-
-        positions = positions[positions_mask]  # (all_batch_events)
-        position_embeddings = self._position_embeddings(positions)  # (all_batch_events, embedding_dim)
-        position_embeddings, _ = create_masked_tensor(
-            data=position_embeddings,
-            lengths=lengths
-        )  # (batch_size, seq_len, embedding_dim)
+        position_embeddings = self._encoder_pos_embeddings(lengths, mask)
         assert torch.allclose(position_embeddings[~mask], embeddings[~mask])
 
         embeddings = embeddings + position_embeddings  # (batch_size, seq_len, embedding_dim)
@@ -149,6 +140,23 @@ class SequentialTorchModel(TorchModel):
             )  # (batch_size, seq_len, embedding_dim)
 
         return embeddings, mask
+
+    def _encoder_pos_embeddings(self, lengths, mask):
+        batch_size = mask.shape[0]
+        seq_len = mask.shape[1]
+
+        positions = torch.arange(
+            start=seq_len - 1, end=-1, step=-1, device=mask.device
+        )[None].tile([batch_size, 1]).long()  # (batch_size, seq_len)
+        positions_mask = positions < lengths[:, None]  # (batch_size, max_seq_len)
+
+        positions = positions[positions_mask]  # (all_batch_events)
+        position_embeddings = self._position_embeddings(positions)  # (all_batch_events, embedding_dim)
+        position_embeddings, _ = create_masked_tensor(
+            data=position_embeddings,
+            lengths=lengths
+        )  # (batch_size, seq_len, embedding_dim)
+        return position_embeddings
 
     @staticmethod
     def _add_cls_token(items, lengths, cls_token_id=0):
