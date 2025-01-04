@@ -6,3 +6,4 @@ tensorboard_logs/*
 papers
 checkpoints/*
 *.prof
+modeling/rqvae
