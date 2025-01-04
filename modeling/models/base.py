@@ -4,6 +4,7 @@ from utils import DEVICE, create_masked_tensor, get_activation_function
 
 import torch
 import torch.nn as nn
+from utils import DEVICE, MetaParent, create_masked_tensor, get_activation_function
 
 
 class BaseModel(metaclass=MetaParent):
@@ -80,7 +81,7 @@ class SequentialTorchModel(TorchModel):
             embedding_dim=embedding_dim
         )
         self._position_embeddings = nn.Embedding(
-            num_embeddings=max_sequence_length + 1,  # in order to include `max_sequence_length` value # TODOPK
+            num_embeddings=max_sequence_length + 1,  # in order to include `max_sequence_length` value
             embedding_dim=embedding_dim
         )
 
@@ -98,7 +99,7 @@ class SequentialTorchModel(TorchModel):
         )
         self._encoder = nn.TransformerEncoder(transformer_encoder_layer, num_layers)
 
-    def _apply_sequential_encoder(self, events, lengths, add_cls_token=False, add_codebook_embeddings=False):
+    def _apply_sequential_encoder(self, events, lengths, add_cls_token=False):
         embeddings = self._item_embeddings(events)  # (all_batch_events, embedding_dim)
 
         embeddings, mask = create_masked_tensor(
@@ -108,17 +109,10 @@ class SequentialTorchModel(TorchModel):
 
         batch_size = mask.shape[0]
         seq_len = mask.shape[1]
-        
-        position_embeddings = self._get_position_embeddings(
-            embeddings, lengths, mask, batch_size, seq_len
-        ) # (batch_size, seq_len, embedding_dim)
-        
-        if add_codebook_embeddings:
-            codebook_embeddings = self._get_codebook_embeddings(
-                embeddings, lengths, mask, batch_size, seq_len
-            ) # (batch_size, seq_len, embedding_dim)
-            embeddings = embeddings + codebook_embeddings
-        
+
+        position_embeddings = self._encoder_pos_embeddings(lengths, mask)
+        assert torch.allclose(position_embeddings[~mask], embeddings[~mask])
+
         embeddings = embeddings + position_embeddings  # (batch_size, seq_len, embedding_dim)
 
         embeddings = self._layernorm(embeddings)  # (batch_size, seq_len, embedding_dim)
@@ -146,15 +140,14 @@ class SequentialTorchModel(TorchModel):
             )  # (batch_size, seq_len, embedding_dim)
 
         return embeddings, mask
-    
-    def _get_codebook_embeddings(self, embeddings, lengths, mask, batch_size, seq_len):
-        raise NotImplementedError
 
-    def _get_position_embeddings(self, embeddings, lengths, mask, batch_size, seq_len):
-        positions = torch.arange( # TODOPK invert decoder (position.reverse)
+    def _encoder_pos_embeddings(self, lengths, mask):
+        batch_size = mask.shape[0]
+        seq_len = mask.shape[1]
+
+        positions = torch.arange(
             start=seq_len - 1, end=-1, step=-1, device=mask.device
         )[None].tile([batch_size, 1]).long()  # (batch_size, seq_len)
-        
         positions_mask = positions < lengths[:, None]  # (batch_size, max_seq_len)
 
         positions = positions[positions_mask]  # (all_batch_events)
@@ -163,10 +156,8 @@ class SequentialTorchModel(TorchModel):
             data=position_embeddings,
             lengths=lengths
         )  # (batch_size, seq_len, embedding_dim)
-        assert torch.allclose(position_embeddings[~mask], embeddings[~mask])
-        
         return position_embeddings
-    
+
     @staticmethod
     def _add_cls_token(items, lengths, cls_token_id=0):
         num_items = items.shape[0]

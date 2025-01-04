@@ -2,9 +2,10 @@
 
 ## Todos
 
-- check enc / dec model
-- correct logits indexing with tgt_mask?
-- max_sequence_length (TODOPK), why +1? не смог найти где дописывается в батч сама длина
+- level embeddings
+- fix dataset (take last max_seq items)
+- single sample from single user (honest comparison)
+- correct logits indexing with tgt_mask? (upper remark fixes)
 - positions = positions // self._semantic_id_length или reverse?
 как именно учитываем codebook_post & item_pos (тот же порядок или inverted)
 - как именно находим ближайшего при пересечении по embedding? (не понял о каком embedding речь)
