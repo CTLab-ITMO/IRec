@@ -255,8 +255,8 @@ class SASRecLoss(TorchLoss, config_name='sasrec'):
         self._output_prefix = output_prefix
 
     def forward(self, inputs):
-        positive_scores = inputs[self._positive_prefix]  # (x, embedding_dim)
-        negative_scores = inputs[self._negative_prefix]  # (x, embedding_dim)
+        positive_scores = inputs[self._positive_prefix]  # (x, 1)
+        negative_scores = inputs[self._negative_prefix]  # (x, num_negatives)
         assert positive_scores.shape[0] == negative_scores.shape[0]
 
         positive_loss = torch.log(nn.functional.sigmoid(positive_scores)).sum(dim=-1)  # (x)

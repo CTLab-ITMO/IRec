@@ -8,7 +8,6 @@
     "max_sequence_length": 50,
     "samplers": {
       "mask_prob": 0.7,
-      "num_negatives_val": 100,
       "type": "masked_item_prediction",
       "negative_sampler_type": "random"
     }

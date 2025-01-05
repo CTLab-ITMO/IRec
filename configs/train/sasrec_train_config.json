@@ -9,7 +9,7 @@
     "samplers": {
       "num_negatives_train": 100,
       "type": "next_item_prediction",
-      "negative_sampler_type": "popular"
+      "negative_sampler_type": "random_by_popularity"
     }
   },
   "dataloader": {
