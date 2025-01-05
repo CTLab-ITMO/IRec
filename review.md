@@ -2,6 +2,7 @@
 
 ## Todos
 
+- Train dataset size: 16972 (in `sasrec`)
 - level embeddings
 - fix trie eval
 - sos / bos embedding correct train fix
