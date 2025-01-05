@@ -2,8 +2,9 @@
 
 ## Todos
 
-- sos / bos embedding correct train fix
 - level embeddings
+- fix trie eval
+- sos / bos embedding correct train fix
 - positions = positions // self._semantic_id_length или reverse?
 как именно учитываем codebook_post & item_pos (тот же порядок или inverted)
 - как именно находим ближайшего при пересечении по embedding? (не понял о каком embedding речь)

@@ -140,7 +140,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             )  # (batch_size, dec_seq_len, _semantic_id_arr[0])
 
             logits = logits.view(-1, self._semantic_id_arr[0])
-            # TODOPK check if correct flattening
 
             return {self._pred_prefix: logits}
         else:
@@ -211,17 +210,16 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         tgt_embeddings = self._decoder_layernorm(
             tgt_embeddings
-        )  # (batch_size, seq_len, embedding_dim)
+        )  # (batch_size, dec_seq_len + 1, embedding_dim)
         tgt_embeddings = self._decoder_dropout(
             tgt_embeddings
-        )  # (batch_size, seq_len, embedding_dim)
+        )  # (batch_size, dec_seq_len + 1, embedding_dim)
 
         tgt_embeddings[~tgt_mask] = 0
 
         causal_mask = (
             torch.tril(torch.ones(label_len, label_len)).bool().to(DEVICE)
-        )  # (seq_len, seq_len)
-        # TODOPK -inf?
+        )  # (dec_seq_len + 1, dec_seq_len + 1)
 
         decoder_outputs = self._decoder(
             tgt=tgt_embeddings,
@@ -229,9 +227,9 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             tgt_mask=~causal_mask,
             memory_key_padding_mask=~encoder_mask,
             tgt_key_padding_mask=~tgt_mask,
-        )  # (batch_size, label_len, embedding_dim)
+        )  # (batch_size, dec_seq_len + 1, embedding_dim)
 
-        decoder_outputs = decoder_outputs[:, 1:, :]  # TODOPK remove bos token
+        decoder_outputs = decoder_outputs[:, 1:, :]  # remove bos token
 
         return decoder_outputs
 
