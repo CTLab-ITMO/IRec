@@ -1,6 +1,6 @@
 {
-  "experiment_name": "sasrec_test",
-  "best_metric": "eval/ndcg@20",
+  "experiment_name": "sasrec_beauty",
+  "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "sequence",
     "path_to_data_dir": "../data/sasrec_in_batch",
@@ -44,7 +44,6 @@
     "dim_feedforward": 256,
     "dropout": 0.3,
     "activation": "gelu",
-    "use_ce": true,
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },
@@ -61,9 +60,8 @@
     "losses": [
       {
         "type": "sasrec",
-        "positive_prefix": "positive_embeddings",
-        "negative_prefix": "negative_embeddings",
-        "representation_prefix": "current_embeddings",
+        "positive_prefix": "positive_scores",
+        "negative_prefix": "negative_scores",
         "output_prefix": "downstream_loss"
       }
     ],
@@ -106,6 +104,18 @@
           "recall@20": {
             "type": "recall",
             "k": 20
+          },
+          "coverage@5": {
+            "type": "coverage",
+            "k": 5
+          },
+          "coverage@10": {
+            "type": "coverage",
+            "k": 10
+          },
+          "coverage@20": {
+            "type": "coverage",
+            "k": 20
           }
         }
       },
@@ -137,6 +147,18 @@
           },
           "recall@20": {
             "type": "recall",
+            "k": 20
+          },
+          "coverage@5": {
+            "type": "coverage",
+            "k": 5
+          },
+          "coverage@10": {
+            "type": "coverage",
+            "k": 10
+          },
+          "coverage@20": {
+            "type": "coverage",
             "k": 20
           }
         }

@@ -1,1 +1,1 @@
-from .base import BaseCallback, CompositeCallback, EvalCallback, ValidationCallback
+from .base import BaseCallback, CompositeCallback, EvalCallback, InferenceCallback, ValidationCallback

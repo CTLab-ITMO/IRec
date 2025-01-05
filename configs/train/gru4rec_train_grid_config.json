@@ -1,17 +1,18 @@
 {
-  "experiment_name": "bert4rec_movielens1m",
-  "best_metric": "eval/ndcg@20",
+  "start_from": 0,
+  "experiment_name": "gru4rec_beauty_grid",
+  "best_metric": "validation/ndcg@20",
   "dataset": {
-    "type": "scientific",
+    "type": "sequence",
     "path_to_data_dir": "../data",
-    "name": "MovieLens1M",
+    "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
-      "mask_prob": 0.3,
-      "num_negatives_val": 100,
-      "type": "masked_item_prediction",
+      "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
+  },
+  "dataset_params": {
   },
   "dataloader": {
     "train": {
@@ -34,38 +35,53 @@
     }
   },
   "model": {
-    "type": "bert4rec",
+    "type": "gru4rec",
     "sequence_prefix": "item",
-    "labels_prefix": "labels",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
     "candidate_prefix": "candidates",
     "embedding_dim": 64,
-    "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
-    "dropout": 0.1,
     "activation": "gelu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
+  },
+  "model_params": {
+    "dropout": [
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9]
   },
   "optimizer": {
     "type": "basic",
     "optimizer": {
       "type": "adam",
-      "lr": 1e-4
+      "lr": 0.001
     },
     "clip_grad_threshold": 5.0
+  },
+  "optimizer_params": {
   },
   "loss": {
     "type": "composite",
     "losses": [
       {
-        "type": "ce",
-        "predictions_prefix": "logits",
-        "labels_prefix": "labels",
+        "type": "bpr",
+        "positive_prefix": "positive_scores",
+        "negative_prefix": "negative_scores",
         "output_prefix": "downstream_loss"
       }
     ],
     "output_prefix": "loss"
+  },
+  "loss_params": {
   },
   "callback": {
     "type": "composite",
@@ -74,11 +90,6 @@
         "type": "metric",
         "on_step": 1,
         "loss_prefix": "loss"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "downstream_loss"
       },
       {
         "type": "validation",
@@ -108,6 +119,18 @@
           },
           "recall@20": {
             "type": "recall",
+            "k": 20
+          },
+          "coverage@5": {
+            "type": "coverage",
+            "k": 5
+          },
+          "coverage@10": {
+            "type": "coverage",
+            "k": 10
+          },
+          "coverage@20": {
+            "type": "coverage",
             "k": 20
           }
         }
@@ -140,6 +163,18 @@
           },
           "recall@20": {
             "type": "recall",
+            "k": 20
+          },
+          "coverage@5": {
+            "type": "coverage",
+            "k": 5
+          },
+          "coverage@10": {
+            "type": "coverage",
+            "k": 10
+          },
+          "coverage@20": {
+            "type": "coverage",
             "k": 20
           }
         }
