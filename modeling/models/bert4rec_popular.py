@@ -95,7 +95,7 @@ class Bert4RecModelPopular(SequentialTorchModel, config_name='bert4rec_popular')
 
             needed_logits = torch.cat((non_zero_labels_logits, non_zero_samples_logits), dim=1)  # (non_zero_events, num_negatives + 1)
 
-            needed_labels = torch.zeros(len(needed_logits), dtype=torch.long) # (non_zero_events)
+            needed_labels = torch.zeros(len(needed_logits), dtype=torch.long, device=needed_logits.device) # (non_zero_events)
 
             return {'logits': needed_logits, 'labels.ids': needed_labels}
         else: # eval mode
