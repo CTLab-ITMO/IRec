@@ -1,5 +1,5 @@
 {
-  "experiment_name": "bert4rec_beauty_dataset_bert_ce_loss_all_rank",
+  "experiment_name": "bert4rec_all_rank_beauty",
   "best_metric": "eval/ndcg@20",
   "dataset": {
     "type": "sequence",
