@@ -138,6 +138,18 @@
           "recall@20": {
             "type": "recall",
             "k": 20
+          },
+          "coverage@5": {
+            "type": "coverage",
+            "k": 5
+          },
+          "coverage@10": {
+            "type": "coverage",
+            "k": 10
+          },
+          "coverage@20": {
+            "type": "coverage",
+            "k": 20
           }
         }
       }
