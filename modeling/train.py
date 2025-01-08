@@ -60,7 +60,6 @@ def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt=None,
                 current_metric = batch_[best_metric]
                 best_checkpoint = copy.deepcopy(model.state_dict())
                 best_epoch = epoch_num
-        break
 
         epoch_num += 1
     logger.debug('Training procedure has been finished!')
