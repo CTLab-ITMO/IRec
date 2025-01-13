@@ -1,6 +1,5 @@
 {
-  "start_from": 0,
-  "experiment_name": "sasrec_grid_in_batch_beauty",
+  "experiment_name": "sasrec_in_batch_beauty",
   "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "sequence",
@@ -11,8 +10,6 @@
       "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
-  },
-  "dataset_params": {
   },
   "dataloader": {
     "train": {
@@ -44,21 +41,10 @@
     "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
+    "dropout": 0.3,
     "activation": "gelu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
-  },
-  "model_params": {
-    "dropout": [
-      0.1,
-      0.2,
-      0.3,
-      0.4,
-      0.5,
-      0.6,
-      0.7,
-      0.8,
-      0.9]
   },
   "optimizer": {
     "type": "basic",
@@ -67,8 +53,6 @@
       "lr": 0.001
     },
     "clip_grad_threshold": 5.0
-  },
-  "optimizer_params": {
   },
   "loss": {
     "type": "composite",
@@ -81,8 +65,6 @@
       }
     ],
     "output_prefix": "loss"
-  },
-  "loss_params": {
   },
   "callback": {
     "type": "composite",

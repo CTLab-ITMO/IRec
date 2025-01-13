@@ -1,7 +1,7 @@
 {
   "start_from": 0,
-  "experiment_name": "bert4rec_grid_all_rank_beauty",
-  "best_metric": "eval/ndcg@20",
+  "experiment_name": "bert4rec_grid_in_batch_beauty",
+  "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "sequence",
     "path_to_data_dir": "../data/sasrec_in_batch",
@@ -22,7 +22,8 @@
         0.5,
         0.6,
         0.7,
-        0.8
+        0.8,
+        0.9
       ]
     }
   },
@@ -47,7 +48,7 @@
     }
   },
   "model": {
-    "type": "bert4rec_all_rank",
+    "type": "bert4rec_in_batch",
     "sequence_prefix": "item",
     "labels_prefix": "labels",
     "candidate_prefix": "candidates",
