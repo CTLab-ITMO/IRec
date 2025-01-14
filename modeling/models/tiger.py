@@ -6,12 +6,15 @@ from models.base import SequentialTorchModel
 from torch import nn
 from utils import DEVICE, create_masked_tensor, get_activation_function
 
+from .rqvae import RqVaeModel
+
 
 class TigerModel(SequentialTorchModel, config_name="tiger"):
 
     def __init__(
         self,
         trie,
+        rqvae_model,
         sequence_prefix,
         pred_prefix,
         positive_prefix,
@@ -58,7 +61,11 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._decoder = nn.TransformerDecoder(
             transformer_decoder_layer, num_decoder_layers
         )
+        
+        self._codebook_item_embeddings = torch.cat([codebook for codebook in rqvae_model.codebooks], dim=0)
+
         self._trie = trie
+        self._rqvae_model = rqvae_model
 
         self._projection = nn.Linear(embedding_dim, semantic_id_arr[0])
 
@@ -67,9 +74,18 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._positive_prefix = positive_prefix
         self._labels_prefix = labels_prefix
 
+        # TODOPK
+        #
+        # 128 128
+        # emb       0[0, 255]   1[0, 255]   2[0, 255]
+        # 12101 ->     123         123         34      ->  lookups (+embedding)
+        #
+        # item_emb in [0, 255]
+
         self._semantic_id_arr = semantic_id_arr
 
         self._bos_token_id = semantic_id_arr[0]
+        self._bos_weight = nn.Parameter(torch.randn(embedding_dim))
 
         self._codebook_embeddings = nn.Embedding(
             num_embeddings=len(semantic_id_arr) + 1, embedding_dim=embedding_dim
@@ -89,23 +105,47 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         semantic_id_arr = rqvae_config["model"]["codebook_sizes"]
         assert all([book_size == semantic_id_arr[0] for book_size in semantic_id_arr])
 
+        rqvae_config["model"]["should_init_codebooks"] = False
+        rqvae_model = RqVaeModel.create_from_config(rqvae_config["model"]).to(DEVICE)
+        rqvae_model.load_state_dict(
+            torch.load(config["rqvae_checkpoint_path"], weights_only=True)
+        )
+        rqvae_model.eval()
+
+        embedding_dim = rqvae_model.encoder.weight.shape[0] # inner rqvae dim
+
         return cls(
             trie=trie,
+            rqvae_model=rqvae_model,
             sequence_prefix=config["sequence_prefix"],
             pred_prefix=config["predictions_prefix"],
             positive_prefix=config["positive_prefix"],
             labels_prefix=config["labels_prefix"],
             num_items=semantic_id_arr[0],
             max_sequence_length=kwargs["max_sequence_length"],
-            embedding_dim=config["embedding_dim"],
-            num_heads=config.get("num_heads", int(config["embedding_dim"] // 64)),
+            embedding_dim=embedding_dim,
+            num_heads=config.get("num_heads", int(embedding_dim // 64)),
             num_encoder_layers=config["num_encoder_layers"],
             num_decoder_layers=config["num_decoder_layers"],
-            dim_feedforward=config.get("dim_feedforward", 4 * config["embedding_dim"]),
+            dim_feedforward=config.get("dim_feedforward", 4 * embedding_dim),
             semantic_id_arr=semantic_id_arr,
             dropout=config.get("dropout", 0.0),
             initializer_range=config.get("initializer_range", 0.02),
         )
+
+    def get_item_embeddings(self, events):
+        bos_mask = (events == self._bos_token_id)
+        
+        codebook_events = events[~bos_mask]
+        positions = torch.arange(len(codebook_events), device=events.device)
+        codebook_positions = positions % len(self._semantic_id_arr)
+        emb_indices = codebook_positions * self._semantic_id_arr[0] + codebook_events
+        
+        embeddings = torch.zeros((len(events), self._bos_weight.shape[0]), device=events.device)
+        embeddings[bos_mask] = self._bos_weight
+        embeddings[~bos_mask] = self._codebook_item_embeddings[emb_indices]
+                
+        return embeddings
 
     def get_logits(self, inputs, prefix, all_sample_events, all_sample_lengths):
         encoder_embeddings, encoder_mask = self._apply_sequential_encoder(
@@ -145,7 +185,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         else:
             logits = self.get_logits(
                 inputs, self._labels_prefix, all_sample_events, all_sample_lengths
-            )
+            )  # batch_size, dec_seq_len, emb_dim (_semantic_id_arr[0])
 
             preds = logits.argmax(dim=-1)  # (batch_size, dec_seq_len)
             ids = torch.tensor(self._apply_trie(preds))
@@ -153,6 +193,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
     def _apply_trie(self, preds):  # TODOPK make this faster (how?)
         native_repr = [tuple(row.tolist()) for row in preds]
+        # TODOPK add residual
+        # add flag if item taken (take other items in up level)
         ids = []
         for semantic_id in native_repr:
             cur_result = set()
@@ -191,7 +233,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
     ):
         label_events, label_lengths = self._prepend_bos(label_events, label_lengths)
 
-        tgt_embeddings = self._item_embeddings(
+        tgt_embeddings = self.get_item_embeddings(
             label_events
         )  # (all_batch_events, embedding_dim)
 
@@ -244,7 +286,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         def codebook_lambda(x):
             non_bos = x < len(self._semantic_id_arr)
             x[non_bos] = (len(self._semantic_id_arr) - 1) - x[non_bos]
-            return x # 3, 0, 1, 2, 3, 0, 1, 2 ...
+            return x  # 3, 0, 1, 2, 3, 0, 1, 2 ...
 
         codebook_embeddings = self._get_position_embeddings(
             lengths, mask, codebook_lambda, self._codebook_embeddings
