@@ -2,6 +2,7 @@ import json
 import pickle
 
 import torch
+from models.collision_solver import CollisionSolver
 from models.base import SequentialTorchModel
 from torch import nn
 from utils import DEVICE, create_masked_tensor, get_activation_function
@@ -66,6 +67,11 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         self._trie = trie
         self._rqvae_model = rqvae_model
+        self._collision_solver = CollisionSolver(embedding_dim, len(semantic_id_arr), DEVICE)
+
+        # TODO
+        # self._collision_solver.create_query_candidates_dict(semantic_ids[:, :-1], residuals)
+        # self._collision_solver.get_semantic_ids(query_prefixes, query_residuals)
 
         self._projection = nn.Linear(embedding_dim, semantic_id_arr[0])
 
@@ -182,6 +188,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             preds = logits.argmax(dim=-1)  # (batch_size, dec_seq_len)
             ids = torch.tensor(self._apply_trie(preds))
             return ids
+        
 
     def _apply_trie(self, preds):  # TODOPK make this faster (how?)
         native_repr = [tuple(row.tolist()) for row in preds]
