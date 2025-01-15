@@ -74,14 +74,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._positive_prefix = positive_prefix
         self._labels_prefix = labels_prefix
 
-        # TODOPK
-        #
-        # 128 128
-        # emb       0[0, 255]   1[0, 255]   2[0, 255]
-        # 12101 ->     123         123         34      ->  lookups (+embedding)
-        #
-        # item_emb in [0, 255]
-
         self._semantic_id_arr = semantic_id_arr
 
         self._bos_token_id = semantic_id_arr[0]
