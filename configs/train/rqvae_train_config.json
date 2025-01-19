@@ -1,6 +1,6 @@
 {
   "experiment_name": "rqvae_beauty",
-  "train_steps_num": 1024,
+  "train_steps_num": 512,
   "dataset": {
     "type": "rqvae",
     "path_to_data_dir": "../data",
@@ -31,8 +31,7 @@
   },
   "model": {
     "type": "rqvae",
-    "input_dim": 512,
-    "hidden_dim": 128,
+    "embedding_dim": 512,
     "n_iter": 100,
     "codebook_sizes": [256, 256, 256, 256],
     "should_init_codebooks": true,

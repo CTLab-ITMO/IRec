@@ -109,3 +109,28 @@ class CollisionSolver:
         max_indices = torch.argmax(masked_dot_products, dim=1)
         best_semantic_ids = torch.concat((query_prefixes, max_indices.unsqueeze(1)), dim=1)
         return best_semantic_ids
+    
+    def get_closest_torch(self, query_prefixes: torch.Tensor, query_residuals: torch.Tensor):
+        raise NotImplementedError("get_closest_torch is not implemented")
+    
+        query_prefixes = query_prefixes.to(self.device)
+        query_residuals = query_residuals.to(self.device)
+
+        batch_size, max_length = self._semantic_ids.shape
+        num_prefixes, prefix_len = query_prefixes.shape
+
+        # привожу к одной размерности чтобы найти совпадения по префиксам
+        semantic_ids_exp = self._semantic_ids[:, :prefix_len].unsqueeze(0).expand(num_prefixes, batch_size, prefix_len) # [num_prefixes, batch_size, prefix_len]
+        prefixes_exp = query_prefixes.unsqueeze(1).expand(num_prefixes, batch_size, prefix_len) #torch.tile
+        is_prefix_match = (semantic_ids_exp == prefixes_exp).all(dim=2)  # [num_prefixes, batch_size]
+
+        # Шаг 2: Маскирование residuals для каждого префикса
+        residuals_exp = self._residuals.unsqueeze(0).expand(num_prefixes, batch_size, -1)  # [num_prefixes, batch_size, emb_dim]
+        masked_residuals = residuals_exp * is_prefix_match.unsqueeze(2).float()  # Зануляем строки, не соответствующие префиксам
+        dot_products = torch.einsum('ijk,ik->ij', masked_residuals, query_residuals)
+        max_indices = torch.argmax(dot_products, dim=1)  # [num_prefixes] #
+
+        best_semantic_ids = self._semantic_ids[max_indices]  # [num_prefixes, max_length]
+        best_residuals = self._residuals[max_indices]  # [num_prefixes, emb_dim]
+        
+        return best_semantic_ids, best_residuals

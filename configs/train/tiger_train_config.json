@@ -17,10 +17,7 @@
       "type": "torch",
       "batch_size": 256,
       "batch_processor": {
-        "type": "rqvae",
-        "rqvae_checkpoint_path": "../checkpoints/rqvae_beauty_final_state.pth",
-        "rqvae_train_config_path": "../configs/train/rqvae_train_config.json",
-        "embs_extractor_path": "../data/Beauty/rqvae/data_full.pt"
+        "type": "basic"
       },
       "drop_last": true,
       "shuffle": true
@@ -29,10 +26,7 @@
       "type": "torch",
       "batch_size": 256,
       "batch_processor": {
-        "type": "rqvae",
-        "rqvae_checkpoint_path": "../checkpoints/rqvae_beauty_final_state.pth",
-        "rqvae_train_config_path": "../configs/train/rqvae_train_config.json",
-        "embs_extractor_path": "../data/Beauty/rqvae/data_full.pt"
+        "type": "basic"
       },
       "drop_last": false,
       "shuffle": false
@@ -43,6 +37,7 @@
     "trie": "../data/Beauty/rqvae/trie.pkl",
     "rqvae_train_config_path": "../configs/train/rqvae_train_config.json",
     "rqvae_checkpoint_path": "../checkpoints/rqvae_beauty_final_state.pth",
+    "embs_extractor_path": "../data/Beauty/rqvae/data_full.pt",
     "sequence_prefix": "item",
     "predictions_prefix": "logits",
     "positive_prefix": "labels",

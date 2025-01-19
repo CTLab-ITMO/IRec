@@ -32,6 +32,9 @@ class RqVaeModel(TorchModel, config_name='rqvae'):
 
         # Default initialization of codebook
         self.codebooks = torch.nn.ParameterList()
+        
+        self.codebook_sizes = codebook_sizes
+        
         for codebook_size in codebook_sizes:
             cb = torch.FloatTensor(codebook_size, hidden_dim)
             self.codebooks.append(cb)
@@ -51,8 +54,8 @@ class RqVaeModel(TorchModel, config_name='rqvae'):
     def create_from_config(cls, config, **kwargs):
         return cls(
             train_sampler=kwargs.get('train_sampler'),
-            input_dim=config['input_dim'],
-            hidden_dim=config['hidden_dim'],
+            input_dim=config['embedding_dim'],
+            hidden_dim=config['embedding_dim'],
             n_iter=config['n_iter'],
             codebook_sizes=config['codebook_sizes'],
             should_init_codebooks=config.get('should_init_codebooks', False),
@@ -144,7 +147,7 @@ class RqVaeModel(TorchModel, config_name='rqvae'):
             codebook_vectors = codebook[codebook_indices]
             ind_lists.append(codebook_indices.cpu().numpy())
             remainder = remainder - codebook_vectors
-        return zip(*ind_lists)
+        return list(zip(*ind_lists)), remainder
 
     def forward(self, inputs):
         embeddings = inputs["embeddings"]
