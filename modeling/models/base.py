@@ -1,7 +1,3 @@
-from utils import MetaParent
-
-from utils import DEVICE, create_masked_tensor, get_activation_function
-
 import torch
 import torch.nn as nn
 from utils import DEVICE, MetaParent, create_masked_tensor, get_activation_function
@@ -99,11 +95,11 @@ class SequentialTorchModel(TorchModel):
         )
         self._encoder = nn.TransformerEncoder(transformer_encoder_layer, num_layers)
     
-    def get_encoder_embeddings(self, events):
+    def get_item_embeddings(self, events):
         return self._item_embeddings(events)
 
     def _apply_sequential_encoder(self, events, lengths, add_cls_token=False):
-        embeddings = self.get_encoder_embeddings(events)  # (all_batch_events, embedding_dim)
+        embeddings = self.get_item_embeddings(events)  # (all_batch_events, embedding_dim)
         
         assert embeddings.shape[0] == sum(lengths)
 

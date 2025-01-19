@@ -1,188 +1,153 @@
-from collections import defaultdict
-import random
-
 import torch
-
+from typing import List, Tuple, Dict, Optional
 
 class Item:
     """
-    Represents one data entry with:
-      - hierarchical_id: a tuple of int, e.g. (1, 2, 5)
+    Represents an item with:
+      - hierarchical_id: a tuple of ints
       - residual: a torch.Tensor of shape (emb_dim,)
     """
-    def __init__(self, hierarchical_id: tuple[int, ...], residual: torch.Tensor):
+    def __init__(self, hierarchical_id: Tuple[int, ...], residual: torch.Tensor):
         self.hierarchical_id = hierarchical_id
         self.residual = residual
 
     def __repr__(self):
-        return f"Item(id={self.hierarchical_id}, residual={self.residual})"
+        return f"Item(hier_id={self.hierarchical_id}, resid_shape={tuple(self.residual.shape)})"
 
 
 class TrieNode:
     """
-    A node in the Trie.
-      - children: dict<int, TrieNode>
-      - items: list of Item, non-empty only if this node is
-               a terminal for those items' hierarchical_id.
+    A node in the trie.
+      - children: dict(int -> TrieNode)
+      - items: list of Items (only non-empty if this node is the end of some hierarchical_id(s))
     """
     def __init__(self):
-        self.children: dict[int, "TrieNode"] = {}
-        self.items: list[Item] = []
-
-    def is_leaf(self) -> bool:
-        """
-        Return True if this node has no children.
-        """
-        return len(self.children) == 0
+        self.children: Dict[int, TrieNode] = {}
+        self.items: List[Item] = []  # collisions end up here if they share the same path
 
 
 class Trie:
     """
-    Trie for storing items keyed by their hierarchical_id.
+    The trie structure that can:
+      1. Insert an Item by its hierarchical_id.
+      2. Find up to n closest items to a query Item by the described prefix-truncation + dot-product logic.
     """
-
     def __init__(self):
         self.root = TrieNode()
 
     def insert(self, item: Item) -> None:
         """
-        Insert an Item into the Trie by walking its hierarchical_id.
+        Insert an Item into the trie following item.hierarchical_id.
         """
-        node = self.root
+        current_node = self.root
         for idx in item.hierarchical_id:
-            if idx not in node.children:
-                node.children[idx] = TrieNode()
-            node = node.children[idx]
-        # This node is now the leaf for item.hierarchical_id
-        node.items.append(item)
+            if idx not in current_node.children:
+                current_node.children[idx] = TrieNode()
+            current_node = current_node.children[idx]
+        # At the leaf, store the item
+        current_node.items.append(item)
 
-    def _find_longest_prefix_node(
-        self, hierarchical_id: tuple[int, ...]
-    ) -> tuple[TrieNode, tuple[int, ...]]:
+    def _gather_subtree_items(self, node: TrieNode) -> List[Item]:
         """
-        Walk the Trie to find the node that matches the longest possible prefix
-        of `hierarchical_id`.
-        Returns the node and the prefix (as a tuple of int) actually matched.
+        Collect all items in the sub-tree rooted at 'node'.
         """
-        node = self.root
-        matched_prefix = []
-
-        for idx in hierarchical_id:
-            if idx in node.children:
-                node = node.children[idx]
-                matched_prefix.append(idx)
-            else:
-                break
-
-        return node, tuple(matched_prefix)
-
-    def _gather_subtree_items(self, node: TrieNode) -> list[Item]:
-        """
-        Collect all items in the entire subtree rooted at `node`.
-        We do a DFS (or BFS) to gather items from every leaf below.
-        """
+        collected = []
         stack = [node]
-        all_items = []
-
         while stack:
-            current = stack.pop()
-            # If current is a leaf, it might have items
-            if current.items:
-                all_items.extend(current.items)
-            # Traverse children
-            for child in current.children.values():
-                stack.append(child)
+            cur = stack.pop()
+            collected.extend(cur.items)
+            for child_node in cur.children.values():
+                stack.append(child_node)
+        return collected
 
-        return all_items
-
-    def _euclidean_distance(self, a: torch.Tensor, b: torch.Tensor) -> float:
+    def _dot_scores(
+        self, 
+        query_residual: torch.Tensor, 
+        candidates: List[Item]
+    ) -> List[Tuple[Item, float]]:
         """
-        Euclidean (L2) distance between two torch.Tensors.
+        Compute dot-product scores between query_residual and each candidate's residual.
+        Return list of (candidate_item, score).
         """
-        return torch.norm(a - b).item()
+        # Note: if your embeddings are large, you may prefer a more efficient approach
+        # (e.g., batched matrix multiplication). For clarity, we do a simple loop here.
+        scored = []
+        for c in candidates:
+            score = torch.dot(query_residual, c.residual).item()
+            scored.append((c, score))
+        return scored
 
-    def find_n_closest(self, query_item: Item, n: int) -> list[Item]:
+    def find_closest(self, query_item: Item, n: int) -> List[Item]:
         """
-        Find up to `n` closest items to `query_item` by:
-          1. Finding the longest existing matching prefix.
-          2. First include ALL items from longest matching prefix node
-          3. If more slots remain:
-             - Go up prefix levels and gather more items
-             - Within each prefix level, sort by distance
-          4. Never return more than n items total
+        Find up to n closest items to 'query_item' by the described rules:
+          1) Find longest existing matching prefix.
+          2) Gather sub-tree items:
+             - If >= n items, pick top n by dot product.
+             - Else, move to parent, gather sub-tree, etc.
+          3) If root is reached, return all if < n, else top n by dot product.
         """
-        # Step 1: Longest prefix node
-        node, matched_prefix = self._find_longest_prefix_node(query_item.hierarchical_id)
+        # 1) Descend as far as possible
+        path_stack = [(self.root, None)]  # (node, parent_node) pairs for easy upward climb
+        current_node = self.root
 
-        # Track items by their prefix length and distance
-        collected_by_prefix: dict[int, list[tuple[Item, float]]] = defaultdict(list)
-        already_seen = set()
-
-        def gather_and_append(target_node: TrieNode, prefix_length: int):
-            """
-            Gather items from subtree of `target_node`, compute distances,
-            and group them by prefix length.
-            """
-            subtree_items = self._gather_subtree_items(target_node)
-            for it in subtree_items:
-                if it not in already_seen:
-                    dist = self._euclidean_distance(it.residual, query_item.residual)
-                    collected_by_prefix[prefix_length].append((it, dist))
-                    already_seen.add(it)
-
-        # First gather items from longest prefix node
-        prefix_len = len(matched_prefix)
-        gather_and_append(node, prefix_len)
-
-        # If we need more items, move up prefix levels
-        while prefix_len > 0 and sum(len(items) for items in collected_by_prefix.values()) < n:
-            prefix_len -= 1
-            parent = self.root
-            for idx in matched_prefix[:prefix_len]:
-                parent = parent.children[idx]
-            gather_and_append(parent, prefix_len)
-
-        # If still not enough and we're not at root, gather from root
-        if prefix_len != 0 and sum(len(items) for items in collected_by_prefix.values()) < n:
-            gather_and_append(self.root, 0)
-
-        # Build final result prioritizing longer prefixes
-        result = []
-        # Start from longest prefix and work down
-        for prefix_length in sorted(collected_by_prefix.keys(), reverse=True):
-            items = collected_by_prefix[prefix_length]
-            # Sort items within this prefix length by distance
-            items.sort(key=lambda x: x[1])
-            # Add items from this level until we hit n
-            remaining_slots = n - len(result)
-            result.extend(item for item, _ in items[:remaining_slots])
-            if len(result) >= n:
+        # Traverse hierarchy while possible
+        for idx in query_item.hierarchical_id:
+            if idx in current_node.children:
+                parent_node = current_node
+                current_node = current_node.children[idx]
+                path_stack.append((current_node, parent_node))
+            else:
+                # Can't go deeper, break
                 break
 
-        return result
+        # Now path_stack[-1][0] is the deepest node we matched.
+        # We'll climb up if needed.
+        while path_stack:
+            node, parent = path_stack[-1]
+            subtree_items = self._gather_subtree_items(node)
+            if len(subtree_items) >= n:
+                # We can pick the top n by dot product
+                scored = self._dot_scores(query_item.residual, subtree_items)
+                # Sort descending by score
+                scored.sort(key=lambda x: x[1], reverse=True)
+                return [itm for itm, _ in scored[:n]]
+            else:
+                # Not enough items: move up one level
+                # (pop the current node off the stack and keep going)
+                path_stack.pop()
+                if not path_stack:
+                    # We are at the root (the last pop).
+                    # If still not enough items, we simply return everything we have from the root
+                    # or if root has more than n, we pick top n.
+                    scored = self._dot_scores(query_item.residual, subtree_items)
+                    scored.sort(key=lambda x: x[1], reverse=True)
+                    return [itm for itm, _ in scored[:n]]
+                # Otherwise, continue in the loop (which means gather from the parent's node)
+
+        # Safety net (should never get here logically, but just in case):
+        return []
 
 
-# ------------------------
-# Example Usage:
-# ------------------------
+# ---------------------------
+# Usage example (toy):
 if __name__ == "__main__":
+    # Suppose emb_dim = 3 for example
     trie = Trie()
-    
-    # generate random items and stress test
-    emb_dim = 4
-    for i in range(12000):
-        semantic_id = tuple(random.randint(0, 255) for _ in range(4))
-        item = Item(semantic_id, torch.rand(emb_dim))
-        trie.insert(item)
 
-    # generate query items
-    query_items = []
-    for i in range(256):
-        semantic_id = tuple(random.randint(0, 255) for _ in range(4))
-        query_item = Item(semantic_id, torch.rand(emb_dim))
-        query_items.append(query_item)
-        
-    for query_item in query_items:
-        closest_items = trie.find_n_closest(query_item, n=20)
-        print(f"{len(closest_items)=}")
-        # print("Closest items to", query_item, ":\n", closest_items)
+    # Insert a few items
+    items_to_insert = [
+        Item((1, 2, 3), torch.tensor([1.0, 0.5, 0.2])),
+        Item((1, 2, 3), torch.tensor([1.1, 0.4, 0.0])),  # collision on same path
+        Item((1, 2, 4), torch.tensor([0.9, 0.9, 0.9])),
+        Item((1, 5),     torch.tensor([-0.1, 0.2, 1.0])),
+        Item((2,),       torch.tensor([0.3, 0.3, 0.3])),
+    ]
+    for it in items_to_insert:
+        trie.insert(it)
+
+    # Query item
+    query = Item((1, 2, 3, 99), torch.tensor([1.0, 1.0, 1.0]))  # (1,2,3,99) partially matches deeper
+    closest = trie.find_closest(query, n=3)
+    print("Closest items:")
+    for c in closest:
+        print(c)

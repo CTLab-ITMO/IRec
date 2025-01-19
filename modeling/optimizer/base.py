@@ -1,8 +1,7 @@
 import copy
 
-from utils import MetaParent
-
 import torch
+from utils import MetaParent
 
 OPTIMIZERS = {
     'sgd': torch.optim.SGD,
