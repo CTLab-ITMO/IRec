@@ -126,6 +126,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         embeddings = torch.stack(embs_extractor['embeddings'].tolist()).to(DEVICE)
 
         semantic_ids, residuals = rqvae_model({"embeddings": embeddings})
+        assert embedding_dim == residuals.shape[1]
         
         solver = CollisionSolver(
             residual_dim=residuals.shape[1], 
@@ -245,8 +246,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         bos_embeddings = self._bos_weight.unsqueeze(0).expand(batch_size, 1, -1)  # (batch_size, 1, embedding_dim)
         
         tgt_embeddings = torch.cat([bos_embeddings, tgt_embeddings[:, :-1, :]], dim=1) # TODO remove residuals (batch_size, dec_seq_len, embedding_dim)
-        # tgt_embeddings = torch.cat([bos_embeddings, tgt_embeddings[:, :-1, :]], dim=1) # (batch_size, dec_seq_len, embedding_dim)
-        # TODO here :-1 removes dedup token, however sizes doesn't match (decoder_output = b x len(codebook_sizes) + 1 x emb_dim)
         
         label_len = tgt_mask.shape[1]
 
