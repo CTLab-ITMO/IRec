@@ -3,8 +3,7 @@ import json
 import torch
 from tqdm import tqdm
 from models.base import SequentialTorchModel
-from models.collision_solver import CollisionSolver
-from rqvae.trie import Item, Trie
+from rqvae_utils import CollisionSolver, Trie, Item
 from torch import nn
 from utils import DEVICE, create_masked_tensor, get_activation_function
 
@@ -100,7 +99,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._init_weights(initializer_range)
         
     @classmethod
-    def init_rqvae(cls, config):
+    def init_rqvae(cls, config) -> RqVaeModel:
         rqvae_config = json.load(open(config["rqvae_train_config_path"]))
         rqvae_config["model"]["should_init_codebooks"] = False
         
@@ -128,8 +127,13 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         semantic_ids, residuals = rqvae_model({"embeddings": embeddings})
         
-        solver = CollisionSolver(residuals.shape[1], len(semantic_ids[0]), device=DEVICE)
-        solver.create_query_candidates_dict(semantic_ids, residuals) # TODO
+        solver = CollisionSolver(
+            residual_dim=residuals.shape[1], 
+            emb_dim=len(rqvae_model.codebook_sizes), 
+            codebook_size=len(rqvae_model.codebook_sizes[0]), 
+            device=DEVICE
+        )
+        solver.create_query_candidates_dict(semantic_ids, residuals)
         
         item_id_to_embedding = {
             item_id: embedding for (item_id, embedding) in zip(item_ids, embeddings)
