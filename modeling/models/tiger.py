@@ -131,10 +131,9 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         solver = CollisionSolver(
             residual_dim=residuals.shape[1], 
             emb_dim=len(rqvae_model.codebook_sizes), 
-            codebook_size=len(rqvae_model.codebook_sizes[0]), 
-            device=DEVICE
+            codebook_size=rqvae_model.codebook_sizes[0]
         )
-        solver.create_query_candidates_dict(semantic_ids, residuals)
+        solver.create_query_candidates_dict(torch.tensor(semantic_ids), residuals)
         
         item_id_to_embedding = {
             item_id: embedding for (item_id, embedding) in zip(item_ids, embeddings)
@@ -189,6 +188,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             
             semantic_ids = torch.stack([self._item_id_to_semantic_id[event] for event in label_events.tolist()]) # len(events), len(codebook_sizes)
             semantic_events = semantic_ids.view(-1)
+            
+            # TODO batch_logsoftmax don't match shapes (example bert4rec cls)
             
             return {self._pred_prefix: logits, f"semantic.{self._labels_prefix}.ids": semantic_events}
         else:
