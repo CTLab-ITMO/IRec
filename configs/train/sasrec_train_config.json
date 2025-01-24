@@ -37,7 +37,7 @@
     "positive_prefix": "positive",
     "negative_prefix": "negative",
     "candidate_prefix": "candidates",
-    "embedding_dim": 64,
+    "embedding_dim": 512,
     "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,

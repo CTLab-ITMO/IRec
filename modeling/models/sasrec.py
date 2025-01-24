@@ -37,6 +37,17 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
         self._positive_prefix = positive_prefix
 
         self._init_weights(initializer_range)
+        
+        df = torch.load('../data/Beauty/data_full.pt')
+        precomputed_embeddings = torch.stack(df.sort_index().embeddings.tolist())
+        
+        # TODO ask if correct, nans occurs in validation
+        padding_embedding = self._item_embeddings.weight[0].unsqueeze(0)
+        mask_embedding = self._item_embeddings.weight[-1].unsqueeze(0)
+        
+        extended_embeddings = torch.cat([padding_embedding, precomputed_embeddings, mask_embedding], dim=0)  # Shape: (num_items + 2, embedding_dim)
+        
+        self._item_embeddings.weight.data.copy_(extended_embeddings)
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
