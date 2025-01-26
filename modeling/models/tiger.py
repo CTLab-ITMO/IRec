@@ -100,7 +100,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             embedding_dim=embedding_dim,
         )
         self._codebook_embeddings = nn.Embedding(
-            num_embeddings=len(codebook_sizes) + 2, embedding_dim=embedding_dim # TODO
+            num_embeddings=len(codebook_sizes) + 2, embedding_dim=embedding_dim
         )  # + 2 for bos token & residual
 
         self._init_weights(initializer_range)

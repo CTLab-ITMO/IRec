@@ -1,5 +1,7 @@
+from functools import lru_cache
+
 import torch
-from typing import List, Tuple, Dict, Optional
+
 
 class Item:
     """
@@ -7,7 +9,7 @@ class Item:
       - hierarchical_id: a tuple of ints
       - residual: a torch.Tensor of shape (emb_dim,)
     """
-    def __init__(self, hierarchical_id: Tuple[int, ...], residual: torch.Tensor):
+    def __init__(self, hierarchical_id: tuple[int, ...], residual: torch.Tensor):
         self.hierarchical_id = hierarchical_id
         self.residual = residual
 
@@ -22,8 +24,8 @@ class TrieNode:
       - items: list of Items (only non-empty if this node is the end of some hierarchical_id(s))
     """
     def __init__(self):
-        self.children: Dict[int, TrieNode] = {}
-        self.items: List[Item] = []  # collisions end up here if they share the same path
+        self.children: dict[int, TrieNode] = {}
+        self.items: list[Item] = []  # collisions end up here if they share the same path
 
 
 class Trie:
@@ -34,6 +36,9 @@ class Trie:
     """
     def __init__(self):
         self.root = TrieNode()
+        # Create instance-specific cached methods
+        self._cached_gather_subtree_items = lru_cache(maxsize=1024)(self._gather_subtree_items)
+        self._cached_dot_scores = lru_cache(maxsize=1024)(self._dot_scores)
 
     def insert(self, item: Item) -> None:
         """
@@ -47,7 +52,7 @@ class Trie:
         # At the leaf, store the item
         current_node.items.append(item)
 
-    def _gather_subtree_items(self, node: TrieNode) -> List[Item]:
+    def _gather_subtree_items(self, node: TrieNode) -> tuple[Item, ...]:
         """
         Collect all items in the sub-tree rooted at 'node'.
         """
@@ -58,26 +63,24 @@ class Trie:
             collected.extend(cur.items)
             for child_node in cur.children.values():
                 stack.append(child_node)
-        return collected
+        return tuple(collected)
 
     def _dot_scores(
         self, 
         query_residual: torch.Tensor, 
-        candidates: List[Item]
-    ) -> List[Tuple[Item, float]]:
+        candidates: tuple[Item, ...]
+    ) -> tuple[tuple[Item, float], ...]:
         """
         Compute dot-product scores between query_residual and each candidate's residual.
-        Return list of (candidate_item, score).
+        Return tuple of (candidate_item, score) pairs.
         """
-        # Note: if your embeddings are large, you may prefer a more efficient approach
-        # (e.g., batched matrix multiplication). For clarity, we do a simple loop here.
         scored = []
         for c in candidates:
             score = torch.dot(query_residual, c.residual).item()
             scored.append((c, score))
-        return scored
+        return tuple(scored)
 
-    def find_closest(self, query_item: Item, n: int) -> List[Item]:
+    def find_closest(self, query_item: Item, n: int) -> list[Item]:
         """
         Find up to n closest items to 'query_item' by the described rules:
           1) Find longest existing matching prefix.
@@ -104,12 +107,12 @@ class Trie:
         # We'll climb up if needed.
         while path_stack:
             node, parent = path_stack[-1]
-            subtree_items = self._gather_subtree_items(node)
+            subtree_items = self._cached_gather_subtree_items(node)
             if len(subtree_items) >= n:
                 # We can pick the top n by dot product
-                scored = self._dot_scores(query_item.residual, subtree_items)
+                scored = self._cached_dot_scores(query_item.residual, subtree_items)
                 # Sort descending by score
-                scored.sort(key=lambda x: x[1], reverse=True)
+                scored = sorted(scored, key=lambda x: x[1], reverse=True)
                 return [itm for itm, _ in scored[:n]]
             else:
                 # Not enough items: move up one level
@@ -119,8 +122,8 @@ class Trie:
                     # We are at the root (the last pop).
                     # If still not enough items, we simply return everything we have from the root
                     # or if root has more than n, we pick top n.
-                    scored = self._dot_scores(query_item.residual, subtree_items)
-                    scored.sort(key=lambda x: x[1], reverse=True)
+                    scored = self._cached_dot_scores(query_item.residual, subtree_items)
+                    scored = sorted(scored, key=lambda x: x[1], reverse=True)
                     return [itm for itm, _ in scored[:n]]
                 # Otherwise, continue in the loop (which means gather from the parent's node)
 
