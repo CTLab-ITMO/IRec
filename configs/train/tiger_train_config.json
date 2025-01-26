@@ -1,7 +1,6 @@
 {
   "experiment_name": "tiger",
   "train_epochs_num": 10,
-  "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "sequence",
     "path_to_data_dir": "../data",
@@ -63,14 +62,14 @@
     "type": "composite",
     "losses": [
       {
-        "type": "ce",
+        "type": "sample_logsoftmax",
         "predictions_prefix": "logits",
         "labels_prefix": "semantic.labels",
         "weight": 1.0,
         "output_prefix": "semantic_loss"
       },
       {
-        "type": "ce",
+        "type": "sample_logsoftmax",
         "predictions_prefix": "dedup.logits",
         "labels_prefix": "dedup.labels",
         "weight": 1.0,
@@ -86,94 +85,6 @@
         "type": "metric",
         "on_step": 1,
         "loss_prefix": "loss"
-      },
-      {
-        "type": "validation",
-        "on_step": 64,
-        "pred_prefix": "logits",
-        "labels_prefix": "labels",
-        "metrics": {
-          "ndcg@5": {
-            "type": "ndcg",
-            "k": 5
-          },
-          "ndcg@10": {
-            "type": "ndcg",
-            "k": 10
-          },
-          "ndcg@20": {
-            "type": "ndcg",
-            "k": 20
-          },
-          "recall@5": {
-            "type": "recall",
-            "k": 5
-          },
-          "recall@10": {
-            "type": "recall",
-            "k": 10
-          },
-          "recall@20": {
-            "type": "recall",
-            "k": 20
-          },
-          "coverage@5": {
-            "type": "coverage",
-            "k": 5
-          },
-          "coverage@10": {
-            "type": "coverage",
-            "k": 10
-          },
-          "coverage@20": {
-            "type": "coverage",
-            "k": 20
-          }
-        }
-      },
-      {
-        "type": "eval",
-        "on_step": 64,
-        "pred_prefix": "logits",
-        "labels_prefix": "labels",
-        "metrics": {
-          "ndcg@5": {
-            "type": "ndcg",
-            "k": 5
-          },
-          "ndcg@10": {
-            "type": "ndcg",
-            "k": 10
-          },
-          "ndcg@20": {
-            "type": "ndcg",
-            "k": 20
-          },
-          "recall@5": {
-            "type": "recall",
-            "k": 5
-          },
-          "recall@10": {
-            "type": "recall",
-            "k": 10
-          },
-          "recall@20": {
-            "type": "recall",
-            "k": 20
-          },
-          "coverage@5": {
-            "type": "coverage",
-            "k": 5
-          },
-          "coverage@10": {
-            "type": "coverage",
-            "k": 10
-          },
-          "coverage@20": {
-            "type": "coverage",
-            "k": 20
-          }
-        }
       }
     ]
   }

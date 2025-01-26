@@ -2,6 +2,7 @@
 __pycache__
 data/*
 tensorboard_logs/*
+saved_logs/*
 .venv
 papers
 checkpoints/*

@@ -37,8 +37,10 @@ class Trie:
     def __init__(self):
         self.root = TrieNode()
         # Create instance-specific cached methods
-        self._cached_gather_subtree_items = lru_cache(maxsize=1024)(self._gather_subtree_items)
-        self._cached_dot_scores = lru_cache(maxsize=1024)(self._dot_scores)
+        self._cached_gather_subtree_items = self._gather_subtree_items
+        self._cached_dot_scores = self._dot_scores
+        # self._cached_gather_subtree_items = lru_cache(maxsize=1024)(self._gather_subtree_items)
+        # self._cached_dot_scores = lru_cache(maxsize=1024)(self._dot_scores)
 
     def insert(self, item: Item) -> None:
         """

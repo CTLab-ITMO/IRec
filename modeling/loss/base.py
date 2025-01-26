@@ -54,6 +54,44 @@ class CompositeLoss(TorchLoss, config_name='composite'):
         return total_loss
 
 
+class SampleLogSoftmaxLoss(TorchLoss, config_name='sample_logsoftmax'):
+    def __init__(self, predictions_prefix, labels_prefix):
+        super().__init__()
+        self._predictions_prefix = predictions_prefix
+        self._labels_prefix = labels_prefix
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        return cls(
+            predictions_prefix=config.get('predictions_prefix'),
+            labels_prefix=config.get('labels_prefix')
+        )
+
+    def forward(self, inputs):  # use log soft max
+        logits = inputs[self._predictions_prefix]
+        candidates = inputs[self._labels_prefix]
+        
+        assert len(logits.shape) in [2, 3]
+        
+        batch_size = logits.shape[0]
+        seq_len = logits.shape[1]
+        
+        if len(logits.shape) == 3:
+            loss = -torch.gather(
+                torch.log_softmax(logits, dim=-1).view(batch_size * seq_len, logits.shape[-1]),
+                dim=-1, 
+                index=candidates.view(batch_size * seq_len, 1)
+            ).mean()
+        else:
+            loss = -torch.gather(
+                torch.log_softmax(logits, dim=-1),
+                dim=-1, 
+                index=candidates.view(batch_size, 1) # TODO check if this is correct
+            ).mean()
+            
+        return loss
+
+
 class BatchLogSoftmaxLoss(TorchLoss, config_name='batch_logsoftmax'):
 
     def __init__(self, predictions_prefix, candidates_prefix):
@@ -299,7 +337,7 @@ class SASRecLoss(TorchLoss, config_name='sasrec'):
         assert positive_scores.shape[0] == negative_scores.shape[0]
 
         positive_loss = torch.log(nn.functional.sigmoid(positive_scores)).sum(dim=-1)  # (x)
-        negative_loss = torch.log(1.0 - nn.functional.sigmoid(negative_scores)).sum(dim=-1)  # (x)
+        negative_loss = torch.log(1.0 - nn.functional.sigmoid(negative_scores) + 1e-9).sum(dim=-1)  # (x), added 1e-9 for Tiger baseline
         loss = positive_loss + negative_loss  # (x)
         loss = -loss.sum()  # (1)
 
