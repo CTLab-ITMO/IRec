@@ -84,40 +84,63 @@ class CollisionSolver:
 
         return candidates, mask
 
-    def get_scores_batch(self, semantic_ids: torch.Tensor, residuals: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def get_pred_scores(self, semantic_ids: torch.Tensor, pred_residuals: torch.Tensor) -> dict[str, torch.Tensor]:
         """
         :param semantic_id: [batch_size, emb_dim] semantic ids (без токена решающего коллизии)
-        :param residuals: [batch_size, residual_dim] остатки
+        :param pred_residuals: [batch_size, residual_dim] предсказанные остатки
 
         :return: Словарь с ключами:
-            - 'scores_mask': [batch_size, max_collision_count] маска существующих значений scores
-            - 'scores': [batch_size, max_collision_count] софтмакс для каждого из кандидатов
-            - 'dedup_tokens_mask': [batch_size] маска существующих токенов решающих коллизии
-            - 'dedup_tokens': [batch_size] токены решающие коллизии
-            - 'item_ids': [batch_size] реальные айди айтемов
+            - 'pred_scores_mask': [batch_size, max_collision_count] маска существующих значений scores для предсказанных остатков
+            - 'pred_scores': [batch_size, max_collision_count] софтмакс для каждого из кандидатов для предсказанных остатков
+            - 'pred_item_ids': [batch_size] реальные айди айтемов для предсказанных остатков
         """
         assert semantic_ids.shape[1] == self.emb_dim
-        assert residuals.shape[1] == self.residual_dim
-        assert semantic_ids.shape[0] == residuals.shape[0]
+        assert pred_residuals.shape[1] == self.residual_dim
+        assert semantic_ids.shape[0] == pred_residuals.shape[0]
 
         semantic_ids = self._to_device(semantic_ids)
-        residuals = self._to_device(residuals)
+        pred_residuals = self._to_device(pred_residuals)
 
         unique_ids = torch.einsum('nc,c->n', semantic_ids, self.key)
 
         candidates, mask = self.get_residuals_by_semantic_id_batch(semantic_ids)
 
-        scores = torch.softmax(torch.einsum('njk,nk->nj', candidates, residuals).masked_fill(~mask, float('-inf')), dim=1)
-
-        indices = torch.argmax(scores, dim=1)
-        item_ids = torch.stack([self.item_ids_sparse_tensor[unique_ids[i]][indices[i]] for i in range(semantic_ids.shape[0])])
+        pred_scores = torch.einsum('njk,nk->nj', candidates, pred_residuals).masked_fill(~mask, -torch.inf)
+        pred_indices = torch.argmax(pred_scores, dim=1)
+        pred_item_ids = torch.stack([self.item_ids_sparse_tensor[unique_ids[i]][pred_indices[i]] for i in range(semantic_ids.shape[0])])
 
         return {
-            "scores_mask": mask,
-            "scores": scores,
-            "dedup_tokens_mask": mask.any(dim=1),
-            "dedup_tokens": indices,
-            "item_ids": item_ids
+            "pred_scores_mask": mask,
+            "pred_scores": pred_scores,
+            "pred_item_ids": pred_item_ids
+        }
+
+    def get_true_dedup_tokens(self, semantic_ids: torch.Tensor, true_residuals: torch.Tensor) -> dict[str, torch.Tensor]:
+        """
+        :param semantic_id: [batch_size, emb_dim] semantic ids (без токена решающего коллизии)
+        :param true_residuals: [batch_size, residual_dim] реальные остатки
+
+        :return: Словарь с ключами:
+            - 'true_dedup_tokens': [batch_size] токены решающие коллизии для реальных остатков
+        """
+        assert semantic_ids.shape[1] == self.emb_dim
+        assert true_residuals.shape[1] == self.residual_dim
+        assert semantic_ids.shape[0] == true_residuals.shape[0]
+
+        semantic_ids = self._to_device(semantic_ids)
+        true_residuals = self._to_device(true_residuals)
+
+        unique_ids = torch.einsum('nc,c->n', semantic_ids, self.key)
+
+        candidates, _ = self.get_residuals_by_semantic_id_batch(semantic_ids)
+
+        matches = torch.all(candidates == true_residuals[:, None, :], dim=2).int()
+        true_dedup_tokens = torch.argmax(matches, dim=1)
+
+        assert matches.any(dim=1).all(), "Не у всех батчей есть совпадение"
+
+        return {
+            "true_dedup_tokens": true_dedup_tokens
         }
 
 
@@ -166,7 +189,7 @@ class CollisionSolver:
             "dedup_tokens": dedup_tokens,
         }
 
-    def get_item_ids_batch(self, semantic_ids: torch.Tensor, dedup_tokens: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def get_item_ids_batch(self, semantic_ids: torch.Tensor, dedup_tokens: torch.Tensor) -> torch.Tensor:
         """
         :param semantic_id: [batch_size, emb_dim] semantic ids (без токенов решающего коллизии)
         :param dedup_tokens: [batch_size] токены решающие коллизии

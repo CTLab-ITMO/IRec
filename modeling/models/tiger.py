@@ -71,7 +71,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._decoder_layernorm = nn.LayerNorm(embedding_dim, eps=layer_norm_eps)
         self._decoder_dropout = nn.Dropout(dropout)
         
-        self._solver = solver
+        self._solver: CollisionSolver = solver
         
         self._codebook_sizes = codebook_sizes
 
@@ -204,20 +204,14 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             
             true_residuals = torch.stack([self._item_id_to_residual[event] for event in label_events.tolist()])
             
-            # TODO tensor
-            true_info = self._solver.get_scores_batch(semantic_ids, true_residuals)
-            # batch_size
-            pred_info = self._solver.get_scores_batch(semantic_ids, decoder_output_residual)
-            # batch_size x max_collision_count
-            # TODO use BatchLogSoftmax
-            
-            semantic_events = semantic_ids.view(-1)
+            true_info = self._solver.get_true_dedup_tokens(semantic_ids, true_residuals)
+            pred_info = self._solver.get_pred_scores(semantic_ids, decoder_output_residual)
             
             return {
                 "logits": decoder_prefix_scores, 
                 "semantic.labels": semantic_ids,
-                "dedup.logits": pred_info["scores"],
-                "dedup.labels": true_info["dedup_tokens"]
+                "dedup.logits": pred_info["pred_scores"],
+                "dedup.labels": true_info["true_dedup_tokens"]
             }
         else:
             tgt_embeddings, semanctid_ids = self._apply_decoder_autoregressive(
