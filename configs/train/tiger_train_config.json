@@ -66,8 +66,15 @@
         "type": "ce",
         "predictions_prefix": "logits",
         "labels_prefix": "semantic.labels",
-        "output_prefix": "downstream_loss",
-        "weight": 1.0
+        "weight": 1.0,
+        "output_prefix": "semantic_loss"
+      },
+      {
+        "type": "ce",
+        "predictions_prefix": "dedup.logits",
+        "labels_prefix": "dedup.labels",
+        "weight": 1.0,
+        "output_prefix": "dedup_loss"
       }
     ],
     "output_prefix": "loss"

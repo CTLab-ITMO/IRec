@@ -133,7 +133,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             emb_dim=len(rqvae_model.codebook_sizes), 
             codebook_size=rqvae_model.codebook_sizes[0]
         )
-        solver.create_query_candidates_dict(torch.tensor(semantic_ids), residuals)
+        solver.create_query_candidates_dict(torch.tensor(item_ids), torch.tensor(semantic_ids), residuals)
         
         item_id_to_embedding = {
             item_id: embedding for (item_id, embedding) in zip(item_ids, embeddings)
@@ -187,11 +187,20 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             logits = decoder_prefix_scores.reshape(-1, self._codebook_sizes[0]) # (batch_size * dec_seq_len, _codebook_sizes[0])
             
             semantic_ids = torch.stack([self._item_id_to_semantic_id[event] for event in label_events.tolist()]) # len(events), len(codebook_sizes)
+            residuals = torch.stack([self._item_id_to_residual[event] for event in label_events.tolist()])
+            info = self._solver.get_scores_batch(semantic_ids, residuals)
+            # TODO use BatchLogSoftmax
+            
             semantic_events = semantic_ids.view(-1)
             
             # TODO batch_logsoftmax don't match shapes (example bert4rec cls)
             
-            return {self._pred_prefix: logits, f"semantic.{self._labels_prefix}.ids": semantic_events}
+            return {
+                self._pred_prefix: logits, 
+                f"semantic.{self._labels_prefix}.ids": semantic_events,
+                "dedup.logits": info["scores"],
+                "dedup.labels.ids": info["dedup_tokens"]
+            }
         else:
             label_events = inputs["{}.ids".format(self._labels_prefix)]
             label_lengths = inputs["{}.length".format(self._labels_prefix)]
