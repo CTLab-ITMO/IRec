@@ -74,12 +74,19 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._solver = solver
         
         self._codebook_sizes = codebook_sizes
+
         self._codebook_item_embeddings_flattened = torch.cat([codebook for codebook in rqvae_model.codebooks], dim=0)
+        self._codebook_item_embeddings_flattened.requires_grad = False # TODO ask if freeze is needed
         self._codebook_item_embeddings_stacked = torch.stack([codebook for codebook in rqvae_model.codebooks])
+        self._codebook_item_embeddings_stacked.requires_grad = False # TODO ask if freeze is needed
         
         self._item_id_to_semantic_id = item_id_to_semantic_id
         self._item_id_to_residual = item_id_to_residual
         self._item_id_to_embedding = item_id_to_embedding
+        
+        self._item_id_to_semantic_embedding = {
+            item_id: emb for (item_id, emb) in zip(item_id_to_semantic_id.keys(), self.get_init_item_embeddings(list(item_id_to_semantic_id.keys())))
+        }
         
         self._trie = Trie()
         for item_id, semantic_id in item_id_to_semantic_id.items():
@@ -289,9 +296,13 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         return decoder_outputs
     
-    def get_item_embeddings(self, events):
+    def get_item_embeddings(self, events): # TODO freezed embeddings
         events = events.tolist()
-        
+        embs = torch.stack([self._item_id_to_semantic_embedding[event] for event in events])
+        embs = embs.view(-1, self._embedding_dim)
+        return embs
+    
+    def get_init_item_embeddings(self, events): # TODO freezed embeddings
         # convert to semantic ids
         semantic_ids = torch.stack([self._item_id_to_semantic_id[event] for event in events]) # len(events), len(codebook_sizes)
         semantic_events = semantic_ids.view(-1) # len(codebook_sizes) * len(events)
@@ -303,7 +314,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         semantic_embeddings = self._codebook_item_embeddings_flattened[emb_indices]
         semantic_embeddings = semantic_embeddings.view(
             len(events), len(self._codebook_sizes), self._embedding_dim
-        )
+        ) # (len(events), len(self._codebook_sizes), embedding_dim)
         
         # get residuals
         text_embeddings = torch.stack([self._item_id_to_embedding[event] for event in events])
@@ -312,7 +323,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         
         # get true item embeddings
         item_embeddings = torch.cat([semantic_embeddings, residual], dim=1) 
-        item_embeddings = item_embeddings.view(-1, self._embedding_dim) # (all_batch_events, embedding_dim)
+        # item_embeddings = item_embeddings.view(-1, self._embedding_dim) # (all_batch_events, embedding_dim)
         
         return item_embeddings
 
