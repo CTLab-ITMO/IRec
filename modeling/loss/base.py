@@ -55,21 +55,21 @@ class CompositeLoss(TorchLoss, config_name='composite'):
 
 
 class SampleLogSoftmaxLoss(TorchLoss, config_name='sample_logsoftmax'):
-    def __init__(self, predictions_prefix, labels_prefix):
+    def __init__(self, predictions_prefix, labels):
         super().__init__()
         self._predictions_prefix = predictions_prefix
-        self._labels_prefix = labels_prefix
+        self._labels = labels
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
             predictions_prefix=config.get('predictions_prefix'),
-            labels_prefix=config.get('labels_prefix')
+            labels=config.get('labels')
         )
 
     def forward(self, inputs):  # use log soft max
         logits = inputs[self._predictions_prefix]
-        candidates = inputs[self._labels_prefix]
+        candidates = inputs[self._labels]
         
         assert len(logits.shape) in [2, 3]
         
