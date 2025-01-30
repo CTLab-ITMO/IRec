@@ -33,7 +33,7 @@
     "type": "rqvae",
     "embedding_dim": 512,
     "n_iter": 100,
-    "codebook_sizes": [256, 256, 256, 256],
+    "codebook_sizes": [256, 256, 256],
     "should_init_codebooks": true,
     "should_reinit_unused_clusters": true,
     "initializer_range": 0.02

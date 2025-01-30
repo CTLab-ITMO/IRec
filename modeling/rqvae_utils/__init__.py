@@ -1,2 +1,2 @@
 from .collision_solver import CollisionSolver
-from .trie import Item, Trie
+from .trie import Item, HierarchicalTrie

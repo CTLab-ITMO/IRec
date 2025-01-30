@@ -1,3 +1,4 @@
+import functools
 from models.base import TorchModel
 
 import torch
@@ -156,3 +157,7 @@ class RqVaeModel(TorchModel, config_name='rqvae'):
             return self.train_pass(embeddings)
         else:  # eval mode
             return self.eval_pass(embeddings)
+        
+    @functools.cache
+    def get_single_embedding(self, codebook_idx: int, codebook_id: int):
+        return self.codebooks[codebook_idx][codebook_id]

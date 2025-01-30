@@ -1,158 +1,188 @@
-from functools import lru_cache
-
 import torch
+from typing import Optional
 
+from models.rqvae import RqVaeModel
 
 class Item:
-    """
-    Represents an item with:
-      - hierarchical_id: a tuple of ints
-      - residual: a torch.Tensor of shape (emb_dim,)
-    """
-    def __init__(self, hierarchical_id: tuple[int, ...], residual: torch.Tensor):
+    def __init__(
+        self, 
+        hierarchical_id: tuple[int], 
+        raw_item_id: int, 
+        residual: torch.Tensor
+    ):
         self.hierarchical_id = hierarchical_id
+        self.raw_item_id = raw_item_id
         self.residual = residual
 
-    def __repr__(self):
-        return f"Item(hier_id={self.hierarchical_id}, resid_shape={tuple(self.residual.shape)})"
 
+class Node:
+    def __init__(self,
+                 codebook_idx: int,
+                 codebook_id: int,
+                 parent: Optional['Node'] = None,
+                 is_leaf: bool = False):
+        self.codebook_idx = codebook_idx
+        self.codebook_id = codebook_id
+        self.children: dict[int, Node] = {}
+        self.leaf_items: list[Item] = []
+        self.is_leaf = is_leaf
+        self.parent = parent
 
-class TrieNode:
-    """
-    A node in the trie.
-      - children: dict(int -> TrieNode)
-      - items: list of Items (only non-empty if this node is the end of some hierarchical_id(s))
-    """
-    def __init__(self):
-        self.children: dict[int, TrieNode] = {}
-        self.items: list[Item] = []  # collisions end up here if they share the same path
+class HierarchicalTrie:
+    def __init__(self, rqvae: RqVaeModel):
+        self.root = Node(codebook_idx=-1, codebook_id=-1, parent=None, is_leaf=False)
+        self.rqvae = rqvae
+    
+    def insert(self, item: Item):
+        current = self.root
+        for level, code_id in enumerate(item.hierarchical_id):
+            if code_id not in current.children:
+                new_node = Node(
+                    codebook_idx=level,
+                    codebook_id=code_id,
+                    parent=current,
+                    is_leaf=False
+                )
+                current.children[code_id] = new_node
+            current = current.children[code_id]
 
+        current.is_leaf = True
+        current.leaf_items.append(item)
 
-class Trie:
-    """
-    The trie structure that can:
-      1. Insert an Item by its hierarchical_id.
-      2. Find up to n closest items to a query Item by the described prefix-truncation + dot-product logic.
-    """
-    def __init__(self):
-        self.root = TrieNode()
-        # Create instance-specific cached methods
-        self._cached_gather_subtree_items = self._gather_subtree_items
-        self._cached_dot_scores = self._dot_scores
-        # self._cached_gather_subtree_items = lru_cache(maxsize=1024)(self._gather_subtree_items)
-        # self._cached_dot_scores = lru_cache(maxsize=1024)(self._dot_scores)
+    def collect_subtree_items(self, node: Node) -> list[Item]:
+        result = []
+        if node.is_leaf:
+            result.extend(node.leaf_items)
+        for child in node.children.values():
+            result.extend(self.collect_subtree_items(child))
+        return result
 
-    def insert(self, item: Item) -> None:
-        """
-        Insert an Item into the trie following item.hierarchical_id.
-        """
-        current_node = self.root
-        for idx in item.hierarchical_id:
-            if idx not in current_node.children:
-                current_node.children[idx] = TrieNode()
-            current_node = current_node.children[idx]
-        # At the leaf, store the item
-        current_node.items.append(item)
-
-    def _gather_subtree_items(self, node: TrieNode) -> tuple[Item, ...]:
-        """
-        Collect all items in the sub-tree rooted at 'node'.
-        """
-        collected = []
-        stack = [node]
-        while stack:
-            cur = stack.pop()
-            collected.extend(cur.items)
-            for child_node in cur.children.values():
-                stack.append(child_node)
-        return tuple(collected)
-
-    def _dot_scores(
+    def top_k_by_dot_product(
         self, 
-        query_residual: torch.Tensor, 
-        candidates: tuple[Item, ...]
-    ) -> tuple[tuple[Item, float], ...]:
-        """
-        Compute dot-product scores between query_residual and each candidate's residual.
-        Return tuple of (candidate_item, score) pairs.
-        """
-        scored = []
-        for c in candidates:
-            score = torch.dot(query_residual, c.residual).item()
-            scored.append((c, score))
-        return tuple(scored)
+        query_vec: torch.Tensor, 
+        items: list[Item], 
+        k: int
+    ) -> list[Item]:
+        if not items:
+            return []
 
-    def find_closest(self, query_item: Item, n: int) -> list[Item]:
-        """
-        Find up to n closest items to 'query_item' by the described rules:
-          1) Find longest existing matching prefix.
-          2) Gather sub-tree items:
-             - If >= n items, pick top n by dot product.
-             - Else, move to parent, gather sub-tree, etc.
-          3) If root is reached, return all if < n, else top n by dot product.
-        """
-        # 1) Descend as far as possible
-        path_stack = [(self.root, None)]  # (node, parent_node) pairs for easy upward climb
-        current_node = self.root
+        dots = []
+        for it in items:
+            dp = torch.dot(query_vec, it.residual).item()
+            dots.append((dp, it))
 
-        # Traverse hierarchy while possible
-        for idx in query_item.hierarchical_id:
-            if idx in current_node.children:
-                parent_node = current_node
-                current_node = current_node.children[idx]
-                path_stack.append((current_node, parent_node))
+        dots.sort(key=lambda x: x[0], reverse=True)
+
+        top = [item for (_, item) in dots[:k]]
+        return top
+
+    def find_n_closest(self, query_item: Item, n: int) -> list[Item]:
+        current = self.root
+        matched_path_length = 0
+
+        for level, code_id in enumerate(query_item.hierarchical_id):
+            if code_id in current.children:
+                current = current.children[code_id]
+                matched_path_length += 1
             else:
-                # Can't go deeper, break
                 break
 
-        # Now path_stack[-1][0] is the deepest node we matched.
-        # We'll climb up if needed.
-        while path_stack:
-            node, parent = path_stack[-1]
-            subtree_items = self._cached_gather_subtree_items(node)
-            if len(subtree_items) >= n:
-                # We can pick the top n by dot product
-                scored = self._cached_dot_scores(query_item.residual, subtree_items)
-                # Sort descending by score
-                scored = sorted(scored, key=lambda x: x[1], reverse=True)
-                return [itm for itm, _ in scored[:n]]
+        node = current
+
+        def try_node(node: Node, query_residual: torch.Tensor, level: int) -> list[Item]:
+            if node.is_leaf:
+                all_items = node.leaf_items
             else:
-                # Not enough items: move up one level
-                # (pop the current node off the stack and keep going)
-                path_stack.pop()
-                if not path_stack:
-                    # We are at the root (the last pop).
-                    # If still not enough items, we simply return everything we have from the root
-                    # or if root has more than n, we pick top n.
-                    scored = self._cached_dot_scores(query_item.residual, subtree_items)
-                    scored = sorted(scored, key=lambda x: x[1], reverse=True)
-                    return [itm for itm, _ in scored[:n]]
-                # Otherwise, continue in the loop (which means gather from the parent's node)
+                all_items = self.collect_subtree_items(node)
 
-        # Safety net (should never get here logically, but just in case):
-        return []
+            count_here = len(all_items)
 
+            if count_here == 0:
+                if node.parent is None:
+                    return []
+                return move_up(node, query_residual, level)
 
-# ---------------------------
-# Usage example (toy):
+            if count_here == n:
+                return all_items
+
+            if count_here > n:
+                top_n_items = self.top_k_by_dot_product(query_residual, all_items, n)
+                return top_n_items
+
+            if node.parent is None:
+                return all_items
+            else:
+                return move_up(node, query_residual, level)
+
+        def move_up(child_node: Node, query_residual: torch.Tensor, level: int) -> list[Item]:
+            parent = child_node.parent
+            if parent is None:
+                return []
+
+            emb = self.rqvae.get_single_embedding(child_node.codebook_idx, child_node.codebook_id)
+            new_query_residual = query_residual + emb
+
+            all_parent_items = self.collect_subtree_items(parent)
+            count_parent = len(all_parent_items)
+
+            if count_parent == 0:
+                if parent.parent is None:
+                    return []
+                return move_up(parent, new_query_residual, level-1)
+
+            if count_parent >= n:
+                adjusted_items = []
+                for it in all_parent_items:
+                    adj_item_res = it.residual + emb if it in child_node.leaf_items else _adjust_residual_up(it, parent, child_node)
+                    new_it = Item(it.hierarchical_id, it.raw_item_id, adj_item_res)
+                    adjusted_items.append(new_it)
+
+                top_n_parent = self.top_k_by_dot_product(new_query_residual, adjusted_items, n)
+                return top_n_parent
+
+            adjusted_items = []
+            for it in all_parent_items:
+                adj_item_res = _adjust_residual_up(it, parent, child_node)
+                new_it = Item(it.hierarchical_id, it.raw_item_id, adj_item_res)
+                adjusted_items.append(new_it)
+
+            # we want to keep them, but also see if we can go further up
+            if parent.parent is None:
+                return adjusted_items
+            else:
+                return move_up(parent, new_query_residual, level-1)
+
+        def _adjust_residual_up(it: Item, parent_node: Node, child_node: Node) -> torch.Tensor:
+            emb = self.rqvae.get_single_embedding(child_node.codebook_idx, child_node.codebook_id)
+            return it.residual + emb
+
+        results = try_node(node, query_item.residual, matched_path_length)
+        return results
+
 if __name__ == "__main__":
-    # Suppose emb_dim = 3 for example
-    trie = Trie()
+    trie = HierarchicalTrie()
 
-    # Insert a few items
-    items_to_insert = [
-        Item((1, 2, 3), torch.tensor([1.0, 0.5, 0.2])),
-        Item((1, 2, 3), torch.tensor([1.1, 0.4, 0.0])),  # collision on same path
-        Item((1, 2, 4), torch.tensor([0.9, 0.9, 0.9])),
-        Item((1, 5),     torch.tensor([-0.1, 0.2, 1.0])),
-        Item((2,),       torch.tensor([0.3, 0.3, 0.3])),
+    emb_dim = 8
+
+    torch.manual_seed(42)
+    items = [
+        Item((10, 20, 30, 40),  1, torch.randn(emb_dim)),
+        Item((10, 20, 30, 40),  2, torch.randn(emb_dim)),  # same path => same leaf
+        Item((10, 20, 99, 40),  3, torch.randn(emb_dim)),
+        Item((10, 23, 30, 44),  4, torch.randn(emb_dim)),
+        Item((10, 23, 30, 45),  5, torch.randn(emb_dim)),
+        Item((99,  1,  2,  3),  6, torch.randn(emb_dim))
     ]
-    for it in items_to_insert:
+
+    for it in items:
         trie.insert(it)
 
-    # Query item
-    query = Item((1, 2, 3, 99), torch.tensor([1.0, 1.0, 1.0]))  # (1,2,3,99) partially matches deeper
-    closest = trie.find_closest(query, n=3)
-    print("Closest items:")
-    for c in closest:
-        print(c)
+    query_id = (10, 20, 30, 40)
+    query_residual = torch.randn(emb_dim)
+    query_item = Item(query_id, raw_item_id=-999, residual=query_residual)
+
+    found_items = trie.find_n_closest(query_item, n=3)
+
+    print("Found items:")
+    for fi in found_items:
+        print(f"  raw_item_id={fi.raw_item_id}, hierarchical_id={fi.hierarchical_id}")

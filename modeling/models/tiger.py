@@ -3,7 +3,7 @@ import json
 import torch
 from tqdm import tqdm
 from models.base import SequentialTorchModel
-from rqvae_utils import CollisionSolver, Trie, Item
+from rqvae_utils import CollisionSolver, HierarchicalTrie, Item
 from torch import nn
 from utils import DEVICE, create_masked_tensor, get_activation_function
 
@@ -86,9 +86,9 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         
         self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
         
-        self._trie = Trie()
+        self._trie = HierarchicalTrie(rqvae_model)
         for item_id, semantic_id in enumerate(item_id_to_semantic_id):
-            self._trie.insert(Item(semantic_id, item_id_to_residual[item_id])) # TODO no dedup tokens here
+            self._trie.insert(Item(semantic_id, item_id + 1, item_id_to_residual[item_id])) # TODO no dedup tokens here
 
         self._bos_token_id = codebook_sizes[0]
         self._bos_weight = nn.Parameter(torch.randn(embedding_dim))
@@ -204,23 +204,24 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
                 "dedup.labels": true_info["true_dedup_tokens"]
             }
         else:
-            tgt_embeddings, semanctid_ids = self._apply_decoder_autoregressive(
+            semantic_ids, tgt_embeddings = self._apply_decoder_autoregressive(
                 encoder_embeddings, encoder_mask
-            ) # (batch_size, len(self._codebook_sizes) + 2 (bos, residual), embedding_dim), (batch_size, len(self._codebook_sizes))
+            ) # (batch_size, len(self._codebook_sizes) + 2 (bos, residual)), (batch_size, len(self._codebook_sizes) + 2 (bos, residual), embedding_dim)
 
             residuals = tgt_embeddings[:, -1, :]
 
-            ids = self._apply_trie(semanctid_ids, residuals)
+            ids = self._apply_trie(semantic_ids, residuals, n=20)
             return ids
 
-    def _apply_trie(self, preds: torch.Tensor, residuals: torch.Tensor):
+    def _apply_trie(self, preds: torch.Tensor, residuals: torch.Tensor, n: int = 20):
         semantic_ids = [tuple(row.tolist()) for row in preds]
         
         ids = []
         for semantic_id, residual in tqdm(zip(semantic_ids, residuals), total=len(semantic_ids)):
-            item = Item(semantic_id, residual)
-            closest_items = self._trie.find_closest(item, n=20)
-            ids.append(closest_items)
+            item = Item(semantic_id, -999, residual)
+            closest_items = self._trie.find_n_closest(item, n)
+            closest_raw_ids = [item.raw_item_id for item in closest_items]
+            ids.append(closest_raw_ids) # TODO add correct tree inference
         
         return torch.tensor(ids)
 
@@ -308,7 +309,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             tgt_embeddings = torch.cat([tgt_embeddings, next_token_embedding.unsqueeze(1)], dim=1)
             tgt_mask = torch.ones(batch_size, tgt_embeddings.shape[1], dtype=torch.bool, device=DEVICE)
 
-        return tgt_embeddings, semantic_ids
+        return semantic_ids, tgt_embeddings
     
     def get_item_embeddings(self, events): # TODO freezed embeddings
         embs = self._item_id_to_semantic_embedding[events - 1] # len(events), len(self._codebook_sizes) + 1, embedding_dim
