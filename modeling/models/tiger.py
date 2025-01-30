@@ -75,8 +75,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         
         self._codebook_sizes = codebook_sizes
 
-        self._codebook_item_embeddings_flattened = torch.cat([codebook for codebook in rqvae_model.codebooks], dim=0)
-        self._codebook_item_embeddings_flattened.requires_grad = False # TODO ask if freeze is needed
         self._codebook_item_embeddings_stacked = torch.stack([codebook for codebook in rqvae_model.codebooks])
         self._codebook_item_embeddings_stacked.requires_grad = False # TODO ask if freeze is needed
         
@@ -319,16 +317,15 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
     def get_init_item_embeddings(self, events): # TODO freezed embeddings
         # convert to semantic ids
         semantic_ids = self._item_id_to_semantic_id[events - 1] # len(events), len(codebook_sizes)
-        semantic_events = semantic_ids.view(-1) # len(codebook_sizes) * len(events)
         
-        # convert to rqvae embeddings
-        positions = torch.arange(len(semantic_events), device=DEVICE)
-        codebook_positions = positions % len(self._codebook_sizes)
-        emb_indices = codebook_positions * self._codebook_sizes[0] + semantic_events
-        semantic_embeddings = self._codebook_item_embeddings_flattened[emb_indices]
-        semantic_embeddings = semantic_embeddings.view(
-            len(events), len(self._codebook_sizes), self._embedding_dim
-        ) # (len(events), len(self._codebook_sizes), embedding_dim)
+        result = []
+        for semantic_id in semantic_ids:
+            item_repr = []
+            for codebook_idx, codebook_id in enumerate(semantic_id):
+                item_repr.append(self._codebook_item_embeddings_stacked[codebook_idx][codebook_id])
+            result.append(torch.stack(item_repr))
+        
+        semantic_embeddings = torch.stack(result)
         
         # get residuals
         text_embeddings = self._item_id_to_embedding[events - 1]
