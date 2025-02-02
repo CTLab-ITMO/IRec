@@ -140,9 +140,9 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         return cls(
             rqvae_model=rqvae_model,
-            item_id_to_semantic_id=semantic_ids.to(DEVICE),
-            item_id_to_residual=residuals.to(DEVICE),
-            item_id_to_embedding=embeddings.to(DEVICE),
+            item_id_to_semantic_id=semantic_ids,
+            item_id_to_residual=residuals,
+            item_id_to_embedding=embeddings,
             solver=solver,
             sequence_prefix=config["sequence_prefix"],
             pred_prefix=config["predictions_prefix"],
@@ -211,6 +211,18 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             residuals = tgt_embeddings[:, -1, :]
 
             ids = self._apply_trie(semantic_ids, residuals, n=20)
+            # store number of items in tree
+            # take first where >= n
+            # set vector with all trues, then set false from lower level tree
+            # take all true left in upper tree
+            # maybe store items by prefix (not so many memory)?
+            # lex sort by level first, item second
+            # use sparse matrix
+            
+            
+            # store by raw_item_id (semantic_id) uniq key (i0 * 256^3 + i1 * 256^2 + i2 * 256 + i3)
+            # sparse matrix - max_uniq_semantic_ids (for rqvae init items infer (max is 12101, could be less if collisions))
+            # store sem_id -> num
             return ids
 
     def _apply_trie(self, preds: torch.Tensor, residuals: torch.Tensor, n: int = 20):

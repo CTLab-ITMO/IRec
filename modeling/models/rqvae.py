@@ -1,4 +1,5 @@
 import functools
+from utils import DEVICE
 from models.base import TorchModel
 
 import torch
@@ -148,7 +149,7 @@ class RqVaeModel(TorchModel, config_name='rqvae'):
             codebook_vectors = codebook[codebook_indices]
             ind_lists.append(codebook_indices.cpu().numpy())
             remainder = remainder - codebook_vectors
-        return torch.tensor(list(zip(*ind_lists))), remainder
+        return torch.tensor(list(zip(*ind_lists))).to(DEVICE), remainder
 
     def forward(self, inputs):
         embeddings = inputs["embeddings"]

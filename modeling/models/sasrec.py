@@ -40,14 +40,31 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
         
         df = torch.load('../data/Beauty/data_full.pt')
         precomputed_embeddings = torch.stack(df.sort_index().embeddings.tolist())
-        self._projector = torch.nn.Linear(precomputed_embeddings.shape[1], embedding_dim) # TODO incorrect projection
-        # TODO infer text embeddings using embedding_dim=64
-        projector_embeddings = self._projector(precomputed_embeddings)
         
-        padding_embedding = self._item_embeddings.weight[0].unsqueeze(0)
-        mask_embedding = self._item_embeddings.weight[-1].unsqueeze(0)
+        self._projector = torch.nn.Linear(precomputed_embeddings.shape[1], embedding_dim)
         
-        extended_embeddings = torch.cat([padding_embedding, projector_embeddings, mask_embedding], dim=0)  # Shape: (num_items + 2, embedding_dim)
+        padding_embedding = torch.nn.init.trunc_normal_(
+            torch.zeros(1, precomputed_embeddings.shape[1]),
+            std=initializer_range,
+            a=-2 * initializer_range,
+            b=2 * initializer_range
+        )
+
+        mask_embedding = torch.nn.init.trunc_normal_(
+            torch.zeros(1, precomputed_embeddings.shape[1]),
+            std=initializer_range,
+            a=-2 * initializer_range,
+            b=2 * initializer_range
+        )
+        
+        extended_embeddings = torch.cat([padding_embedding, precomputed_embeddings, mask_embedding], dim=0)  # Shape: (num_items + 2, embedding_dim)
+        
+        self._item_embeddings = torch.nn.Embedding(
+            num_embeddings=num_items + 2,
+            embedding_dim=precomputed_embeddings.shape[1]
+        )
+        
+        # TODO ask about freezed masked & padding tokens
         
         self._item_embeddings.weight.data.copy_(extended_embeddings)
         self._item_embeddings.weight.requires_grad = False
@@ -66,6 +83,12 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
             dropout=config.get('dropout', 0.0),
             initializer_range=config.get('initializer_range', 0.02)
         )
+        
+    def get_item_embeddings(self, events):
+        return self._projector(self._item_embeddings(events))
+    
+    def _get_item_embeddings(self):
+        return self._projector(self._item_embeddings.weight)
 
     def forward(self, inputs):
         all_sample_events = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
@@ -80,7 +103,7 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
 
             all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
 
-            all_embeddings = self._item_embeddings.weight  # (num_items + 2, embedding_dim)
+            all_embeddings = self._get_item_embeddings()  # (num_items + 2, embedding_dim)
 
             # a -- all_batch_events, n -- num_items + 2, d -- embedding_dim
             all_scores = torch.einsum(
@@ -121,7 +144,7 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
             candidate_scores = torch.einsum(
                 'bd,nd->bn',
                 last_embeddings,
-                self._item_embeddings.weight
+                self._get_item_embeddings()
             )  # (batch_size, num_items + 2)
             candidate_scores[:, 0] = -torch.inf  # Padding id
             candidate_scores[:, self._num_items + 1:] = -torch.inf  # Mask id
