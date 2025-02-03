@@ -3,7 +3,7 @@ import json
 import torch
 from tqdm import tqdm
 from models.base import SequentialTorchModel
-from rqvae_utils import CollisionSolver, HierarchicalTrie, Item
+from rqvae_utils import CollisionSolver, Trie
 from torch import nn
 from utils import DEVICE, create_masked_tensor, get_activation_function
 
@@ -86,9 +86,9 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         
         self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
         
-        self._trie = HierarchicalTrie(rqvae_model)
-        for item_id, semantic_id in enumerate(item_id_to_semantic_id):
-            self._trie.insert(Item(semantic_id, item_id + 1, item_id_to_residual[item_id])) # TODO no dedup tokens here
+        # self._trie = HierarchicalTrie(rqvae_model)
+        # for item_id, semantic_id in enumerate(item_id_to_semantic_id):
+        #     self._trie.insert(Item(semantic_id, item_id + 1, item_id_to_residual[item_id])) # TODO no dedup tokens here
 
         self._bos_token_id = codebook_sizes[0]
         self._bos_weight = nn.Parameter(torch.randn(embedding_dim))
@@ -209,6 +209,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             ) # (batch_size, len(self._codebook_sizes) + 2 (bos, residual)), (batch_size, len(self._codebook_sizes) + 2 (bos, residual), embedding_dim)
 
             residuals = tgt_embeddings[:, -1, :]
+            
+            raise Exception("TODO")
 
             ids = self._apply_trie(semantic_ids, residuals, n=20)
             # store number of items in tree
