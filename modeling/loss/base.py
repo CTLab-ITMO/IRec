@@ -105,6 +105,36 @@ class CrossEntropyLoss(TorchLoss, config_name='ce'):
 
         return loss
 
+class CrossEntropyLossSasrec(TorchLoss, config_name='sasrec_ce'):
+
+    def __init__(
+            self,
+            positive_prefix,
+            negative_prefix,
+            output_prefix=None
+    ):
+        super().__init__()
+        self._positive_prefix = positive_prefix
+        self._negative_prefix = negative_prefix
+        self._output_prefix = output_prefix
+
+        self._loss = nn.CrossEntropyLoss()
+
+    def forward(self, inputs):
+        positive_scores = inputs[self._positive_prefix].unsqueeze(1) # (x, 1)
+        negative_scores = inputs[self._negative_prefix]  # (x, num_negatives)
+        assert positive_scores.shape[0] == negative_scores.shape[0]
+
+        all_logits = torch.cat((positive_scores, negative_scores), dim=1)
+        all_labels = torch.zeros(len(all_logits), dtype=torch.long, device=all_logits.device)
+        assert all_logits.shape[0] == all_labels.shape[0]
+
+        loss = self._loss(all_logits, all_labels)  # (1)
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss
+
 
 class BinaryCrossEntropyLoss(TorchLoss, config_name='bce'):
 
@@ -269,6 +299,36 @@ class SASRecLoss(TorchLoss, config_name='sasrec'):
 
         return loss
 
+class Bert4recSASRecLoss(TorchLoss, config_name='bert4rec_sasrec'):
+
+    def __init__(self, predictions_prefix, labels_prefix, output_prefix=None):
+        super().__init__()
+        self._pred_prefix = predictions_prefix
+        self._labels_prefix = labels_prefix
+        self._output_prefix = output_prefix
+
+    def forward(self, inputs):
+        all_logits = inputs[self._pred_prefix]  # (all_items, num_classes)
+        all_labels = inputs['{}.ids'.format(self._labels_prefix)]  # (all_items)
+        assert all_logits.shape[0] == all_labels.shape[0]
+
+        # Extract positive scores using gather
+        positive_scores = all_logits.gather(1, all_labels.unsqueeze(1)).squeeze(1)
+        # Create a mask to exclude the positive indices
+        mask = torch.arange(all_logits.size(1), device=all_logits.device) != all_labels.unsqueeze(1)
+        # Apply the mask and reshape to get negative scores
+        negative_scores = all_logits[mask].view(all_logits.size(0), -1)
+        assert positive_scores.shape[0] == negative_scores.shape[0]
+
+        positive_loss = torch.log(nn.functional.sigmoid(positive_scores) + 1e-9).sum(dim=-1)  # (x)
+        negative_loss = torch.log(1.0 - nn.functional.sigmoid(negative_scores) + 1e-9).sum(dim=-1)  # (x)
+        loss = positive_loss + negative_loss  # (x)
+        loss = -loss.sum()  # (1)
+
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss
 
 class SamplesSoftmaxLoss(TorchLoss, config_name='sampled_softmax'):
 

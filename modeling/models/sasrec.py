@@ -295,17 +295,17 @@ class SasRecModelPopular(SequentialTorchModel, config_name='sasrec_popular'):
         if self.training:  # training mode
             # TODO: move 'negative' to config
             negative_items = inputs['negative.ids']  # (num_negatives)
-            negative_embeddings = self._item_embeddings.weight[negative_items]  # (num_negatives, embedding_dim)
+            negative_embeddings = self._item_embeddings.weight[negative_items]  # (batch_size*num_negatives, embedding_dim)
             negative_embeddings = negative_embeddings.reshape(len(all_sample_lengths), int(negative_embeddings.size(0) / len(all_sample_lengths)), negative_embeddings.size(1))  # (batch_size, num_negatives, embedding_dim)
             negative_embeddings = torch.repeat_interleave(negative_embeddings, all_sample_lengths, dim=0)  # (all_batch_events, num_negatives, embedding_dim)
 
             all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
-            negative_scores = torch.einsum("bd,bnd->bn", all_sample_embeddings, negative_embeddings)  # (non_zero_events, num_negatives)
+            negative_scores = torch.einsum("bd,bnd->bn", all_sample_embeddings, negative_embeddings)  # (all_batch_events, num_negatives)
             # negative_scores = all_sample_embeddings @ negative_embeddings.T
 
             all_positive_sample_events = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
             all_positive_sample_embeddings = self._item_embeddings.weight[
-                all_positive_sample_events]  # (non_zero_events, embedding_dim)
+                all_positive_sample_events]  # (all_batch_events, embedding_dim)
 
             positive_scores = (all_sample_embeddings * all_positive_sample_embeddings).sum(dim=-1)
 

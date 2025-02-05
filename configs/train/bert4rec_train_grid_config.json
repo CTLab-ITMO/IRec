@@ -1,6 +1,6 @@
 {
   "start_from": 0,
-  "experiment_name": "bert4rec_grid_in_batch_beauty",
+  "experiment_name": "bert4rec_grid_random_beauty",
   "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "sequence",
@@ -8,6 +8,7 @@
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
+      "num_negatives_train": 100,
       "type": "masked_item_prediction",
       "negative_sampler_type": "random"
     }
@@ -48,7 +49,7 @@
     }
   },
   "model": {
-    "type": "bert4rec_in_batch",
+    "type": "bert4rec_popular",
     "sequence_prefix": "item",
     "labels_prefix": "labels",
     "candidate_prefix": "candidates",
