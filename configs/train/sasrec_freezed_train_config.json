@@ -1,14 +1,13 @@
 {
-  "experiment_name": "tiger",
+  "experiment_name": "sasrec_beauty",
   "best_metric": "validation/ndcg@20",
-  "train_epochs_num": 50,
   "dataset": {
     "type": "sequence",
     "path_to_data_dir": "../data",
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
-      "type": "last_item_prediction",
+      "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
   },
@@ -33,19 +32,14 @@
     }
   },
   "model": {
-    "type": "tiger",
-    "trie": "../data/Beauty/rqvae/trie.pkl",
-    "rqvae_train_config_path": "../configs/train/rqvae_train_config.json",
-    "rqvae_checkpoint_path": "../checkpoints/rqvae_beauty_final_state.pth",
-    "embs_extractor_path": "../data/Beauty/rqvae/data_full.pt",
+    "type": "sasrec_freezed",
     "sequence_prefix": "item",
-    "predictions_prefix": "logits",
-    "positive_prefix": "labels",
-    "labels_prefix": "labels",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
+    "candidate_prefix": "candidates",
     "embedding_dim": 64,
     "num_heads": 2,
-    "num_encoder_layers": 2,
-    "num_decoder_layers": 2,
+    "num_layers": 2,
     "dim_feedforward": 256,
     "dropout": 0.3,
     "activation": "gelu",
@@ -64,18 +58,10 @@
     "type": "composite",
     "losses": [
       {
-        "type": "sample_logsoftmax",
-        "predictions_prefix": "logits",
-        "labels": "semantic.labels",
-        "weight": 1.0,
-        "output_prefix": "semantic_loss"
-      },
-      {
-        "type": "sample_logsoftmax",
-        "predictions_prefix": "dedup.logits",
-        "labels": "dedup.labels",
-        "weight": 1.0,
-        "output_prefix": "dedup_loss"
+        "type": "sasrec",
+        "positive_prefix": "positive_scores",
+        "negative_prefix": "negative_scores",
+        "output_prefix": "downstream_loss"
       }
     ],
     "output_prefix": "loss"
@@ -134,7 +120,7 @@
       },
       {
         "type": "eval",
-        "on_step": 64,
+        "on_step": 256,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {

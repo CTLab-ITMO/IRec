@@ -4,7 +4,6 @@ import torch
 from models.base import SequentialTorchModel
 from rqvae_utils import CollisionSolver, Trie
 from torch import nn
-from tqdm import tqdm
 from utils import DEVICE, create_masked_tensor, get_activation_function
 
 from .rqvae import RqVaeModel
@@ -16,7 +15,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         rqvae_model,
         item_id_to_semantic_id,
         item_id_to_residual,
-        item_id_to_embedding,
+        item_id_to_text_embedding,
         solver,
         sequence_prefix,
         pred_prefix,
@@ -83,7 +82,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         self._item_id_to_semantic_id = item_id_to_semantic_id
         self._item_id_to_residual = item_id_to_residual
-        self._item_id_to_embedding = item_id_to_embedding
+        self._item_id_to_text_embedding = item_id_to_text_embedding
 
         item_ids = torch.tensor(list(range(1, len(item_id_to_semantic_id) + 1)))
 
@@ -127,7 +126,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
     @classmethod
     def create_from_config(cls, config, **kwargs):
         rqvae_model = cls.init_rqvae(config)
-        embedding_dim = rqvae_model.encoder.weight.shape[0]
         embs_extractor = torch.load(config["embs_extractor_path"])
 
         embs_extractor = embs_extractor.sort_index()
@@ -135,10 +133,9 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         item_ids = embs_extractor.index.tolist()
         assert item_ids == list(range(1, len(item_ids) + 1))
 
-        embeddings = torch.stack(embs_extractor["embeddings"].tolist()).to(DEVICE)
+        text_embeddings = torch.stack(embs_extractor["embeddings"].tolist()).to(DEVICE)
 
-        semantic_ids, residuals = rqvae_model({"embeddings": embeddings})
-        assert embedding_dim == residuals.shape[1]
+        semantic_ids, residuals = rqvae_model({"embeddings": text_embeddings})
 
         solver = CollisionSolver(
             residual_dim=residuals.shape[1],
@@ -153,7 +150,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             rqvae_model=rqvae_model,
             item_id_to_semantic_id=semantic_ids,
             item_id_to_residual=residuals,
-            item_id_to_embedding=embeddings,
+            item_id_to_text_embedding=text_embeddings,
             solver=solver,
             sequence_prefix=config["sequence_prefix"],
             pred_prefix=config["predictions_prefix"],
@@ -161,11 +158,11 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             labels_prefix=config["labels_prefix"],
             num_items=rqvae_model.codebook_sizes[0],  # unused
             max_sequence_length=kwargs["max_sequence_length"],
-            embedding_dim=embedding_dim,
-            num_heads=config.get("num_heads", int(embedding_dim // 64)),
+            embedding_dim=config["embedding_dim"],
+            num_heads=config.get("num_heads", int(config["embedding_dim"] // 64)),
             num_encoder_layers=config["num_encoder_layers"],
             num_decoder_layers=config["num_decoder_layers"],
-            dim_feedforward=config.get("dim_feedforward", 4 * embedding_dim),
+            dim_feedforward=config.get("dim_feedforward", 4 * config["embedding_dim"]),
             codebook_sizes=rqvae_model.codebook_sizes,
             dropout=config.get("dropout", 0.0),
             initializer_range=config.get("initializer_range", 0.02),
@@ -363,7 +360,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         semantic_embeddings = torch.stack(result)
 
         # get residuals
-        text_embeddings = self._item_id_to_embedding[events - 1]
+        text_embeddings = self._item_id_to_text_embedding[events - 1]
         residual = text_embeddings - semantic_embeddings.sum(dim=1)
         residual = residual.unsqueeze(1)
 
