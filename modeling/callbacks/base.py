@@ -1,3 +1,4 @@
+from tqdm import tqdm
 from metric import BaseMetric, StatefullMetric
 
 import utils
@@ -202,8 +203,8 @@ class InferenceCallback(BaseCallback):
 
             self._model.eval()
             with torch.no_grad():
-                for batch in self._get_dataloader():
-
+                total = len(self._get_dataloader())
+                for batch in tqdm(self._get_dataloader(), total=total):
                     for key, value in batch.items():
                         batch[key] = value.to(utils.DEVICE)
 

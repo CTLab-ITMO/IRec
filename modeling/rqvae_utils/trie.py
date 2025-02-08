@@ -16,7 +16,7 @@ class Trie:
         self.total_items = None
         self.embedding_table = torch.stack(
             [cb for cb in self.rqvae_model.codebooks]
-        )  # K x codebook_size x embedding_dim
+        ).to("cpu")  # K x codebook_size x embedding_dim
 
     def unique_with_index(self, x, dim=None):
         """Unique elements of x and indices of those unique elements
@@ -89,7 +89,7 @@ class Trie:
 
         residuals_per_level = self.get_residuals_per_level(
             semantic_ids, residuals
-        )  # total_items x K + 2 x embedding_dim
+        )  # total_items x K + 1 x embedding_dim
 
         keys = self.compute_keys(semantic_ids)  # bs, could be collisions
 
@@ -124,15 +124,7 @@ class Trie:
 
         residuals_per_level[:, 0, :] = residuals
 
-        residuals_per_level = torch.cat(
-            [
-                torch.zeros(bs, 1, embedding_dim),
-                residuals_per_level,
-            ],
-            dim=1,
-        )
-
-        return residuals_per_level  # bs x K + 2 x embedding_dim
+        return residuals_per_level  # bs x K + 1 x embedding_dim
 
     def get_mask_by_prefix(self, prefixes: torch.Tensor, taken_lens: torch.Tensor):
         bs = prefixes.shape[0]
@@ -243,10 +235,9 @@ class Trie:
         items_to_query,
     ):
         # K = 3
-        # self.residuals_per_level = 0, res, res+emb_2, res+emb_2+emb_1, res+emb_2+emb_1+emb_0 # K + 2
-        # query_residuals_per_level = 0, res, res+emb_2, res+emb_2+emb_1, res+emb_2+emb_1+emb_0 # K + 2
-        # outer_level = 3 # TODO if K (get by dot only from outer)
-        # inner_level = 4 # TODO if K + 1 (get by dot only from outer)
+        # self.residuals_per_level = 0, res, res+emb_2, res+emb_2+emb_1, res+emb_2+emb_1+emb_0 # K + 1
+        # query_residuals_per_level = 0, res, res+emb_2, res+emb_2+emb_1, res+emb_2+emb_1+emb_0 # K + 1
+        # outer_level = 3 # if K (get by dot only from outer) => inner_mask = outer_mask
         # outer_mask.shape = total_items
         # inner_mask.shape = total_items
 
@@ -268,7 +259,9 @@ class Trie:
             guaranteed = inner_mask  # guaranteed_len
             left = outer_mask & ~inner_mask  # left_len
 
-            # self.residuals_per_level.shape = total_items, K + 2, embedding_dim
+            assert guaranteed.sum() + left.sum() == outer_mask.sum()
+
+            # self.residuals_per_level.shape = total_items, K + 1, embedding_dim
             guaranteed_raw_item_ids = self.raw_item_ids[guaranteed]  # guaranteed_len
             guaranteed_stored_residuals = self.residuals_per_level[guaranteed][
                 :, -(inner_level + 1)
@@ -323,6 +316,10 @@ class Trie:
             taken_inner_prefixes, inner_levels
         )  # bs, total_items
 
+        inner_levels_max_mask = inner_levels == self.K + 1
+        inner_levels[inner_levels_max_mask] = self.K
+        inner_masks[inner_levels_max_mask] = outer_masks[inner_levels_max_mask]
+
         assert (
             num_items[torch.arange(bs), outer_levels] == outer_masks.sum(dim=1)
         ).all()
@@ -331,7 +328,7 @@ class Trie:
         ).all()
 
         assert (outer_masks.sum(dim=1) > items_to_query).all()
-        assert (inner_masks.sum(dim=1) <= items_to_query).all()
+        # assert (inner_masks.sum(dim=1) <= items_to_query).all() # can be false if collisions
 
         assert (inner_masks <= outer_masks).all()
 
@@ -364,10 +361,10 @@ if __name__ == "__main__":
     rqvae_model.eval()
 
     trie = Trie(rqvae_model)
-    alphabet_size = rqvae_model.codebook_sizes[0]
+    alphabet_size = 6
 
     N = 12101
-    K = len(rqvae_model.codebook_sizes)
+    K = 3
     semantic_ids = torch.randint(0, alphabet_size, (N, K), dtype=torch.int64)
     residuals = torch.randn(N, embedding_dim)
     trie.build_tree_structure(semantic_ids, residuals, torch.arange(N))
@@ -377,7 +374,13 @@ if __name__ == "__main__":
     q_semantic_ids = torch.randint(0, alphabet_size, (batch_size, K), dtype=torch.int64)
     q_residuals = torch.randn(batch_size, embedding_dim)
 
-    for i in range(100):
+    total_time = 0
+    n_exps = 100
+
+    for i in range(n_exps):
         now = time.time()
         item_ids = trie.query(q_semantic_ids, q_residuals, items_to_query)
-        print(time.time() - now)
+        assert item_ids.shape == (batch_size, items_to_query)
+        total_time += time.time() - now
+
+    print(f"Time per query: {total_time / n_exps * 1000:.2f} ms")

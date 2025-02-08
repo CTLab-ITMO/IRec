@@ -95,3 +95,9 @@ decoder: (bos, 1, 2, 3) -> (1, 2, 3, 4) # causal mask so (bos -> 1), (bos, 1 -> 
 - user_id & codebook_ids -> repr ???
 - add last 'sequence' prediction, now only last item is supported
 - dataloader (semantic ids lens)
+
+## TODO
+
+1) Tiger
+2) SasRec
+3) SasRec freezed (all on single board)

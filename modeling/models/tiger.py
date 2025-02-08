@@ -1,17 +1,16 @@
 import json
 
 import torch
-from tqdm import tqdm
 from models.base import SequentialTorchModel
 from rqvae_utils import CollisionSolver, Trie
 from torch import nn
+from tqdm import tqdm
 from utils import DEVICE, create_masked_tensor, get_activation_function
 
 from .rqvae import RqVaeModel
 
 
 class TigerModel(SequentialTorchModel, config_name="tiger"):
-
     def __init__(
         self,
         rqvae_model,
@@ -63,80 +62,92 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             layer_norm_eps=layer_norm_eps,
             batch_first=True,
         )
-        
+
         self._decoder = nn.TransformerDecoder(
             transformer_decoder_layer, num_decoder_layers
         )
-    
+
         self._decoder_layernorm = nn.LayerNorm(embedding_dim, eps=layer_norm_eps)
         self._decoder_dropout = nn.Dropout(dropout)
-        
+
         self._solver: CollisionSolver = solver
-        
+
         self._codebook_sizes = codebook_sizes
 
-        self._codebook_item_embeddings_stacked = torch.stack([codebook for codebook in rqvae_model.codebooks])
-        self._codebook_item_embeddings_stacked.requires_grad = False # TODO ask if freeze is needed
-        
+        self._codebook_item_embeddings_stacked = torch.stack(
+            [codebook for codebook in rqvae_model.codebooks]
+        )
+        self._codebook_item_embeddings_stacked.requires_grad = (
+            False  # TODO ask if freeze is needed
+        )
+
         self._item_id_to_semantic_id = item_id_to_semantic_id
         self._item_id_to_residual = item_id_to_residual
         self._item_id_to_embedding = item_id_to_embedding
-        
+
         item_ids = torch.tensor(list(range(1, len(item_id_to_semantic_id) + 1)))
-        
+
         self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
-        
-        # self._trie = HierarchicalTrie(rqvae_model)
-        # for item_id, semantic_id in enumerate(item_id_to_semantic_id):
-        #     self._trie.insert(Item(semantic_id, item_id + 1, item_id_to_residual[item_id])) # TODO no dedup tokens here
+
+        self._trie = Trie(rqvae_model)
+
+        self._trie.build_tree_structure(
+            item_id_to_semantic_id.to("cpu"),
+            item_id_to_residual.to("cpu"),
+            torch.arange(1, len(item_id_to_semantic_id) + 1),
+        )
 
         self._bos_token_id = codebook_sizes[0]
         self._bos_weight = nn.Parameter(torch.randn(embedding_dim))
-        
+
         self._codebook_embeddings = nn.Embedding(
             num_embeddings=len(codebook_sizes) + 2, embedding_dim=embedding_dim
         )  # + 2 for bos token & residual
 
         self._init_weights(initializer_range)
-        
+
     @classmethod
     def init_rqvae(cls, config) -> RqVaeModel:
         rqvae_config = json.load(open(config["rqvae_train_config_path"]))
         rqvae_config["model"]["should_init_codebooks"] = False
-        
-        rqvae_model = RqVaeModel.create_from_config(rqvae_config['model']).to(DEVICE)
-        rqvae_model.load_state_dict(torch.load(config['rqvae_checkpoint_path'], weights_only=True))
+
+        rqvae_model = RqVaeModel.create_from_config(rqvae_config["model"]).to(DEVICE)
+        rqvae_model.load_state_dict(
+            torch.load(config["rqvae_checkpoint_path"], weights_only=True)
+        )
         rqvae_model.eval()
-        for param in rqvae_model.parameters(): # TODO freezed
+        for param in rqvae_model.parameters():  # TODO freezed
             param.requires_grad = False
-        
+
         codebook_sizes = rqvae_model.codebook_sizes
         assert all([book_size == codebook_sizes[0] for book_size in codebook_sizes])
-        
+
         return rqvae_model
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
         rqvae_model = cls.init_rqvae(config)
         embedding_dim = rqvae_model.encoder.weight.shape[0]
-        embs_extractor = torch.load(config['embs_extractor_path'])
-        
+        embs_extractor = torch.load(config["embs_extractor_path"])
+
         embs_extractor = embs_extractor.sort_index()
-        
+
         item_ids = embs_extractor.index.tolist()
         assert item_ids == list(range(1, len(item_ids) + 1))
-        
-        embeddings = torch.stack(embs_extractor['embeddings'].tolist()).to(DEVICE)
+
+        embeddings = torch.stack(embs_extractor["embeddings"].tolist()).to(DEVICE)
 
         semantic_ids, residuals = rqvae_model({"embeddings": embeddings})
         assert embedding_dim == residuals.shape[1]
-        
+
         solver = CollisionSolver(
-            residual_dim=residuals.shape[1], 
-            emb_dim=len(rqvae_model.codebook_sizes), 
-            codebook_size=rqvae_model.codebook_sizes[0]
+            residual_dim=residuals.shape[1],
+            emb_dim=len(rqvae_model.codebook_sizes),
+            codebook_size=rqvae_model.codebook_sizes[0],
         )
-        solver.create_query_candidates_dict(torch.tensor(item_ids), semantic_ids, residuals)
+        solver.create_query_candidates_dict(
+            torch.tensor(item_ids), semantic_ids, residuals
+        )
 
         return cls(
             rqvae_model=rqvae_model,
@@ -148,7 +159,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             pred_prefix=config["predictions_prefix"],
             positive_prefix=config["positive_prefix"],
             labels_prefix=config["labels_prefix"],
-            num_items=rqvae_model.codebook_sizes[0], # unused
+            num_items=rqvae_model.codebook_sizes[0],  # unused
             max_sequence_length=kwargs["max_sequence_length"],
             embedding_dim=embedding_dim,
             num_heads=config.get("num_heads", int(embedding_dim // 64)),
@@ -168,7 +179,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         all_sample_lengths = inputs[
             "{}.length".format(self._sequence_prefix)
         ]  # (batch_size)
-        
+
         all_sample_lengths = all_sample_lengths * (len(self._codebook_sizes) + 1)
         encoder_embeddings, encoder_mask = self._apply_sequential_encoder(
             all_sample_events, all_sample_lengths
@@ -177,68 +188,55 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         if self.training:
             label_events = inputs["{}.ids".format(self._positive_prefix)]
             label_lengths = inputs["{}.length".format(self._positive_prefix)]
-            
-            label_lengths = label_lengths * (len(self._codebook_sizes) + 1) # TODO bos prepending
-            tgt_embeddings = self.get_item_embeddings( # TODO residual embs
+
+            label_lengths = label_lengths * (
+                len(self._codebook_sizes) + 1
+            )  # TODO bos prepending
+            tgt_embeddings = self.get_item_embeddings(  # TODO residual embs
                 label_events
             )  # (all_batch_events, embedding_dim)
-            
+
             decoder_outputs = self._apply_decoder(
                 tgt_embeddings, label_lengths, encoder_embeddings, encoder_mask
             )  # (batch_size, label_len, embedding_dim)
-            
-            decoder_prefix_scores = torch.einsum("bsd,scd->bsc", decoder_outputs[:, :-1, :], self._codebook_item_embeddings_stacked)
-            
+
+            decoder_prefix_scores = torch.einsum(
+                "bsd,scd->bsc",
+                decoder_outputs[:, :-1, :],
+                self._codebook_item_embeddings_stacked,
+            )
+
             decoder_output_residual = decoder_outputs[:, -1, :]
-        
-            semantic_ids = self._item_id_to_semantic_id[label_events - 1] # len(events), len(codebook_sizes)
-            true_residuals = self._item_id_to_residual[label_events - 1] 
-            
+
+            semantic_ids = self._item_id_to_semantic_id[
+                label_events - 1
+            ]  # len(events), len(codebook_sizes)
+            true_residuals = self._item_id_to_residual[label_events - 1]
+
             true_info = self._solver.get_true_dedup_tokens(semantic_ids, true_residuals)
-            pred_info = self._solver.get_pred_scores(semantic_ids, decoder_output_residual)
-            
+            pred_info = self._solver.get_pred_scores(
+                semantic_ids, decoder_output_residual
+            )
+
             return {
-                "logits": decoder_prefix_scores, 
+                "logits": decoder_prefix_scores,
                 "semantic.labels": semantic_ids,
                 "dedup.logits": pred_info["pred_scores"],
-                "dedup.labels": true_info["true_dedup_tokens"]
+                "dedup.labels": true_info["true_dedup_tokens"],
             }
         else:
             semantic_ids, tgt_embeddings = self._apply_decoder_autoregressive(
                 encoder_embeddings, encoder_mask
-            ) # (batch_size, len(self._codebook_sizes) + 2 (bos, residual)), (batch_size, len(self._codebook_sizes) + 2 (bos, residual), embedding_dim)
+            )  # (batch_size, len(self._codebook_sizes) + 2 (bos, residual)), (batch_size, len(self._codebook_sizes) + 2 (bos, residual), embedding_dim)
 
             residuals = tgt_embeddings[:, -1, :]
-            
-            raise Exception("TODO")
+            semantic_ids = semantic_ids.to(torch.int64)
 
-            ids = self._apply_trie(semantic_ids, residuals, n=20)
-            # store number of items in tree
-            # take first where >= n
-            # set vector with all trues, then set false from lower level tree
-            # take all true left in upper tree
-            # maybe store items by prefix (not so many memory)?
-            # lex sort by level first, item second
-            # use sparse matrix
-            
-            
-            # store by raw_item_id (semantic_id) uniq key (i0 * 256^3 + i1 * 256^2 + i2 * 256 + i3)
-            # sparse matrix - max_uniq_semantic_ids (for rqvae init items infer (max is 12101, could be less if collisions))
-            # store sem_id -> num
-            return ids
+            item_ids = self._trie.query(
+                semantic_ids.to("cpu"), residuals.to("cpu"), items_to_query=20
+            )
 
-    def _apply_trie(self, preds: torch.Tensor, residuals: torch.Tensor, n: int = 20):
-        semantic_ids = [tuple(row.tolist()) for row in preds]
-        
-        ids = []
-        for semantic_id, residual in tqdm(zip(semantic_ids, residuals), total=len(semantic_ids)):
-            item = Item(semantic_id, -999, residual)
-            closest_items = self._trie.find_n_closest(item, n)
-            closest_raw_ids = [item.raw_item_id for item in closest_items]
-            ids.append(closest_raw_ids) # TODO add correct tree inference
-        
-        return torch.tensor(ids)
-
+            return item_ids
 
     def _apply_decoder(
         self, tgt_embeddings, label_lengths, encoder_embeddings, encoder_mask
@@ -246,12 +244,14 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         tgt_embeddings, tgt_mask = create_masked_tensor(
             data=tgt_embeddings, lengths=label_lengths
         )  # (batch_size, dec_seq_len, embedding_dim), (batch_size, dec_seq_len)
-        
+
         batch_size = tgt_embeddings.shape[0]
-        bos_embeddings = self._bos_weight.unsqueeze(0).expand(batch_size, 1, -1)  # (batch_size, 1, embedding_dim)
-        
+        bos_embeddings = self._bos_weight.unsqueeze(0).expand(
+            batch_size, 1, -1
+        )  # (batch_size, 1, embedding_dim)
+
         tgt_embeddings = torch.cat([bos_embeddings, tgt_embeddings[:, :-1, :]], dim=1)
-        
+
         label_len = tgt_mask.shape[1]
 
         assert label_len == len(self._codebook_sizes) + 1
@@ -273,7 +273,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         causal_mask = (
             torch.tril(torch.ones(label_len, label_len)).bool().to(DEVICE)
         )  # (dec_seq_len, dec_seq_len)
-        
+
         decoder_outputs = self._decoder(
             tgt=tgt_embeddings,
             memory=encoder_embeddings,
@@ -282,89 +282,110 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         )  # (batch_size, dec_seq_len, embedding_dim)
 
         return decoder_outputs
-    
-    def _apply_decoder_autoregressive(
-        self, encoder_embeddings, encoder_mask
-    ):
+
+    def _apply_decoder_autoregressive(self, encoder_embeddings, encoder_mask):
         batch_size = encoder_embeddings.shape[0]
-        
-        tgt_embeddings = self._bos_weight.unsqueeze(0).unsqueeze(0).expand(batch_size, 1, -1)
+
+        tgt_embeddings = (
+            self._bos_weight.unsqueeze(0).unsqueeze(0).expand(batch_size, 1, -1)
+        )
         tgt_mask = torch.ones(batch_size, 1, dtype=torch.bool, device=DEVICE)
-        
+
         semantic_ids = torch.tensor([], device=DEVICE)
-        
-        for step in range(len(self._codebook_sizes) + 1): # semantic_id + residual
+
+        for step in range(len(self._codebook_sizes) + 1):  # semantic_id + residual
             position_embeddings = self._decoder_pos_embeddings(
                 torch.full((batch_size,), tgt_embeddings.shape[1], device=DEVICE),
-                tgt_mask
+                tgt_mask,
             )
-            
+
             curr_embeddings = tgt_embeddings + position_embeddings
-            
+
             curr_embeddings = self._decoder_layernorm(curr_embeddings)
             curr_embeddings = self._decoder_dropout(curr_embeddings)
-            
+
             decoder_output = self._decoder(
                 tgt=curr_embeddings,
                 memory=encoder_embeddings,
                 memory_key_padding_mask=~encoder_mask,
             )
-            
-            next_token_embedding = decoder_output[:, -1, :] # batch_size x embedding_dim
-            
+
+            next_token_embedding = decoder_output[
+                :, -1, :
+            ]  # batch_size x embedding_dim
+
             if step < len(self._codebook_sizes):
-                codebook = self._codebook_item_embeddings_stacked[step] # len(codebook_sizes) x embedding_dim
+                codebook = self._codebook_item_embeddings_stacked[
+                    step
+                ]  # len(codebook_sizes) x embedding_dim
                 closest_semantic_ids = torch.argmax(
                     torch.einsum("bd,cd->bc", next_token_embedding, codebook), dim=1
-                ) # batch_size x 1
-                semantic_ids = torch.cat([semantic_ids, closest_semantic_ids.unsqueeze(1)], dim=1) # batch_size x (step + 1)
-                next_token_embedding = codebook[closest_semantic_ids] # batch_size x embedding_dim
-                
-            tgt_embeddings = torch.cat([tgt_embeddings, next_token_embedding.unsqueeze(1)], dim=1)
-            tgt_mask = torch.ones(batch_size, tgt_embeddings.shape[1], dtype=torch.bool, device=DEVICE)
+                )  # batch_size x 1
+                semantic_ids = torch.cat(
+                    [semantic_ids, closest_semantic_ids.unsqueeze(1)], dim=1
+                )  # batch_size x (step + 1)
+                next_token_embedding = codebook[
+                    closest_semantic_ids
+                ]  # batch_size x embedding_dim
+
+            tgt_embeddings = torch.cat(
+                [tgt_embeddings, next_token_embedding.unsqueeze(1)], dim=1
+            )
+            tgt_mask = torch.ones(
+                batch_size, tgt_embeddings.shape[1], dtype=torch.bool, device=DEVICE
+            )
 
         return semantic_ids, tgt_embeddings
-    
-    def get_item_embeddings(self, events): # TODO freezed embeddings
-        embs = self._item_id_to_semantic_embedding[events - 1] # len(events), len(self._codebook_sizes) + 1, embedding_dim
-        return embs.view(len(events) * (len(self._codebook_sizes) + 1), self._embedding_dim)
-    
-    def get_init_item_embeddings(self, events): # TODO freezed embeddings
+
+    def get_item_embeddings(self, events):  # TODO freezed embeddings
+        embs = self._item_id_to_semantic_embedding[
+            events - 1
+        ]  # len(events), len(self._codebook_sizes) + 1, embedding_dim
+        return embs.view(
+            len(events) * (len(self._codebook_sizes) + 1), self._embedding_dim
+        )
+
+    def get_init_item_embeddings(self, events):  # TODO freezed embeddings
         # convert to semantic ids
-        semantic_ids = self._item_id_to_semantic_id[events - 1] # len(events), len(codebook_sizes)
-        
+        semantic_ids = self._item_id_to_semantic_id[
+            events - 1
+        ]  # len(events), len(codebook_sizes)
+
         result = []
         for semantic_id in semantic_ids:
             item_repr = []
             for codebook_idx, codebook_id in enumerate(semantic_id):
-                item_repr.append(self._codebook_item_embeddings_stacked[codebook_idx][codebook_id])
+                item_repr.append(
+                    self._codebook_item_embeddings_stacked[codebook_idx][codebook_id]
+                )
             result.append(torch.stack(item_repr))
-        
+
         semantic_embeddings = torch.stack(result)
-        
+
         # get residuals
         text_embeddings = self._item_id_to_embedding[events - 1]
         residual = text_embeddings - semantic_embeddings.sum(dim=1)
         residual = residual.unsqueeze(1)
-        
+
         # get true item embeddings
         item_embeddings = torch.cat(
             [semantic_embeddings, residual], dim=1
-        ) # len(events), len(self._codebook_sizes) + 1, embedding_dim
-        
+        )  # len(events), len(self._codebook_sizes) + 1, embedding_dim
+
         # item_embeddings = item_embeddings.view(-1, self._embedding_dim) # (all_batch_events, embedding_dim)
-        
+
         return item_embeddings
 
     def _encoder_pos_embeddings(self, lengths, mask):
         def position_lambda(x):
             return x // (len(self._codebook_sizes) + 1)  # 5 5 5 4 4 4 3 3 3 ...
+
         # TODO +1 for residual embedding
 
         position_embeddings = self._get_position_embeddings(
             lengths, mask, position_lambda, self._position_embeddings
         )
-        
+
         # print(f"{position_embeddings.isnan().any()=}") # TODO fix NaN in pos_embs
 
         def codebook_lambda(x):
@@ -392,7 +413,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         )
 
         return codebook_embeddings
-    
+
     def _get_position_embeddings(self, lengths, mask, position_lambda, embedding_layer):
         batch_size = mask.shape[0]
         seq_len = mask.shape[1]
@@ -408,10 +429,12 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         # 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0 7 6 5 4 3 2 1 0 ...
 
         positions = position_lambda(positions)  # (all_batch_events)
-        
+
         # print(f"{positions.tolist()[:20]=}")
-        
-        assert (positions >= 0).all() and (positions < embedding_layer.num_embeddings).all()
+
+        assert (positions >= 0).all() and (
+            positions < embedding_layer.num_embeddings
+        ).all()
 
         position_embeddings = embedding_layer(
             positions
