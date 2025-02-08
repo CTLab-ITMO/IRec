@@ -101,3 +101,5 @@ decoder: (bos, 1, 2, 3) -> (1, 2, 3, 4) # causal mask so (bos -> 1), (bos, 1 -> 
 1) Tiger
 2) SasRec
 3) SasRec freezed (all on single board)
+4) Tiger batched inference
+5) Tiger honest embedding_dim
