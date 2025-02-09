@@ -84,6 +84,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._item_id_to_residual = item_id_to_residual
         self._item_id_to_text_embedding = item_id_to_text_embedding
 
+        self._projector = nn.Linear(item_id_to_text_embedding.shape[1], embedding_dim)
+
         item_ids = torch.tensor(list(range(1, len(item_id_to_semantic_id) + 1)))
 
         self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
@@ -196,6 +198,9 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             decoder_outputs = self._apply_decoder(
                 tgt_embeddings, label_lengths, encoder_embeddings, encoder_mask
             )  # (batch_size, label_len, embedding_dim)
+
+            print(decoder_outputs.shape)
+            print(self._codebook_item_embeddings_stacked.shape)
 
             decoder_prefix_scores = torch.einsum(
                 "bsd,scd->bsc",
@@ -338,6 +343,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         embs = self._item_id_to_semantic_embedding[
             events - 1
         ]  # len(events), len(self._codebook_sizes) + 1, embedding_dim
+        embs = self._projector(embs)
         return embs.view(
             len(events) * (len(self._codebook_sizes) + 1), self._embedding_dim
         )
