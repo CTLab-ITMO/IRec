@@ -1,6 +1,6 @@
 {
   "start_from": 0,
-  "experiment_name": "sasrec_grid_all_rank_beauty_loss_ce",
+  "experiment_name": "sasrec_grid_in_batch_beauty_loss_ce",
   "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "sequence",
@@ -35,7 +35,7 @@
     }
   },
   "model": {
-    "type": "sasrec_all_rank",
+    "type": "sasrec_in_batch",
     "sequence_prefix": "item",
     "positive_prefix": "positive",
     "negative_prefix": "negative",

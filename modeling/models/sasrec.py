@@ -406,11 +406,12 @@ class SasRecInBatchModel(SasRecModel, config_name='sasrec_in_batch'):
                 in_batch_negative_ids
             )  # (batch_size, embedding_dim)
 
-            in_batch_negative_embeddings = in_batch_queries_embeddings @ in_batch_negative_embeddings.T
+            in_batch_negative_scores = in_batch_queries_embeddings @ in_batch_negative_embeddings.T
+            in_batch_positive_scores = (in_batch_queries_embeddings * in_batch_positive_embeddings).sum(dim=-1)
 
             return {
-                'positive_scores': in_batch_positive_embeddings,
-                'negative_scores': in_batch_negative_embeddings
+                'positive_scores': in_batch_positive_scores,
+                'negative_scores': in_batch_negative_scores
             }
         else:  # eval mode
             last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
