@@ -194,7 +194,7 @@ class SasRecModelAllRank(SequentialTorchModel, config_name='sasrec_all_rank'):
                 input=all_scores,
                 dim=1,
                 index=all_positive_sample_events[..., None]
-            )  # (all_batch_items, 1)
+            ).squeeze()  # (all_batch_items,)
 
             sample_ids, _ = create_masked_tensor(
                 data=all_sample_events,

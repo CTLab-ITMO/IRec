@@ -1,6 +1,6 @@
 {
   "start_from": 0,
-  "experiment_name": "bert4rec_grid_random_beauty",
+  "experiment_name": "bert4rec_grid_in_batch_beauty_loss_sasrec",
   "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "sequence",
@@ -8,9 +8,8 @@
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
-      "num_negatives_train": 100,
       "type": "masked_item_prediction",
-      "negative_sampler_type": "random"
+      "negative_sampler_type": "random_by_popularity"
     }
   },
   "dataset_params": {
@@ -49,7 +48,7 @@
     }
   },
   "model": {
-    "type": "bert4rec_popular",
+    "type": "bert4rec_in_batch",
     "sequence_prefix": "item",
     "labels_prefix": "labels",
     "candidate_prefix": "candidates",
@@ -86,7 +85,7 @@
     "type": "composite",
     "losses": [
       {
-        "type": "ce",
+        "type": "bert4rec_sasrec",
         "predictions_prefix": "logits",
         "labels_prefix": "labels",
         "output_prefix": "downstream_loss"
