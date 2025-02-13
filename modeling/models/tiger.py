@@ -86,7 +86,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         self._projector = nn.Linear(item_id_to_text_embedding.shape[1], embedding_dim)
 
-        item_ids = torch.tensor(list(range(1, len(item_id_to_semantic_id) + 1)))
+        item_ids = torch.arange(1, len(item_id_to_semantic_id) + 1)
 
         self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
 
@@ -95,7 +95,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._trie.build_tree_structure(
             item_id_to_semantic_id,
             item_id_to_residual,
-            torch.arange(1, len(item_id_to_semantic_id) + 1),
+            item_ids,
         )
 
         self._bos_token_id = codebook_sizes[0]

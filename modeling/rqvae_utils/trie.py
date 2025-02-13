@@ -298,7 +298,7 @@ class Trie:
 
             raw_item_ids.append(result_ids[:items_to_query])
 
-        return torch.stack(raw_item_ids)
+        return torch.stack(raw_item_ids).int() # TODO
 
     def query(
         self, semantic_ids: torch.Tensor, residuals: torch.Tensor, items_to_query: int
