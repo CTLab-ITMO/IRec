@@ -87,7 +87,7 @@ class SasRecFreezedModel(SequentialTorchModel, config_name='sasrec_freezed'):
     def get_item_embeddings(self, events): # TODO refactor (single projection)
         return self._projector(self._item_embeddings(events))
     
-    def _get_item_embeddings(self):
+    def get_last_item_embeddings(self):
         return self._projector(self._item_embeddings.weight)
 
     def forward(self, inputs):
@@ -103,7 +103,7 @@ class SasRecFreezedModel(SequentialTorchModel, config_name='sasrec_freezed'):
 
             all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
 
-            all_embeddings = self._get_item_embeddings()  # (num_items + 2, embedding_dim)
+            all_embeddings = self.get_last_item_embeddings()  # (num_items + 2, embedding_dim)
 
             # a -- all_batch_events, n -- num_items + 2, d -- embedding_dim
             all_scores = torch.einsum(
@@ -144,7 +144,7 @@ class SasRecFreezedModel(SequentialTorchModel, config_name='sasrec_freezed'):
             candidate_scores = torch.einsum(
                 'bd,nd->bn',
                 last_embeddings,
-                self._get_item_embeddings()
+                self.get_last_item_embeddings()
             )  # (batch_size, num_items + 2)
             candidate_scores[:, 0] = -torch.inf  # Padding id
             candidate_scores[:, self._num_items + 1:] = -torch.inf  # Mask id

@@ -365,21 +365,31 @@ if __name__ == "__main__":
 
     N = 12101
     K = 3
-    semantic_ids = torch.randint(0, alphabet_size, (N, K), dtype=torch.int64)
-    residuals = torch.randn(N, embedding_dim)
-    trie.build_tree_structure(semantic_ids, residuals, torch.arange(N))
+    # make tensor of size N x K
+    # of ([1, 2, 3], [1, 2, 3], [1, 2, 3], ...)
+    a = torch.arange(K).repeat(20, 1)
+    b = torch.arange(K + 1, K + K + 1).repeat(20, 1)
+    semantic_ids = torch.cat([a, b], dim=0)
+    residuals = torch.randn(semantic_ids.shape[0], embedding_dim)
+    trie.build_tree_structure(
+        semantic_ids, residuals, torch.arange(semantic_ids.shape[0])
+    )
 
-    items_to_query = 20
-    batch_size = 256
-    q_semantic_ids = torch.randint(0, alphabet_size, (batch_size, K), dtype=torch.int64)
+    items_to_query = 5
+    batch_size = 1
+    q_semantic_ids = semantic_ids[0].repeat(batch_size, 1)
+    # q_semantic_ids = torch.randint(0, alphabet_size, (batch_size, K), dtype=torch.int64)
     q_residuals = torch.randn(batch_size, embedding_dim)
 
     total_time = 0
-    n_exps = 100
+    n_exps = 1
 
     for i in range(n_exps):
         now = time.time()
         item_ids = trie.query(q_semantic_ids, q_residuals, items_to_query)
+        print(semantic_ids[item_ids].shape)
+        print(q_semantic_ids.shape)
+        print(semantic_ids[item_ids] == q_semantic_ids)
         assert item_ids.shape == (batch_size, items_to_query)
         total_time += time.time() - now
 
