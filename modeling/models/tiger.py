@@ -77,7 +77,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             [codebook for codebook in rqvae_model.codebooks]
         )
         self._codebook_item_embeddings_stacked.requires_grad = (
-            False  # TODO ask if freeze is needed
+            False  # TODO maybe unfreeeze later
         )
 
         self._item_id_to_semantic_id = item_id_to_semantic_id
@@ -90,16 +90,23 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
 
-        self._trie = Trie(rqvae_model)
+        self._trie = Trie(rqvae_model, self._projector)
 
         self._trie.build_tree_structure(
-            item_id_to_semantic_id.to("cpu"),
-            item_id_to_residual.to("cpu"),
+            item_id_to_semantic_id,
+            item_id_to_residual,
             torch.arange(1, len(item_id_to_semantic_id) + 1),
         )
 
         self._bos_token_id = codebook_sizes[0]
-        self._bos_weight = nn.Parameter(torch.randn(embedding_dim))
+        self._bos_weight = nn.Parameter(
+            torch.nn.init.trunc_normal_(
+                torch.zeros(embedding_dim),
+                std=initializer_range,
+                a=-2 * initializer_range,
+                b=2 * initializer_range,
+            )
+        )
 
         self._codebook_embeddings = nn.Embedding(
             num_embeddings=len(codebook_sizes) + 2, embedding_dim=embedding_dim
@@ -117,7 +124,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             torch.load(config["rqvae_checkpoint_path"], weights_only=True)
         )
         rqvae_model.eval()
-        for param in rqvae_model.parameters():  # TODO freezed
+        for param in rqvae_model.parameters():
             param.requires_grad = False
 
         codebook_sizes = rqvae_model.codebook_sizes
@@ -199,13 +206,12 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
                 tgt_embeddings, label_lengths, encoder_embeddings, encoder_mask
             )  # (batch_size, label_len, embedding_dim)
 
-            print(decoder_outputs.shape)
-            print(self._codebook_item_embeddings_stacked.shape)
+            projected_stacked = self._projector(self._codebook_item_embeddings_stacked)
 
             decoder_prefix_scores = torch.einsum(
                 "bsd,scd->bsc",
                 decoder_outputs[:, :-1, :],
-                self._codebook_item_embeddings_stacked,
+                projected_stacked,
             )
 
             decoder_output_residual = decoder_outputs[:, -1, :]
@@ -215,16 +221,14 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             ]  # len(events), len(codebook_sizes)
             true_residuals = self._item_id_to_residual[label_events - 1]
 
-            true_info = self._solver.get_true_dedup_tokens(semantic_ids, true_residuals)
-            pred_info = self._solver.get_pred_scores(
-                semantic_ids, decoder_output_residual
-            )
+            # true_info = self._solver.get_true_dedup_tokens(semantic_ids, true_residuals)
+            # pred_info = self._solver.get_pred_scores(
+            #     semantic_ids, decoder_output_residual
+            # ) TODO shapes don't match (solver init with 512, here 64)
 
             return {
                 "logits": decoder_prefix_scores,
                 "semantic.labels": semantic_ids,
-                "dedup.logits": pred_info["pred_scores"],
-                "dedup.labels": true_info["true_dedup_tokens"],
             }
         else:
             semantic_ids, tgt_embeddings = self._apply_decoder_autoregressive(
@@ -316,10 +320,10 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
                 :, -1, :
             ]  # batch_size x embedding_dim
 
+            projected = self._projector(self._codebook_item_embeddings_stacked)
+
             if step < len(self._codebook_sizes):
-                codebook = self._codebook_item_embeddings_stacked[
-                    step
-                ]  # len(codebook_sizes) x embedding_dim
+                codebook = projected[step]  # len(codebook_sizes) x embedding_dim
                 closest_semantic_ids = torch.argmax(
                     torch.einsum("bd,cd->bc", next_token_embedding, codebook), dim=1
                 )  # batch_size x 1
