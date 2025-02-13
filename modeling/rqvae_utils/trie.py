@@ -197,7 +197,15 @@ class Trie:
 
         assert (outer_level <= K).all()
 
-        return num_items, outer_level, inner_level  # bs, bs
+        return num_items, outer_level, inner_level  # bs x K + 1, bs, bs
+
+    def get_sorted_ids(self, stored_residuals, query_residual, raw_item_ids):
+        scores = torch.matmul(stored_residuals, query_residual)  # (guaranteed_len,)
+        # Sort guaranteed items by score (descending)
+        sorted_indices = torch.argsort(scores, descending=True)
+        sorted_ids = raw_item_ids[sorted_indices.to(raw_item_ids.device)]
+
+        return sorted_ids
 
     def get_closest_single(
         self,
@@ -208,26 +216,18 @@ class Trie:
         left_stored_residuals,  # left_len x embedding_dim
         left_query_residual,  # embedding_dim
     ):
-        guaranteed_scores = torch.matmul(
-            guaranteed_stored_residuals, guaranteed_query_residual
-        )  # (guaranteed_len,)
+        if guaranteed_raw_item_ids.shape[0] == 0:
+            guaranteed_sorted_ids = torch.tensor([])
+        else:
+            guaranteed_sorted_ids = self.get_sorted_ids(
+                guaranteed_stored_residuals,
+                guaranteed_query_residual,
+                guaranteed_raw_item_ids,
+            )
 
-        # Compute scores for left items
-        left_scores = torch.matmul(
-            left_stored_residuals, left_query_residual
-        )  # (left_len,)
-
-        # Sort guaranteed items by score (descending)
-        guaranteed_sorted_indices = torch.argsort(guaranteed_scores, descending=True)
-        guaranteed_sorted_ids = guaranteed_raw_item_ids[
-            guaranteed_sorted_indices.to(guaranteed_raw_item_ids.device)
-        ]
-
-        # Sort left items by score (descending)
-        left_sorted_indices = torch.argsort(left_scores, descending=True)
-        left_sorted_ids = left_raw_item_ids[
-            left_sorted_indices.to(left_raw_item_ids.device)
-        ]
+        left_sorted_ids = self.get_sorted_ids(
+            left_stored_residuals, left_query_residual, left_raw_item_ids
+        )
 
         # Concatenate the sorted lists
         result_ids = torch.cat((guaranteed_sorted_ids, left_sorted_ids))
@@ -309,13 +309,17 @@ class Trie:
 
         num_items, outer_levels, inner_levels = self.get_outer_inner_levels(
             semantic_ids, items_to_query
-        )  # bs, bs
+        )  # bs x K + 1, bs, bs
+
+        # print(num_items.shape, outer_levels.shape, inner_levels.shape)
+        # print(num_items, outer_levels, inner_levels)
 
         taken_outer_prefixes = semantic_ids * (
             torch.arange(K).expand(bs, K) < outer_levels.unsqueeze(1)
         )
         taken_inner_prefixes = semantic_ids * (
-            torch.arange(K).expand(bs, K) < inner_levels.unsqueeze(1)
+            torch.arange(K).expand(bs, K) < inner_levels
+            .unsqueeze(1)
         )
 
         outer_masks = self.get_mask_by_prefix(
@@ -324,6 +328,9 @@ class Trie:
         inner_masks = self.get_mask_by_prefix(
             taken_inner_prefixes, inner_levels
         )  # bs, total_items
+
+        # print(inner_masks.shape, outer_masks.shape)
+        # print(inner_masks, outer_masks)
 
         inner_levels_max_mask = inner_levels == self.K + 1
         inner_levels[inner_levels_max_mask] = self.K
