@@ -35,7 +35,7 @@
   "model": {
     "type": "sasrec",
     "sequence_prefix": "item",
-    "positive_prefix": "positive",
+    "positive_prefix": "labels",
     "negative_prefix": "negative",
     "candidate_prefix": "candidates",
     "embedding_dim": 64,
