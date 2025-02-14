@@ -43,9 +43,9 @@ class Trie:
         return unique, inverse.new_empty(unique.size(0)).scatter_(0, inverse, perm)
 
     def compute_keys(self, semantic_ids: torch.Tensor):
-        exponents = torch.arange(self.K - 1, -1, -1, dtype=torch.int64)
+        exponents = torch.arange(self.K - 1, -1, -1, dtype=torch.int64, device=DEVICE)
         base = self.rqvae_model.codebook_sizes[0] ** exponents
-        uniq_ids = semantic_ids.to("cpu") @ base  # TODO fix device
+        uniq_ids = semantic_ids @ base
         return uniq_ids
 
     def pad_semantic_ids(self, semantic_ids: torch.Tensor):
@@ -298,7 +298,7 @@ class Trie:
 
             raw_item_ids.append(result_ids[:items_to_query])
 
-        return torch.stack(raw_item_ids).int() # TODO
+        return torch.stack(raw_item_ids).int()  # TODO
 
     def query(
         self, semantic_ids: torch.Tensor, residuals: torch.Tensor, items_to_query: int
@@ -318,8 +318,7 @@ class Trie:
             torch.arange(K).expand(bs, K) < outer_levels.unsqueeze(1)
         )
         taken_inner_prefixes = semantic_ids * (
-            torch.arange(K).expand(bs, K) < inner_levels
-            .unsqueeze(1)
+            torch.arange(K).expand(bs, K) < inner_levels.unsqueeze(1)
         )
 
         outer_masks = self.get_mask_by_prefix(

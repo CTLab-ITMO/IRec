@@ -343,7 +343,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         return semantic_ids, tgt_embeddings
 
-    def get_item_embeddings(self, events):  # TODO freezed embeddings
+    def get_item_embeddings(self, events):
         embs = self._item_id_to_semantic_embedding[
             events - 1
         ]  # len(events), len(self._codebook_sizes) + 1, embedding_dim
@@ -352,7 +352,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             len(events) * (len(self._codebook_sizes) + 1), self._embedding_dim
         )
 
-    def get_init_item_embeddings(self, events):  # TODO freezed embeddings
+    def get_init_item_embeddings(self, events):
         # convert to semantic ids
         semantic_ids = self._item_id_to_semantic_id[
             events - 1
