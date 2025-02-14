@@ -2,8 +2,8 @@ import json
 import time
 
 import torch
-from utils import DEVICE
 from models.rqvae import RqVaeModel
+from utils import DEVICE
 
 
 class Trie:
@@ -43,9 +43,9 @@ class Trie:
         return unique, inverse.new_empty(unique.size(0)).scatter_(0, inverse, perm)
 
     def compute_keys(self, semantic_ids: torch.Tensor):
-        exponents = torch.arange(self.K - 1, -1, -1, dtype=torch.int64, device=DEVICE)
+        exponents = torch.arange(self.K - 1, -1, -1, dtype=torch.int64)
         base = self.rqvae_model.codebook_sizes[0] ** exponents
-        uniq_ids = semantic_ids @ base
+        uniq_ids = semantic_ids.to("cpu") @ base
         return uniq_ids
 
     def pad_semantic_ids(self, semantic_ids: torch.Tensor):
