@@ -135,7 +135,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
     @classmethod
     def create_from_config(cls, config, **kwargs):
         rqvae_model = cls.init_rqvae(config)
-        embs_extractor = torch.load(config["embs_extractor_path"])
+        embs_extractor = torch.load(config["embs_extractor_path"], weights_only=False)
 
         embs_extractor = embs_extractor.sort_index()
 
