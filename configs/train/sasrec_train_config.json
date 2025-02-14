@@ -1,6 +1,7 @@
 {
   "experiment_name": "sasrec_beauty",
   "best_metric": "validation/ndcg@20",
+  "train_epochs_num": 100,
   "dataset": {
     "type": "sequence",
     "path_to_data_dir": "../data",
