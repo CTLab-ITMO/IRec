@@ -221,14 +221,16 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             ]  # len(events), len(codebook_sizes)
             true_residuals = self._item_id_to_residual[label_events - 1]
 
-            # true_info = self._solver.get_true_dedup_tokens(semantic_ids, true_residuals)
-            # pred_info = self._solver.get_pred_scores(
-            #     semantic_ids, decoder_output_residual
-            # ) TODO shapes don't match (solver init with 512, here 64)
+            true_info = self._solver.get_true_dedup_tokens(semantic_ids, true_residuals)
+            pred_info = self._solver.get_pred_scores(
+                semantic_ids, decoder_output_residual
+            )
 
             return {
                 "logits": decoder_prefix_scores,
                 "semantic.labels": semantic_ids,
+                "dedup.logits": pred_info["pred_scores"],
+                "dedup.labels": true_info["true_dedup_tokens"],
             }
         else:
             semantic_ids, tgt_embeddings = self._apply_decoder_autoregressive(
