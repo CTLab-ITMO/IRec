@@ -237,7 +237,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             semantic_ids = semantic_ids.to(torch.int64)
 
             item_ids = self._trie.query(
-                semantic_ids.to("cpu"), residuals.to("cpu"), items_to_query=20
+                semantic_ids, residuals, items_to_query=20
             )
 
             return item_ids

@@ -44,7 +44,7 @@ class Trie:
     def compute_keys(self, semantic_ids: torch.Tensor):
         exponents = torch.arange(self.K - 1, -1, -1, dtype=torch.int64)
         base = self.rqvae_model.codebook_sizes[0] ** exponents
-        uniq_ids = semantic_ids.to("cpu") @ base
+        uniq_ids = semantic_ids @ base.to(DEVICE)
         return uniq_ids
 
     def pad_semantic_ids(self, semantic_ids: torch.Tensor):
