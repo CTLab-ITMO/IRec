@@ -13,7 +13,7 @@ import torch
 if torch.cuda.is_available():
     DEVICE = torch.device('cuda')
 elif torch.backends.mps.is_available():
-    DEVICE = torch.device("mps")
+    DEVICE = torch.device("mps:0")
 else:
     DEVICE = torch.device('cpu')
 

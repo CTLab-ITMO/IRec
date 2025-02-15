@@ -1,6 +1,6 @@
 {
   "experiment_name": "rqvae_beauty",
-  "train_epochs_num": 50,
+  "train_epochs_num": 200,
   "dataset": {
     "type": "rqvae",
     "path_to_data_dir": "../data",
