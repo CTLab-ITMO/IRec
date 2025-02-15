@@ -91,9 +91,9 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._trie = Trie(rqvae_model)
 
         self._trie.build_tree_structure(
-            item_id_to_semantic_id,
-            item_id_to_residual,
-            item_ids,
+            item_id_to_semantic_id.to(DEVICE),
+            item_id_to_residual.to(DEVICE),
+            item_ids.to(DEVICE),
         )
 
         self._bos_token_id = codebook_sizes[0]

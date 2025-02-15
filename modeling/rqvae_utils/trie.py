@@ -42,12 +42,10 @@ class Trie:
         return unique, inverse.new_empty(unique.size(0)).scatter_(0, inverse, perm)
 
     def compute_keys(self, semantic_ids: torch.Tensor):
-        exponents = torch.arange(self.K - 1, -1, -1, dtype=torch.int64)
+        exponents = torch.arange(self.K - 1, -1, -1, device=DEVICE).float()
         base = self.rqvae_model.codebook_sizes[0] ** exponents
-        print(semantic_ids.device)
-        print(base.device)
-        uniq_ids = semantic_ids @ base.to(DEVICE)
-        return uniq_ids
+        uniq_ids = semantic_ids.float() @ base
+        return uniq_ids.int()
 
     def pad_semantic_ids(self, semantic_ids: torch.Tensor):
         return torch.cat(
@@ -57,7 +55,8 @@ class Trie:
                     semantic_ids.shape[0],
                     self.K - semantic_ids.shape[1],
                     dtype=semantic_ids.dtype,
-                ).to(semantic_ids.device),
+                    device=semantic_ids.device,
+                ),
             ],
             dim=1,
         )
@@ -163,7 +162,7 @@ class Trie:
 
     def process_prefixes(self, prefixes: torch.Tensor):
         bs, prefix_len = prefixes.shape
-        taken_len = torch.full((bs,), prefix_len)
+        taken_len = torch.full((bs,), prefix_len, device=DEVICE)
         mask = self.get_mask_by_prefix(prefixes, taken_len)
         # self.keys.unsqueeze(0) = 1 x bs
         # lower_key.unsqueeze(1), upper_key.unsqueeze(1) = bs x 1
@@ -180,6 +179,7 @@ class Trie:
                 torch.full(
                     (bs, 1),
                     self.total_items,
+                    device=DEVICE,
                 ),
                 num_items,
             ],
@@ -203,7 +203,7 @@ class Trie:
         scores = torch.matmul(stored_residuals, query_residual)  # (guaranteed_len,)
         # Sort guaranteed items by score (descending)
         sorted_indices = torch.argsort(scores, descending=True)
-        sorted_ids = raw_item_ids[sorted_indices.to(raw_item_ids.device)]
+        sorted_ids = raw_item_ids[sorted_indices]
 
         return sorted_ids
 
@@ -217,7 +217,7 @@ class Trie:
         left_query_residual,  # embedding_dim
     ):
         if guaranteed_raw_item_ids.shape[0] == 0:
-            guaranteed_sorted_ids = torch.tensor([])
+            guaranteed_sorted_ids = torch.tensor([], device=DEVICE)
         else:
             guaranteed_sorted_ids = self.get_sorted_ids(
                 guaranteed_stored_residuals,
@@ -274,15 +274,13 @@ class Trie:
             guaranteed_raw_item_ids = self.raw_item_ids[guaranteed]  # guaranteed_len
             guaranteed_stored_residuals = self.residuals_per_level[guaranteed][
                 :, -(inner_level + 1)
-            ].to(DEVICE)  # guaranteed_len x embedding_dim
+            ]  # guaranteed_len x embedding_dim
             guaranteed_query_residual = query_residual_per_level[
                 -(inner_level + 1)
             ]  # embedding_dim
 
             left_raw_item_ids = self.raw_item_ids[left]  # left_len
-            left_stored_residuals = self.residuals_per_level[left][:, -outer_level].to(
-                DEVICE
-            )  # left_len x embedding_dim
+            left_stored_residuals = self.residuals_per_level[left][:, -outer_level]  # left_len x embedding_dim
             left_query_residual = query_residual_per_level[
                 -outer_level
             ]  # embedding_dim
@@ -315,10 +313,10 @@ class Trie:
         # print(num_items, outer_levels, inner_levels)
 
         taken_outer_prefixes = semantic_ids * (
-            torch.arange(K).expand(bs, K) < outer_levels.unsqueeze(1)
+            torch.arange(K, device=DEVICE).expand(bs, K) < outer_levels.unsqueeze(1)
         )
         taken_inner_prefixes = semantic_ids * (
-            torch.arange(K).expand(bs, K) < inner_levels.unsqueeze(1)
+            torch.arange(K, device=DEVICE).expand(bs, K) < inner_levels.unsqueeze(1)
         )
 
         outer_masks = self.get_mask_by_prefix(
