@@ -57,7 +57,7 @@ class RqVaeModel(TorchModel, config_name='rqvae'):
         return cls(
             train_sampler=kwargs.get('train_sampler'),
             input_dim=config['embedding_dim'],
-            hidden_dim=config['embedding_dim'],
+            hidden_dim=config['hidden_dim'],
             n_iter=config['n_iter'],
             codebook_sizes=config['codebook_sizes'],
             should_init_codebooks=config.get('should_init_codebooks', False),

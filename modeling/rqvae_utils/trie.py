@@ -7,7 +7,7 @@ from utils import DEVICE
 
 
 class Trie:
-    def __init__(self, rqvae_model: RqVaeModel, projector: torch.nn.Linear):
+    def __init__(self, rqvae_model: RqVaeModel):
         self.rqvae_model = rqvae_model
         self.keys = None
         self.prefix_counts = None
@@ -18,7 +18,6 @@ class Trie:
         self.embedding_table = torch.stack(
             [cb for cb in self.rqvae_model.codebooks]
         )  # K x codebook_size x embedding_dim
-        self.projector = projector
 
     def unique_with_index(self, x, dim=None):
         """Unique elements of x and indices of those unique elements
@@ -90,7 +89,7 @@ class Trie:
             prefix_counts[:, i + 1] = current_level_same
 
         residuals_per_level = self.get_residuals_per_level(
-            self.embedding_table.to(residuals.device), semantic_ids, residuals
+            semantic_ids, residuals
         )  # total_items x K + 1 x embedding_dim
 
         keys = self.compute_keys(semantic_ids)  # bs, could be collisions
@@ -103,21 +102,20 @@ class Trie:
 
     def get_residuals_per_level(
         self,
-        embedding_table: torch.Tensor,
         semantic_ids: torch.Tensor,
         residuals: torch.Tensor,
     ):
         bs = semantic_ids.shape[0]
         embedding_dim = residuals.shape[1]
         residuals_per_level = torch.zeros(
-            bs, self.K + 1, embedding_dim, device=embedding_table.device
+            bs, self.K + 1, embedding_dim, device=self.embedding_table.device
         )  # bs x K + 1 x embedding_dim
 
         # TODO think if reverse is needed here
         # i = 3, 2, 1, 0
         for i in range(self.K - 1, -1, -1):
             indices_at_level = semantic_ids[:, i]  # bs
-            embeddings_at_level = embedding_table[
+            embeddings_at_level = self.embedding_table[
                 i, indices_at_level
             ]  # bs x embedding_dim
             # 1 2 3 4
@@ -272,16 +270,16 @@ class Trie:
 
             # self.residuals_per_level.shape = total_items, K + 1, embedding_dim
             guaranteed_raw_item_ids = self.raw_item_ids[guaranteed]  # guaranteed_len
-            guaranteed_stored_residuals = self.projector(
-                self.residuals_per_level[guaranteed][:, -(inner_level + 1)].to(DEVICE)
-            )  # guaranteed_len x embedding_dim
+            guaranteed_stored_residuals = self.residuals_per_level[guaranteed][
+                :, -(inner_level + 1)
+            ].to(DEVICE)  # guaranteed_len x embedding_dim
             guaranteed_query_residual = query_residual_per_level[
                 -(inner_level + 1)
             ]  # embedding_dim
 
             left_raw_item_ids = self.raw_item_ids[left]  # left_len
-            left_stored_residuals = self.projector(
-                self.residuals_per_level[left][:, -outer_level].to(DEVICE)
+            left_stored_residuals = self.residuals_per_level[left][:, -outer_level].to(
+                DEVICE
             )  # left_len x embedding_dim
             left_query_residual = query_residual_per_level[
                 -outer_level
@@ -347,10 +345,8 @@ class Trie:
 
         assert (inner_masks <= outer_masks).all()
 
-        projected_embedding_table = self.projector(self.embedding_table)
-
         query_residuals_per_level = self.get_residuals_per_level(
-            projected_embedding_table, semantic_ids, residuals
+            semantic_ids, residuals
         )
 
         raw_item_ids = self.get_closest(
