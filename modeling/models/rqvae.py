@@ -84,7 +84,7 @@ class RqVaeModel(TorchModel, config_name='rqvae'):
                     d=embeddings_np.shape[1],
                     k=n_clusters,
                     niter=self.n_iter,
-                    gpu=torch.cuda.is_available(),
+                    gpu=1,
                 )
                 kmeans.train(embeddings_np)
 
