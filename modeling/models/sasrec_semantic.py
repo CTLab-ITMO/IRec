@@ -165,7 +165,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
         def position_lambda(x):
             return x // (len(self._codebook_sizes) + 1)  # 5 5 5 4 4 4 3 3 3 ...
 
-        # TODO +1 for residual embedding
+        # TODOPK +1 for residual embedding
 
         position_embeddings = self._get_position_embeddings(
             lengths, mask, position_lambda, self._position_embeddings

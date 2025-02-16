@@ -269,7 +269,7 @@ class SequenceFullDataset(SequenceDataset, config_name='sequence_full'):
         
     @classmethod
     def flatten_item_sequence(cls, item_ids):
-        min_history_length = 3 # TODO: make this configurable
+        min_history_length = 3 # TODOPK make this configurable
         histories = []
         for i in range(min_history_length-1, len(item_ids)):
             histories.append(item_ids[:i+1])

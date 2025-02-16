@@ -112,7 +112,7 @@ class Trie:
             bs, self.K + 1, embedding_dim, device=self.embedding_table.device
         )  # bs x K + 1 x embedding_dim
 
-        # TODO think if reverse is needed here
+        # TODOPK think if reverse is needed here
         # i = 3, 2, 1, 0
         for i in range(self.K - 1, -1, -1):
             indices_at_level = semantic_ids[:, i]  # bs
@@ -124,7 +124,7 @@ class Trie:
                 embeddings_at_level + residuals_per_level[:, self.K - i - 1, :]
             )  # [0 first_cumul_emb, second, ..., full_emb]
 
-        # TODO check that residuals_per_level equal at last layer to full embedding of semantic id
+        # TODOPK check that residuals_per_level equal at last layer to full embedding of semantic id
 
         residuals_per_level[:, 0, :] = residuals
 

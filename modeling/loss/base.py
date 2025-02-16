@@ -86,7 +86,7 @@ class SampleLogSoftmaxLoss(TorchLoss, config_name='sample_logsoftmax'):
             loss = -torch.gather(
                 torch.log_softmax(logits, dim=-1),
                 dim=-1, 
-                index=candidates.view(batch_size, 1) # TODO check if this is correct
+                index=candidates.view(batch_size, 1) # TODOPK check if this is correct
             ).mean()
             
         return loss

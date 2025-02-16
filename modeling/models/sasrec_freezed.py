@@ -65,7 +65,7 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
             num_embeddings=num_items + 2, embedding_dim=precomputed_embeddings.shape[1]
         )
 
-        # TODO ask about freezed masked & padding tokens
+        # TODOPK ask about freezed masked & padding tokens
 
         self._item_embeddings.weight.data.copy_(extended_embeddings)
         self._item_embeddings.weight.requires_grad = False
@@ -85,7 +85,7 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
             initializer_range=config.get("initializer_range", 0.02),
         )
 
-    def get_item_embeddings(self, events=None):  # TODO refactor (single projection)
+    def get_item_embeddings(self, events=None):
         if events is None:
             return self._projector(self._item_embeddings.weight)
         else:

@@ -76,7 +76,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             [codebook for codebook in rqvae_model.codebooks]
         )
         self._codebook_item_embeddings_stacked.requires_grad = (
-            False  # TODO maybe unfreeeze later
+            False  # TODOPK maybe unfreeeze later
         )
 
         self._item_id_to_semantic_id = item_id_to_semantic_id
@@ -193,8 +193,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
             label_lengths = label_lengths * (
                 len(self._codebook_sizes) + 1
-            )  # TODO bos prepending
-            tgt_embeddings = self.get_item_embeddings(  # TODO residual embs
+            )  # TODOPK bos prepending
+            tgt_embeddings = self.get_item_embeddings(
                 label_events
             )  # (all_batch_events, embedding_dim)
 
@@ -383,7 +383,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         def position_lambda(x):
             return x // (len(self._codebook_sizes) + 1)  # 5 5 5 4 4 4 3 3 3 ...
 
-        # TODO +1 for residual embedding
+        # TODOPK +1 for residual embedding
 
         position_embeddings = self._get_position_embeddings(
             lengths, mask, position_lambda, self._position_embeddings
