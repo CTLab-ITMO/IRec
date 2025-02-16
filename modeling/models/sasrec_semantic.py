@@ -131,7 +131,6 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
                 data=all_sample_events, lengths=all_sample_lengths
             )  # (batch_size, seq_len)
 
-
             negative_scores = torch.scatter(
                 input=all_scores,
                 dim=1,
