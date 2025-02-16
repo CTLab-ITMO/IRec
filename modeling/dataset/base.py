@@ -196,7 +196,126 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
             'num_items': self.num_items,
             'max_sequence_length': self.max_sequence_length
         }
+        
+        
+class SequenceFullDataset(SequenceDataset, config_name='sequence_full'):
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
 
+        train_dataset, train_max_user_id, train_max_item_id, train_seq_len = cls._create_dataset(
+            dir_path=data_dir_path,
+            part='train',
+            max_sequence_length=config['max_sequence_length'],
+            use_cached=config.get('use_cached', False)
+        )
+        validation_dataset, valid_max_user_id, valid_max_item_id, valid_seq_len = cls._create_dataset(
+            dir_path=data_dir_path,
+            part='valid',
+            max_sequence_length=config['max_sequence_length'],
+            use_cached=config.get('use_cached', False)
+        )
+        test_dataset, test_max_user_id, test_max_item_id, test_seq_len = cls._create_dataset(
+            dir_path=data_dir_path,
+            part='test',
+            max_sequence_length=config['max_sequence_length'],
+            use_cached=config.get('use_cached', False)
+        )
+
+        max_user_id = max([train_max_user_id, valid_max_user_id, test_max_user_id])
+        max_item_id = max([train_max_item_id, valid_max_item_id, test_max_item_id])
+        max_seq_len = max([train_seq_len, valid_seq_len, test_seq_len])
+
+        logger.info('Train dataset size: {}'.format(len(train_dataset)))
+        logger.info('Test dataset size: {}'.format(len(test_dataset)))
+        logger.info('Max user id: {}'.format(max_user_id))
+        logger.info('Max item id: {}'.format(max_item_id))
+        logger.info('Max sequence length: {}'.format(max_seq_len))
+
+        train_interactions = sum(list(map(lambda x: len(x), train_dataset)))  # whole user history as a sample
+        valid_interactions = len(validation_dataset)  # each new interaction as a sample
+        test_interactions = len(test_dataset) # each new interaction as a sample
+        logger.info('{} dataset sparsity: {}'.format(
+            config['name'], (train_interactions + valid_interactions + test_interactions) / max_user_id / max_item_id
+        ))
+
+        train_sampler = TrainSampler.create_from_config(
+            config['samplers'],
+            dataset=train_dataset,
+            num_users=max_user_id,
+            num_items=max_item_id
+        )
+        validation_sampler = EvalSampler.create_from_config(
+            config['samplers'],
+            dataset=validation_dataset,
+            num_users=max_user_id,
+            num_items=max_item_id
+        )
+        test_sampler = EvalSampler.create_from_config(
+            config['samplers'],
+            dataset=test_dataset,
+            num_users=max_user_id,
+            num_items=max_item_id
+        )
+
+        return cls(
+            train_sampler=train_sampler,
+            validation_sampler=validation_sampler,
+            test_sampler=test_sampler,
+            num_users=max_user_id,
+            num_items=max_item_id,
+            max_sequence_length=max_seq_len
+        )
+        
+    @classmethod
+    def flatten_item_sequence(cls, item_ids):
+        min_history_length = 3 # TODO: make this configurable
+        histories = []
+        for i in range(min_history_length-1, len(item_ids)):
+            histories.append(item_ids[:i+1])
+        return histories
+    
+    @classmethod
+    def _create_dataset(cls, dir_path, part, max_sequence_length=None, use_cached=False):
+        max_user_id = 0
+        max_item_id = 0
+        max_sequence_len = 0
+
+        if use_cached and os.path.exists(os.path.join(dir_path, '{}.pkl'.format(part))):
+            logger.info(f'Take cached dataset from {os.path.join(dir_path, "{}.pkl".format(part))}')
+
+            with open(os.path.join(dir_path, '{}.pkl'.format(part)), 'rb') as dataset_file:
+                dataset, max_user_id, max_item_id, max_sequence_len = pickle.load(dataset_file)
+        else:
+            logger.info('Cache is forecefully ignored.' if not use_cached else 'No cached dataset has been found.')
+            logger.info(f'Creating a dataset {os.path.join(dir_path, "{}.txt".format(part))}...')
+
+            dataset_path = os.path.join(dir_path, '{}.txt'.format(part))
+            with open(dataset_path, 'r') as f:
+                data = f.readlines()
+
+            sequence_info = cls._create_sequences(data, max_sequence_length)
+            user_sequences, item_sequences, max_user_id, max_item_id, max_sequence_len = sequence_info
+
+            dataset = []
+            for user_id, item_ids in zip(user_sequences, item_sequences):
+                flattened_item_ids = cls.flatten_item_sequence(item_ids)
+                for seq in flattened_item_ids:
+                    dataset.append({
+                        'user.ids': [user_id], 'user.length': 1,
+                        'item.ids': seq, 'item.length': len(seq)
+                    })
+
+            logger.info('{} dataset size: {}'.format(part, len(dataset)))
+            logger.info('{} dataset max sequence length: {}'.format(part, max_sequence_len))
+
+            with open(os.path.join(dir_path, '{}.pkl'.format(part)), 'wb') as dataset_file:
+                pickle.dump(
+                    (dataset, max_user_id, max_item_id, max_sequence_len),
+                    dataset_file
+                )
+
+        return dataset, max_user_id, max_item_id, max_sequence_len
 
 class GraphDataset(BaseDataset, config_name='graph'):
 
