@@ -68,7 +68,6 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
         # TODOPK ask about freezed masked & padding tokens
 
         self._item_embeddings.weight.data.copy_(extended_embeddings)
-        self._item_embeddings.weight.requires_grad = False
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
