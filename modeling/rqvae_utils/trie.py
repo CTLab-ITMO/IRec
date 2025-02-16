@@ -199,104 +199,72 @@ class Trie:
 
         return num_items, outer_level, inner_level  # bs x K + 1, bs, bs
 
-    def get_sorted_ids(self, stored_residuals, query_residual, raw_item_ids):
-        scores = torch.matmul(stored_residuals, query_residual)  # (guaranteed_len,)
-        # Sort guaranteed items by score (descending)
-        sorted_indices = torch.argsort(scores, descending=True)
-        sorted_ids = raw_item_ids[sorted_indices]
+    def get_scores(self, item_indices, idx, query_residuals_per_level):
+        bs = idx.shape[0]  # batch_size
 
-        return sorted_ids
+        # stored[n, i, :] = self.residuals_per_level[item_indices[n,i], idx_expanded[n,i], :]
+        stored = self.residuals_per_level[item_indices[None, :], idx[:, None], :]
 
-    def get_closest_single(
+        # Gather the corresponding query vectors for each row:
+        # query[n, :] = query_residuals_per_level[n, idx[n], :]
+        query = query_residuals_per_level[
+            torch.arange(bs, device=item_indices.device), idx, :
+        ]  # Shape [batch_size, D]
+
+        # Dot products => shape [batch_size, total_items]
+        scores = torch.einsum("bnd,bd->bn", stored, query)
+
+        return scores
+
+    def get_closest_vectorized(
         self,
-        guaranteed_raw_item_ids,  # guaranteed_len
-        guaranteed_stored_residuals,  # guaranteed_len x embedding_dim
-        guaranteed_query_residual,  # embedding_dim
-        left_raw_item_ids,  # left_len
-        left_stored_residuals,  # left_len x embedding_dim
-        left_query_residual,  # embedding_dim
-    ):
-        if guaranteed_raw_item_ids.shape[0] == 0:
-            guaranteed_sorted_ids = torch.tensor([], device=DEVICE)
-        else:
-            guaranteed_sorted_ids = self.get_sorted_ids(
-                guaranteed_stored_residuals,
-                guaranteed_query_residual,
-                guaranteed_raw_item_ids,
-            )
-
-        left_sorted_ids = self.get_sorted_ids(
-            left_stored_residuals, left_query_residual, left_raw_item_ids
-        )
-
-        # Concatenate the sorted lists
-        result_ids = torch.cat((guaranteed_sorted_ids, left_sorted_ids))
-
-        return result_ids
-
-    def get_closest(
-        self,
-        outer_masks,
-        inner_masks,
-        outer_levels,
-        inner_levels,
-        query_residuals_per_level,
+        outer_masks,  # shape: [batch_size, total_items] (boolean)
+        inner_masks,  # shape: [batch_size, total_items] (boolean)
+        outer_levels,  # shape: [batch_size]
+        inner_levels,  # shape: [batch_size]
+        query_residuals_per_level,  # shape: [batch_size, K+1, embedding_dim]
         items_to_query,
     ):
-        # K = 3
-        # self.residuals_per_level = 0, res, res+emb_2, res+emb_2+emb_1, res+emb_2+emb_1+emb_0 # K + 1
-        # query_residuals_per_level = 0, res, res+emb_2, res+emb_2+emb_1, res+emb_2+emb_1+emb_0 # K + 1
-        # outer_level = 3 # if K (get by dot only from outer) => inner_mask = outer_mask
-        # outer_mask.shape = total_items
-        # inner_mask.shape = total_items
+        device = outer_masks.device
+        bs, total_items = outer_masks.shape
 
-        raw_item_ids = []
+        item_indices = torch.arange(total_items, device=device)
 
-        for (
-            outer_mask,
-            inner_mask,
-            outer_level,
-            inner_level,
-            query_residual_per_level,
-        ) in zip(
-            outer_masks,
-            inner_masks,
-            outer_levels,
-            inner_levels,
+        guaranteed_scores = self.get_scores(
+            item_indices,
+            -(inner_levels + 1),
             query_residuals_per_level,
-        ):
-            guaranteed = inner_mask  # guaranteed_len
-            left = outer_mask & ~inner_mask  # left_len
+        )
+        guaranteed_scores = torch.where(
+            inner_masks, guaranteed_scores, torch.tensor(float("-inf"), device=device)
+        )  # [batch_size, total_items]
 
-            assert guaranteed.sum() + left.sum() == outer_mask.sum()
+        left_scores = self.get_scores(
+            item_indices,
+            -outer_levels,
+            query_residuals_per_level,
+        )
+        left_masks = outer_masks & ~inner_masks
+        left_scores = torch.where(
+            left_masks, left_scores, torch.tensor(float("-inf"), device=device)
+        )  # [batch_size, total_items]
 
-            # self.residuals_per_level.shape = total_items, K + 1, embedding_dim
-            guaranteed_raw_item_ids = self.raw_item_ids[guaranteed]  # guaranteed_len
-            guaranteed_stored_residuals = self.residuals_per_level[guaranteed][
-                :, -(inner_level + 1)
-            ]  # guaranteed_len x embedding_dim
-            guaranteed_query_residual = query_residual_per_level[
-                -(inner_level + 1)
-            ]  # embedding_dim
+        _, guaranteed_indices = torch.topk(
+            guaranteed_scores, items_to_query, dim=1
+        )  # [batch_size, items_to_query]
+        _, left_indices = torch.topk(
+            left_scores, items_to_query, dim=1
+        )  # [batch_size, items_to_query]
 
-            left_raw_item_ids = self.raw_item_ids[left]  # left_len
-            left_stored_residuals = self.residuals_per_level[left][:, -outer_level]  # left_len x embedding_dim
-            left_query_residual = query_residual_per_level[
-                -outer_level
-            ]  # embedding_dim
+        indices = torch.cat(
+            [guaranteed_indices, left_indices], dim=1
+        )  # [batch_size, 2 * items_to_query]
 
-            result_ids = self.get_closest_single(
-                guaranteed_raw_item_ids,
-                guaranteed_stored_residuals,
-                guaranteed_query_residual,
-                left_raw_item_ids,
-                left_stored_residuals,
-                left_query_residual,
-            )
+        top_ids = self.raw_item_ids[indices][
+            :, :items_to_query
+        ]  # [batch_size, items_to_query]
 
-            raw_item_ids.append(result_ids[:items_to_query])
-
-        return torch.stack(raw_item_ids).int()  # TODO
+        return top_ids
 
     def query(
         self, semantic_ids: torch.Tensor, residuals: torch.Tensor, items_to_query: int
@@ -349,7 +317,7 @@ class Trie:
             semantic_ids, residuals
         )
 
-        raw_item_ids = self.get_closest(
+        raw_item_ids = self.get_closest_vectorized(
             outer_masks,
             inner_masks,
             outer_levels,
