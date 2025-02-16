@@ -28,7 +28,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         num_encoder_layers,
         num_decoder_layers,
         dim_feedforward,
-        codebook_sizes,
         dropout=0.0,
         activation="relu",
         layer_norm_eps=1e-9,
@@ -71,7 +70,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         self._solver: CollisionSolver = solver
 
-        self._codebook_sizes = codebook_sizes
+        self._codebook_sizes = rqvae_model.codebook_sizes
 
         self._codebook_item_embeddings_stacked = torch.stack(
             [codebook for codebook in rqvae_model.codebooks]
@@ -96,7 +95,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             item_ids.to(DEVICE),
         )
 
-        self._bos_token_id = codebook_sizes[0]
+        self._bos_token_id = self._codebook_sizes[0]
         self._bos_weight = nn.Parameter(
             torch.nn.init.trunc_normal_(
                 torch.zeros(embedding_dim),
@@ -107,7 +106,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         )
 
         self._codebook_embeddings = nn.Embedding(
-            num_embeddings=len(codebook_sizes) + 2, embedding_dim=embedding_dim
+            num_embeddings=len(self._codebook_sizes) + 2, embedding_dim=embedding_dim
         )  # + 2 for bos token & residual
 
         self._init_weights(initializer_range)
@@ -170,7 +169,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             num_encoder_layers=config["num_encoder_layers"],
             num_decoder_layers=config["num_decoder_layers"],
             dim_feedforward=config.get("dim_feedforward", 4 * config["embedding_dim"]),
-            codebook_sizes=rqvae_model.codebook_sizes,
             dropout=config.get("dropout", 0.0),
             initializer_range=config.get("initializer_range", 0.02),
         )

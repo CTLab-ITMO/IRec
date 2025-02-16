@@ -50,6 +50,47 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             dropout=config.get("dropout", 0.0),
             initializer_range=config.get("initializer_range", 0.02),
         )
+        
+    
+    def get_item_embeddings(self, events):
+        embs = self._item_id_to_semantic_embedding[
+            events - 1
+        ]  # len(events), len(self._codebook_sizes) + 1, embedding_dim
+        return embs.view(
+            len(events) * (len(self._codebook_sizes) + 1), self._embedding_dim
+        )
+
+    def get_init_item_embeddings(self, events):
+        # convert to semantic ids
+        semantic_ids = self._item_id_to_semantic_id[
+            events - 1
+        ]  # len(events), len(codebook_sizes)
+
+        result = []
+        for semantic_id in semantic_ids:
+            item_repr = []
+            for codebook_idx, codebook_id in enumerate(semantic_id):
+                item_repr.append(
+                    self._codebook_item_embeddings_stacked[codebook_idx][codebook_id]
+                )
+            result.append(torch.stack(item_repr))
+
+        semantic_embeddings = torch.stack(result)
+
+        # get residuals
+        residual = self._item_id_to_residual[events - 1]
+        # text_embeddings = self._item_id_to_text_embedding[events - 1]
+        # residual = text_embeddings - semantic_embeddings.sum(dim=1)
+        residual = residual.unsqueeze(1)
+
+        # get true item embeddings
+        item_embeddings = torch.cat(
+            [semantic_embeddings, residual], dim=1
+        )  # len(events), len(self._codebook_sizes) + 1, embedding_dim
+
+        # item_embeddings = item_embeddings.view(-1, self._embedding_dim) # (all_batch_events, embedding_dim)
+
+        return item_embeddings
 
     def forward(self, inputs):
         all_sample_events = inputs[
@@ -59,6 +100,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             "{}.length".format(self._sequence_prefix)
         ]  # (batch_size)
 
+        all_sample_lengths = all_sample_lengths * (len(self._codebook_sizes) + 1)
         embeddings, mask = self._apply_sequential_encoder(
             all_sample_events, all_sample_lengths
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
@@ -126,3 +168,25 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             )  # (batch_size, 20)
 
             return indices
+        
+    def _encoder_pos_embeddings(self, lengths, mask):
+        def position_lambda(x):
+            return x // (len(self._codebook_sizes) + 1)  # 5 5 5 4 4 4 3 3 3 ...
+
+        # TODO +1 for residual embedding
+
+        position_embeddings = self._get_position_embeddings(
+            lengths, mask, position_lambda, self._position_embeddings
+        )
+
+        def codebook_lambda(x):
+            x = len(self._codebook_sizes) - x % (len(self._codebook_sizes) + 1)
+            x[x == len(self._codebook_sizes)] = len(self._codebook_sizes) + 1
+            # 0 1 2 3 5 0 1 2 3 5 ... # len(self._codebook_sizes) for bos, len(self._codebook_sizes) + 1 for residual
+            return x
+
+        codebook_embeddings = self._get_position_embeddings(
+            lengths, mask, codebook_lambda, self._codebook_embeddings
+        )
+        
+        return position_embeddings + codebook_embeddings
