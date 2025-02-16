@@ -75,14 +75,14 @@ if __name__ == "__main__":
     q_residuals = torch.randn(batch_size, embedding_dim).to(DEVICE)
 
     total_time = 0
-    n_exps = 1
+    n_exps = 20
 
     memory_stats(1)
     for i in range(n_exps):
         now = time.time()
         item_ids = trie.query(q_semantic_ids, q_residuals, items_to_query)
         total_time += time.time() - now
-        stats(q_semantic_ids[:3], 256, tree.sids, item_ids[:3])
+        #stats(q_semantic_ids[:3], 256, tree.sids, item_ids[:3])
 
     print(f"Time per query: {total_time / n_exps * 1000:.2f} ms")
 
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         now = time.time()
         simplified_tree_ids = simplified_tree.get_ids(q_semantic_ids, items_to_query)
         total_time += time.time() - now
-        stats(q_semantic_ids[:3], 256, tree.sids, simplified_tree_ids[:3])
+        #stats(q_semantic_ids[:3], 256, tree.sids, simplified_tree_ids[:3])
 
     print(f"Time per query: {total_time / n_exps * 1000:.2f} ms")
 
@@ -100,10 +100,20 @@ if __name__ == "__main__":
 
     for i in range(n_exps):
         now = time.time()
-        tree_ids = tree.get_ids(q_semantic_ids, q_residuals, items_to_query)
+        simplified_tree_ids = simplified_tree._get_ids(q_semantic_ids, items_to_query)
         total_time += time.time() - now
-        stats(q_semantic_ids[:3], 256, tree.sids, tree_ids[:3])
+        #stats(q_semantic_ids[:3], 256, tree.sids, simplified_tree_ids[:3])
 
     print(f"Time per query: {total_time / n_exps * 1000:.2f} ms")
 
     memory_stats(4)
+
+    for i in range(n_exps):
+        now = time.time()
+        tree_ids = tree.get_ids(q_semantic_ids, q_residuals, items_to_query)
+        total_time += time.time() - now
+        #stats(q_semantic_ids[:3], 256, tree.sids, tree_ids[:3])
+
+    print(f"Time per query: {total_time / n_exps * 1000:.2f} ms")
+
+    memory_stats(5)

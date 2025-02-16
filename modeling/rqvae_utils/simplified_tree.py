@@ -18,12 +18,12 @@ class SimplifiedTree:
         :param embeddings: тензор эмбеддингов для каждого из semantic ids (sem_ids_count, emb_dim)
         """
         assert embeddings.shape[1] == self.emb_dim
-        self.full_embeddings = embeddings.to(self.device)  # (sem_ids_count, emb_dim)
+        self.full_embeddings = embeddings.to(self.device).float()  # (sem_ids_count, emb_dim)
         self.sem_ids_count = embeddings.shape[0]
 
     def get_ids(self, request_sem_ids: torch.Tensor, k: int) -> torch.Tensor:
         """
-        :param request_sem_ids: батч из sem ids (batch_size, sem_id_len)
+        :param request_sem_ids: батч sem ids (batch_size, sem_id_len)
         :param k: количество ближайших элементов которые нужно взять (int)
         :return: тензор индексов ближайших k элементов из всех semantic_ids для каждого sem_id из батча (batch_size, k)
         """
@@ -46,3 +46,30 @@ class SimplifiedTree:
 
         indices = torch.argsort(diff_norm, descending=False, dim=1)[:, :k]  # (batch_size, k)
         return indices
+
+    def _get_ids(self, request_sem_ids: torch.Tensor, k: int) -> torch.Tensor:
+        """
+        Альтернатива get_ids, попытка ускорить
+        :param request_sem_ids: батч sem ids (batch_size, sem_id_len)
+        :param k: количество ближайших элементов которые нужно взять (int)
+        :return: тензор индексов ближайших k элементов из всех semantic_ids для каждого sem_id из батча (batch_size, k)
+        """
+        assert request_sem_ids.shape[1] == self.sem_id_len
+        assert 0 < k <= self.sem_ids_count
+        request_sem_ids = request_sem_ids.to(self.device)
+
+        index = (request_sem_ids.unsqueeze(-1)
+                 .expand(-1, -1, self.emb_dim)
+                 .unsqueeze(2))  # (batch_size, sem_id_len, 1, emb_dim)
+
+        request_embeddings = torch.gather(
+            input=self.embedding_table.unsqueeze(0).expand(request_sem_ids.shape[0], -1, -1, -1),
+            dim=2,
+            index=index
+        ).sum(1)  # (batch_size, emb_dim)
+
+        diff_norm = torch.cdist(self.full_embeddings, request_embeddings.unsqueeze(1), p=2).squeeze(
+            1)  # (batch_size, sem_ids_count)
+
+        _, indices = torch.topk(diff_norm, k=k, dim=1, largest=False)  # (batch_size, k)
+        return indices.squeeze(-1)
