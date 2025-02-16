@@ -65,10 +65,6 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
             all_positive_sample_events = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
 
             all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
-            # TODO last item for each event in batch
-            # TODO compare rqvae embs and textual
-            # TODO 4 embs (codebook vectors + residuals) for item intoo sasrec + positional embeddings
-            # rqvae EmbedingDim = TransformerEmbeddingDim
 
             all_embeddings = self._item_embeddings.weight  # (num_items + 2, embedding_dim)
 

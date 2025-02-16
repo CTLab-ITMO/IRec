@@ -391,8 +391,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             lengths, mask, position_lambda, self._position_embeddings
         )
 
-        # print(f"{position_embeddings.isnan().any()=}") # TODO fix NaN in pos_embs
-
         def codebook_lambda(x):
             x = len(self._codebook_sizes) - x % (len(self._codebook_sizes) + 1)
             x[x == len(self._codebook_sizes)] = len(self._codebook_sizes) + 1
@@ -402,8 +400,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         codebook_embeddings = self._get_position_embeddings(
             lengths, mask, codebook_lambda, self._codebook_embeddings
         )
-
-        # print(f"{codebook_embeddings.isnan().any()=}") # TODO fix NaN in pos_embs
 
         return position_embeddings + codebook_embeddings
 
@@ -444,7 +440,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         position_embeddings = embedding_layer(
             positions
         )  # (all_batch_events, embedding_dim)
-        # print(f"{position_embeddings.isnan().any()=}") # TODO without embeddings also NaN
+
         position_embeddings, _ = create_masked_tensor(
             data=position_embeddings, lengths=lengths
         )  # (batch_size, seq_len, embedding_dim)
