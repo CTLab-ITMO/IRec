@@ -56,7 +56,6 @@ class Tree:
         :return: префиксы всех длин sem_ids, количество sem_id на каждой глубине дерева
         """
         assert sem_ids.shape[1] == self.sem_id_len
-        assert sem_ids.device == self.device
 
         offsets = torch.arange(self.sem_id_len + 1, device=self.device)
         i = torch.arange(self.sem_id_len, device=self.device)
