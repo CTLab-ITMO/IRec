@@ -15,7 +15,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         rqvae_model,
         item_id_to_semantic_id,
         item_id_to_residual,
-        item_id_to_text_embedding,
         solver,
         sequence_prefix,
         pred_prefix,
@@ -81,7 +80,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         self._item_id_to_semantic_id = item_id_to_semantic_id
         self._item_id_to_residual = item_id_to_residual
-        self._item_id_to_text_embedding = item_id_to_text_embedding
 
         item_ids = torch.arange(1, len(item_id_to_semantic_id) + 1)
 
@@ -127,11 +125,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         codebook_sizes = rqvae_model.codebook_sizes
         assert all([book_size == codebook_sizes[0] for book_size in codebook_sizes])
 
-        return rqvae_model
-
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        rqvae_model = cls.init_rqvae(config)
         embs_extractor = torch.load(config["embs_extractor_path"], weights_only=False)
 
         embs_extractor = embs_extractor.sort_index()
@@ -142,6 +135,12 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         text_embeddings = torch.stack(embs_extractor["embeddings"].tolist()).to(DEVICE)
 
         semantic_ids, residuals = rqvae_model({"embeddings": text_embeddings})
+
+        return rqvae_model, semantic_ids, residuals, item_ids
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        rqvae_model, semantic_ids, residuals, item_ids = cls.init_rqvae(config)
 
         solver = CollisionSolver(
             residual_dim=residuals.shape[1],
@@ -156,7 +155,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             rqvae_model=rqvae_model,
             item_id_to_semantic_id=semantic_ids,
             item_id_to_residual=residuals,
-            item_id_to_text_embedding=text_embeddings,
             solver=solver,
             sequence_prefix=config["sequence_prefix"],
             pred_prefix=config["predictions_prefix"],
@@ -380,16 +378,12 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         # get residuals
         residual = self._item_id_to_residual[events - 1]
-        # text_embeddings = self._item_id_to_text_embedding[events - 1]
-        # residual = text_embeddings - semantic_embeddings.sum(dim=1)
         residual = residual.unsqueeze(1)
 
         # get true item embeddings
         item_embeddings = torch.cat(
             [semantic_embeddings, residual], dim=1
         )  # len(events), len(self._codebook_sizes) + 1, embedding_dim
-
-        # item_embeddings = item_embeddings.view(-1, self._embedding_dim) # (all_batch_events, embedding_dim)
 
         return item_embeddings
 

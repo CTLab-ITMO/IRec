@@ -14,6 +14,7 @@ from .pure_mf import PureMF
 from .random import RandomModel
 from .sasrec import SasRecModel, SasRecInBatchModel
 from .sasrec_freezed import SasRecFreezedModel
+from .sasrec_semantic import SasRecSemanticModel
 from .sasrec_ce import SasRecCeModel
 from .s3rec import S3RecModel
 from .rqvae import RqVaeModel
