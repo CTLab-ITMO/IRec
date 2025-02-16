@@ -5,19 +5,19 @@ from utils import create_masked_tensor
 
 class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
     def __init__(
-            self,
-            sequence_prefix,
-            positive_prefix,
-            num_items,
-            max_sequence_length,
-            embedding_dim,
-            num_heads,
-            num_layers,
-            dim_feedforward,
-            dropout=0.0,
-            activation='relu',
-            layer_norm_eps=1e-9,
-            initializer_range=0.02
+        self,
+        sequence_prefix,
+        positive_prefix,
+        num_items,
+        max_sequence_length,
+        embedding_dim,
+        num_heads,
+        num_layers,
+        dim_feedforward,
+        dropout=0.0,
+        activation="relu",
+        layer_norm_eps=1e-9,
+        initializer_range=0.02,
     ):
         super().__init__(
             num_items=num_items,
@@ -29,7 +29,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             dropout=dropout,
             activation=activation,
             layer_norm_eps=layer_norm_eps,
-            is_causal=True
+            is_causal=True,
         )
         self._sequence_prefix = sequence_prefix
         self._positive_prefix = positive_prefix
@@ -73,7 +73,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             ]  # (all_batch_events, embedding_dim)
 
             all_embeddings = (
-                self.get_last_item_embeddings()
+                self._item_embeddings.weight
             )  # (num_items + 2, embedding_dim)
 
             # a -- all_batch_events, n -- num_items + 2, d -- embedding_dim
@@ -102,9 +102,13 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             negative_scores[:, 0] = -torch.inf  # Padding idx
             negative_scores[:, self._num_items + 1 :] = -torch.inf  # Mask idx
 
+            last_item_mask = (
+                torch.cumsum(mask.sum(dim=1), dim=0) - 1
+            )  # TODO ask if correct (mask, last True in each row, index as only Trues appeared)
+
             return {
                 "positive_scores": positive_scores,
-                "negative_scores": negative_scores,
+                "negative_scores": negative_scores[last_item_mask],
             }
         else:  # eval mode
             last_embeddings = self._get_last_embedding(
@@ -112,7 +116,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             )  # (batch_size, embedding_dim)
             # b - batch_size, n - num_candidates, d - embedding_dim
             candidate_scores = torch.einsum(
-                "bd,nd->bn", last_embeddings, self.get_last_item_embeddings()
+                "bd,nd->bn", last_embeddings, self._item_embeddings.weight
             )  # (batch_size, num_items + 2)
             candidate_scores[:, 0] = -torch.inf  # Padding id
             candidate_scores[:, self._num_items + 1 :] = -torch.inf  # Mask id

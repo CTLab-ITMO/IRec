@@ -97,11 +97,9 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
             negative_scores[:, 0] = -torch.inf  # Padding idx
             negative_scores[:, self._num_items + 1:] = -torch.inf  # Mask idx
 
-            last_item_mask = torch.cumsum(mask.sum(dim=1), dim=0) - 1 # TODO ask if correct (mask, last True in eahch row, index as only Trues appeared)
-
             return {
                 'positive_scores': positive_scores,
-                'negative_scores': negative_scores[last_item_mask]
+                'negative_scores': negative_scores
             }
         else:  # eval mode
             last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)

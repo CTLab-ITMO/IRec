@@ -85,11 +85,11 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
             initializer_range=config.get("initializer_range", 0.02),
         )
 
-    def get_item_embeddings(self, events):  # TODO refactor (single projection)
-        return self._projector(self._item_embeddings(events))
-
-    def get_last_item_embeddings(self):
-        return self._projector(self._item_embeddings.weight)
+    def get_item_embeddings(self, events=None):  # TODO refactor (single projection)
+        if events is None:
+            return self._projector(self._item_embeddings.weight)
+        else:
+            return self._projector(self._item_embeddings(events))
 
     def forward(self, inputs):
         all_sample_events = inputs[
@@ -113,7 +113,7 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
             ]  # (all_batch_events, embedding_dim)
 
             all_embeddings = (
-                self.get_last_item_embeddings()
+                self.get_item_embeddings()
             )  # (num_items + 2, embedding_dim)
 
             # a -- all_batch_events, n -- num_items + 2, d -- embedding_dim
@@ -142,9 +142,13 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
             negative_scores[:, 0] = -torch.inf  # Padding idx
             negative_scores[:, self._num_items + 1 :] = -torch.inf  # Mask idx
 
+            last_item_mask = (
+                torch.cumsum(mask.sum(dim=1), dim=0) - 1
+            )  # TODO ask if correct (mask, last True in each row, index as only Trues appeared)
+
             return {
                 "positive_scores": positive_scores,
-                "negative_scores": negative_scores,
+                "negative_scores": negative_scores[last_item_mask],
             }
         else:  # eval mode
             last_embeddings = self._get_last_embedding(
@@ -152,7 +156,7 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
             )  # (batch_size, embedding_dim)
             # b - batch_size, n - num_candidates, d - embedding_dim
             candidate_scores = torch.einsum(
-                "bd,nd->bn", last_embeddings, self.get_last_item_embeddings()
+                "bd,nd->bn", last_embeddings, self.get_item_embeddings()
             )  # (batch_size, num_items + 2)
             candidate_scores[:, 0] = -torch.inf  # Padding id
             candidate_scores[:, self._num_items + 1 :] = -torch.inf  # Mask id
