@@ -108,9 +108,9 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
                 "{}.ids".format(self._positive_prefix)
             ]  # (all_batch_events)
 
-            all_sample_embeddings = embeddings[
-                mask
-            ]  # (all_batch_events, embedding_dim)
+            last_embeddings = self._get_last_embedding(
+                embeddings, mask
+            )  # (batch_size, embedding_dim)
 
             all_embeddings = (
                 self.get_item_embeddings()
@@ -118,20 +118,17 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
 
             # a -- all_batch_events, n -- num_items + 2, d -- embedding_dim
             all_scores = torch.einsum(
-                "ad,nd->an", all_sample_embeddings, all_embeddings
-            )  # (all_batch_events, num_items + 2)
+                "ad,nd->an", last_embeddings, all_embeddings
+            )  # (batch_size, num_items + 2)
 
             positive_scores = torch.gather(
                 input=all_scores, dim=1, index=all_positive_sample_events[..., None]
-            )  # (all_batch_items, 1)
+            )  # (batch_size, 1)
 
             sample_ids, _ = create_masked_tensor(
                 data=all_sample_events, lengths=all_sample_lengths
             )  # (batch_size, seq_len)
 
-            sample_ids = torch.repeat_interleave(
-                sample_ids, all_sample_lengths, dim=0
-            )  # (all_batch_events, seq_len)
 
             negative_scores = torch.scatter(
                 input=all_scores,
@@ -142,13 +139,9 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
             negative_scores[:, 0] = -torch.inf  # Padding idx
             negative_scores[:, self._num_items + 1 :] = -torch.inf  # Mask idx
 
-            last_item_mask = (
-                torch.cumsum(mask.sum(dim=1), dim=0) - 1
-            )  # TODO ask if correct (mask, last True in each row, index as only Trues appeared)
-
             return {
                 "positive_scores": positive_scores,
-                "negative_scores": negative_scores[last_item_mask],
+                "negative_scores": negative_scores,
             }
         else:  # eval mode
             last_embeddings = self._get_last_embedding(
