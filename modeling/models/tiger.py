@@ -234,9 +234,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             residuals = tgt_embeddings[:, -1, :]
             semantic_ids = semantic_ids.to(torch.int64)
 
-            item_ids = self._trie.query(
-                semantic_ids, residuals, items_to_query=20
-            )
+            item_ids = self._trie.query(semantic_ids, residuals, items_to_query=20)
 
             return item_ids
 
@@ -252,7 +250,9 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             batch_size, 1, -1
         )  # (batch_size, 1, embedding_dim)
 
-        tgt_embeddings = torch.cat([bos_embeddings, tgt_embeddings[:, :-1, :]], dim=1)
+        tgt_embeddings = torch.cat(
+            [bos_embeddings, tgt_embeddings[:, :-1, :]], dim=1
+        )  # remove residual by using :-1
 
         label_len = tgt_mask.shape[1]
 
@@ -287,21 +287,32 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
     def _apply_decoder_autoregressive(self, encoder_embeddings, encoder_mask):
         batch_size = encoder_embeddings.shape[0]
+        embedding_dim = encoder_embeddings.shape[2]
 
         tgt_embeddings = (
-            self._bos_weight.unsqueeze(0).unsqueeze(0).expand(batch_size, 1, -1)
+            self._bos_weight.unsqueeze(0)
+            .unsqueeze(0)
+            .expand(batch_size, 1, embedding_dim)
         )
-        tgt_mask = torch.ones(batch_size, 1, dtype=torch.bool, device=DEVICE)
 
         semantic_ids = torch.tensor([], device=DEVICE)
 
-        for step in range(len(self._codebook_sizes) + 1):  # semantic_id + residual
-            position_embeddings = self._decoder_pos_embeddings(
-                torch.full((batch_size,), tgt_embeddings.shape[1], device=DEVICE),
-                tgt_mask,
-            )
+        for step in range(len(self._codebook_sizes) + 1):  # semantic_id_seq + residual
+            if step == 0:
+                indexes = torch.full(
+                    (batch_size, 1), len(self._codebook_sizes), device=DEVICE
+                )  # len(self._codebook_sizes) for bos
+            else:
+                indexes = torch.cat(
+                    [indexes, torch.full((batch_size, 1), step - 1, device=DEVICE)],
+                    dim=1,
+                )
 
-            curr_embeddings = tgt_embeddings + position_embeddings
+            position_embeddings = self._codebook_embeddings(indexes.view(-1))
+
+            curr_embeddings = tgt_embeddings + position_embeddings.view(
+                batch_size, step + 1, embedding_dim
+            )
 
             curr_embeddings = self._decoder_layernorm(curr_embeddings)
             curr_embeddings = self._decoder_dropout(curr_embeddings)
@@ -315,6 +326,12 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             next_token_embedding = decoder_output[
                 :, -1, :
             ]  # batch_size x embedding_dim
+
+            # TODOPK ask if we take last
+            # torch.Size([256, 1, 64])
+            # torch.Size([256, 2, 64])
+            # torch.Size([256, 3, 64])
+            # torch.Size([256, 4, 64])
 
             if step < len(self._codebook_sizes):
                 codebook = self._codebook_item_embeddings_stacked[
@@ -332,9 +349,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
             tgt_embeddings = torch.cat(
                 [tgt_embeddings, next_token_embedding.unsqueeze(1)], dim=1
-            )
-            tgt_mask = torch.ones(
-                batch_size, tgt_embeddings.shape[1], dtype=torch.bool, device=DEVICE
             )
 
         return semantic_ids, tgt_embeddings
@@ -381,9 +395,9 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
     def _encoder_pos_embeddings(self, lengths, mask):
         def position_lambda(x):
-            return x // (len(self._codebook_sizes) + 1)  # 5 5 5 4 4 4 3 3 3 ...
-
-        # TODOPK +1 for residual embedding
+            return x // (
+                len(self._codebook_sizes) + 1
+            )  # 5 5 5 5 4 4 4 4 ..., +1 for residual
 
         position_embeddings = self._get_position_embeddings(
             lengths, mask, position_lambda, self._position_embeddings
@@ -392,7 +406,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         def codebook_lambda(x):
             x = len(self._codebook_sizes) - x % (len(self._codebook_sizes) + 1)
             x[x == len(self._codebook_sizes)] = len(self._codebook_sizes) + 1
-            # 0 1 2 3 5 0 1 2 3 5 ... # len(self._codebook_sizes) for bos, len(self._codebook_sizes) + 1 for residual
+            # 0 1 2 4 0 1 2 4 ... # len(self._codebook_sizes) + 1 = 4 for residual
             return x
 
         codebook_embeddings = self._get_position_embeddings(
@@ -405,7 +419,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         def codebook_lambda(x):
             non_bos = x < len(self._codebook_sizes)
             x[non_bos] = (len(self._codebook_sizes) - 1) - x[non_bos]
-            return x  # 3, 0, 1, 2, 3, 0, 1, 2 ...
+            return x  # 3, 0, 1, 2, 3, 0, 1, 2 ... len(self._codebook_sizes) = 3 for bos
 
         codebook_embeddings = self._get_position_embeddings(
             lengths, mask, codebook_lambda, self._codebook_embeddings
