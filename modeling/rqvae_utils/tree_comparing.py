@@ -61,13 +61,15 @@ if __name__ == "__main__":
     print(f"Time for trie init: {(time.time() - now) * 1000:.2f} ms")
 
     now = time.time()
-    tree.init_tree(semantic_ids, residuals)
+    tree.build_tree_structure(semantic_ids, residuals)
     print(f"Time for tree init: {(time.time() - now) * 1000:.2f} ms")
 
     now = time.time()
-    full_embeddings = tree.calculate_full(semantic_ids, torch.zeros_like(residuals)).sum(1)
-    simplified_tree.init_tree(full_embeddings)
+    simplified_tree.build_tree_structure(semantic_ids, residuals)
     print(f"Time for simplified tree init: {(time.time() - now) * 1000:.2f} ms")
+
+    full_embeddings = tree.calculate_full(semantic_ids, residuals).sum(1)
+    print(torch.all((full_embeddings == simplified_tree.full_embeddings) == True))
 
     items_to_query = 20
     batch_size = 256
@@ -90,7 +92,7 @@ if __name__ == "__main__":
 
     for i in range(n_exps):
         now = time.time()
-        simplified_tree_ids = simplified_tree.get_ids(q_semantic_ids, items_to_query)
+        simplified_tree_ids = simplified_tree.query(q_semantic_ids, items_to_query)
         total_time += time.time() - now
         #stats(q_semantic_ids[:3], 256, tree.sids, simplified_tree_ids[:3])
 
@@ -100,7 +102,7 @@ if __name__ == "__main__":
 
     for i in range(n_exps):
         now = time.time()
-        simplified_tree_ids = simplified_tree._get_ids(q_semantic_ids, items_to_query)
+        simplified_tree_ids = simplified_tree._query(q_semantic_ids, items_to_query)
         total_time += time.time() - now
         #stats(q_semantic_ids[:3], 256, tree.sids, simplified_tree_ids[:3])
 
@@ -110,7 +112,7 @@ if __name__ == "__main__":
 
     for i in range(n_exps):
         now = time.time()
-        tree_ids = tree.get_ids(q_semantic_ids, q_residuals, items_to_query)
+        tree_ids = tree.query(q_semantic_ids, q_residuals, items_to_query)
         total_time += time.time() - now
         #stats(q_semantic_ids[:3], 256, tree.sids, tree_ids[:3])
 

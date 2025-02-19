@@ -19,7 +19,7 @@ class Tree:
         self.sem_ids_embs: torch.Tensor = torch.empty((0, 0))
         self.sids: torch.Tensor = torch.empty((0, 0))  # будет (sem_id_len, )
 
-    def init_tree(self, semantic_ids, residuals):
+    def build_tree_structure(self, semantic_ids, residuals):
         """
         :param semantic_ids: (sem_ids_count, sem_id_len)
         :param residuals: (sem_ids_count, emb_dim)
@@ -164,7 +164,7 @@ class Tree:
     def mask_result(self, result: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         return torch.where(mask, result, torch.tensor(float('-inf'), device=self.device))
 
-    def get_ids(self, request_sem_ids: torch.Tensor, request_residuals: torch.Tensor, k: int) -> torch.Tensor:
+    def query(self, request_sem_ids: torch.Tensor, request_residuals: torch.Tensor, k: int) -> torch.Tensor:
         """
         :param request_sem_ids: батч из sem_ids (batch_size, sem_id_len)
         :param request_residuals: батч из остатков (batch_size, emb_dim)

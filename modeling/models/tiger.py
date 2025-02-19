@@ -144,8 +144,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         semantic_ids, residuals = rqvae_model({"embeddings": text_embeddings})
 
         solver = CollisionSolver(
-            residual_dim=residuals.shape[1],
-            emb_dim=len(rqvae_model.codebook_sizes),
+            emb_dim=residuals.shape[1],
+            sem_id_len=len(rqvae_model.codebook_sizes),
             codebook_size=rqvae_model.codebook_sizes[0],
         )
         solver.create_query_candidates_dict(

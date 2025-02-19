@@ -13,15 +13,37 @@ class SimplifiedTree:
         self.sem_ids_count: int = 0
         self.full_embeddings: torch.Tensor = torch.empty((0, 0))
 
-    def init_tree(self, embeddings: torch.Tensor) -> None:
+    def build_tree_structure(self, semantic_ids: torch.Tensor, residuals: torch.Tensor) -> None:
         """
-        :param embeddings: тензор эмбеддингов для каждого из semantic ids (sem_ids_count, emb_dim)
+        :param semantic_ids: (sem_ids_count, sem_id_len)
+        :param residuals: (sem_ids_count, emb_dim)
         """
-        assert embeddings.shape[1] == self.emb_dim
-        self.full_embeddings = embeddings.to(self.device).float()  # (sem_ids_count, emb_dim)
-        self.sem_ids_count = embeddings.shape[0]
+        self.sem_ids_count = semantic_ids.shape[0]
+        assert residuals.shape == (self.sem_ids_count, self.emb_dim)
+        assert semantic_ids.shape == (self.sem_ids_count, self.sem_id_len)
 
-    def get_ids(self, request_sem_ids: torch.Tensor, k: int) -> torch.Tensor:
+        semantic_ids = semantic_ids.to(self.device)
+        residuals = residuals.to(self.device).float()
+        self.full_embeddings = self.calculate_full(semantic_ids).float() + residuals
+
+    def calculate_full(self, sem_ids: torch.Tensor) -> torch.Tensor:
+        """
+        :param sem_ids: набор из sem ids (count, sem_id_len)
+        :return: эмбеддинг для каждого sem_id из набора (count, emb_dim)
+        """
+        assert sem_ids.shape[1] == self.sem_id_len
+        sem_ids = sem_ids.to(self.device)
+
+        expanded_emb_table = (self.embedding_table.unsqueeze(0)
+                              .expand(sem_ids.shape[0], -1, -1, -1))  # (count, sem_id_len, codebook_size, emb_dim)
+
+        index = (sem_ids.unsqueeze(-1)
+                 .expand(-1, -1, self.emb_dim)
+                 .unsqueeze(2))  # (count, sem_id_len, 1, emb_dim)
+
+        return torch.gather(input=expanded_emb_table, index=index, dim=2).sum(1).squeeze(1)  # (count, emb_dim)
+
+    def query(self, request_sem_ids: torch.Tensor, k: int) -> torch.Tensor:
         """
         :param request_sem_ids: батч sem ids (batch_size, sem_id_len)
         :param k: количество ближайших элементов которые нужно взять (int)
@@ -29,17 +51,11 @@ class SimplifiedTree:
         """
         assert request_sem_ids.shape[1] == self.sem_id_len
         assert 0 < k <= self.sem_ids_count
+
         request_sem_ids = request_sem_ids.to(self.device)
+        request_embeddings = self.calculate_full(request_sem_ids)  # (batch_size, emb_dim)
 
-        expanded_emb_table = (self.embedding_table.unsqueeze(0)
-                              .expand(request_sem_ids.shape[0], -1, -1,
-                                      -1))  # (batch_size, sem_id_len, codebook_size, emb_dim)
-
-        index = (request_sem_ids.unsqueeze(-1)
-                 .expand(-1, -1, self.emb_dim)
-                 .unsqueeze(2))  # (batch_size, sem_id_len, 1, emb_dim)
-
-        request_embeddings = (torch.gather(input=expanded_emb_table, index=index, dim=2).sum(1)
+        request_embeddings = (request_embeddings.unsqueeze(1)
                               .expand(-1, self.sem_ids_count, -1))  # (batch_size, sem_ids_count, emb_dim)
 
         diff_norm = torch.norm(self.full_embeddings - request_embeddings, p=2, dim=2)  # (batch_size, sem_ids_count)
@@ -47,7 +63,7 @@ class SimplifiedTree:
         indices = torch.argsort(diff_norm, descending=False, dim=1)[:, :k]  # (batch_size, k)
         return indices
 
-    def _get_ids(self, request_sem_ids: torch.Tensor, k: int) -> torch.Tensor:
+    def _query(self, request_sem_ids: torch.Tensor, k: int) -> torch.Tensor:
         """
         Альтернатива get_ids, попытка ускорить
         :param request_sem_ids: батч sem ids (batch_size, sem_id_len)
