@@ -46,9 +46,9 @@ if __name__ == "__main__":
     ).to(DEVICE)
 
     trie = Trie(rqvae_model)
-    tree = Tree(emb_table, DEVICE)
-    simplified_tree = SimplifiedTree(emb_table, DEVICE)
-    simplified_tree_wr = SimplifiedTree(emb_table, DEVICE)
+    tree = Tree(rqvae_model, DEVICE)
+    simplified_tree = SimplifiedTree(rqvae_model, DEVICE)
+    simplified_tree_wr = SimplifiedTree(rqvae_model, DEVICE)
     alphabet_size = 10
 
     N = 12101

@@ -1,18 +1,21 @@
 import numpy as np
 import torch
 
+from models import RqVaeModel
 from utils import DEVICE
 
 
 class Tree:
-    def __init__(self, embedding_table, device: torch.device = DEVICE):
+    def __init__(self, rqvae_model: RqVaeModel, device: torch.device = DEVICE):
         """
-        :param embedding_table: Тензор из RQ-VAE # (semantic_id_len, codebook_size, emb_dim)
-        :param device: Устройство
+        :param rqvae_model: обученная модель rq-vae
+        :param device: устройство
         """
-        self.embedding_table: torch.Tensor = embedding_table  # (semantic_id_len, codebook_size, emb_dim)
-        self.sem_id_len, self.codebook_size, self.emb_dim = embedding_table.shape
         self.device: torch.device = device
+        self.embedding_table: torch.Tensor = torch.stack(
+            [cb for cb in rqvae_model.codebooks]
+        ).to(self.device)  # (semantic_id_len, codebook_size, emb_dim)
+        self.sem_id_len, self.codebook_size, self.emb_dim = self.embedding_table.shape
         self.key: torch.Tensor = torch.empty((0, 0))
         self.A: torch.Tensor = torch.empty((0, 0))  # будет (max_sem_id, )
         self.sem_ids_count: int = -1
@@ -161,14 +164,15 @@ class Tree:
         assert decomposed_embeddings.shape == (self.sem_ids_count, self.sem_id_len + 1, self.emb_dim)
 
         mask = (torch.arange(1, self.sem_id_len + 2, device=self.device) >=
-                torch.arange(self.sem_id_len + 2, 0, -1,device=self.device).unsqueeze(1)).float()
+                torch.arange(self.sem_id_len + 2, 0, -1, device=self.device).unsqueeze(1)).float()
         sids_mask = mask[levels + 1].unsqueeze(-1)  # (batch_size, sem_id_len + 1, 1)
         return torch.einsum('nld,bld->bnd', decomposed_embeddings, sids_mask)  # (batch_size, sem_ids_count, emb_dim)
 
     def mask_result(self, result: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         return torch.where(mask, result, torch.tensor(float('-inf'), device=self.device))
 
-    def query(self, request_sem_ids: torch.Tensor, request_residuals: torch.Tensor, items_to_query: int) -> torch.Tensor:
+    def query(self, request_sem_ids: torch.Tensor, request_residuals: torch.Tensor,
+              items_to_query: int) -> torch.Tensor:
         """
         :param request_sem_ids: батч из sem_ids (batch_size, sem_id_len)
         :param request_residuals: батч из остатков (batch_size, emb_dim)

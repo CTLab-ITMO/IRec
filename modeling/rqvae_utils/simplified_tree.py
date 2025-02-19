@@ -1,20 +1,26 @@
 import torch
 
+from models import RqVaeModel
+from utils import DEVICE
+
 
 class SimplifiedTree:
-    def __init__(self, embedding_table: torch.Tensor, device: torch.device = torch.device('cpu')):
+    def __init__(self, rqvae_model: RqVaeModel, device: torch.device = DEVICE):
         """
-        :param embedding_table: Тензор из RQ-VAE # (semantic_id_len, codebook_size, emb_dim)
-        :param device: Устройство
+        :param rqvae_model: обученная модель rq-vae
+        :param device: устройство
         """
-        self.embedding_table: torch.Tensor = embedding_table.to(device)  # (semantic_id_len, codebook_size, emb_dim)
-        self.sem_id_len, self.codebook_size, self.emb_dim = embedding_table.shape
         self.device: torch.device = device
+        self.embedding_table: torch.Tensor = torch.stack(
+            [cb for cb in rqvae_model.codebooks]
+        ).to(self.device)  # (semantic_id_len, codebook_size, emb_dim
+        self.sem_id_len, self.codebook_size, self.emb_dim = self.embedding_table.shape
         self.sem_ids_count: int = 0
         self.full_embeddings: torch.Tensor = torch.empty((0, 0))
         self.item_ids: torch.Tensor = torch.empty((0, 0))
 
-    def build_tree_structure(self, semantic_ids: torch.Tensor, residuals: torch.Tensor, item_ids: torch.Tensor, sum_with_residuals: bool = True) -> None:
+    def build_tree_structure(self, semantic_ids: torch.Tensor, residuals: torch.Tensor, item_ids: torch.Tensor,
+                             sum_with_residuals: bool = True) -> None:
         """
         :param sum_with_residuals: флаг, отвечающий за то учитывать ли остатки при выборе кандидатов
         :param semantic_ids: (sem_ids_count, sem_id_len)
@@ -27,7 +33,9 @@ class SimplifiedTree:
         assert item_ids.shape == (self.sem_ids_count,)
 
         semantic_ids = semantic_ids.to(self.device)
-        residuals = residuals.to(self.device).float() if sum_with_residuals else torch.zeros_like(residuals, device=self.device, dtype=torch.float)
+        residuals = residuals.to(self.device).float() if sum_with_residuals else torch.zeros_like(residuals,
+                                                                                                  device=self.device,
+                                                                                                  dtype=torch.float)
         self.full_embeddings = self.calculate_full(semantic_ids).float() + residuals
         self.item_ids = item_ids
 
