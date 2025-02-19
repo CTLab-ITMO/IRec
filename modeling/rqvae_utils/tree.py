@@ -18,18 +18,22 @@ class Tree:
         self.sem_ids_count: int = -1
         self.sem_ids_embs: torch.Tensor = torch.empty((0, 0))
         self.sids: torch.Tensor = torch.empty((0, 0))  # будет (sem_id_len, )
+        self.item_ids: torch.Tensor = torch.empty((0, 0))
 
-    def build_tree_structure(self, semantic_ids, residuals):
+    def build_tree_structure(self, semantic_ids: torch.Tensor, residuals: torch.Tensor, item_ids: torch.Tensor):
         """
         :param semantic_ids: (sem_ids_count, sem_id_len)
         :param residuals: (sem_ids_count, emb_dim)
+        :param item_ids: (sem_ids_count,)
         """
+        self.sem_ids_count = semantic_ids.shape[0]
 
         assert semantic_ids.shape[0] == residuals.shape[0]
         assert semantic_ids.shape[1] == self.sem_id_len
         assert residuals.shape[1] == self.emb_dim
+        assert item_ids.shape == (self.sem_ids_count,)
 
-        self.sem_ids_count = semantic_ids.shape[0]
+        self.item_ids = item_ids
         self.key = torch.tensor([self.codebook_size ** i for i in range(self.sem_id_len - 1, -1, -1)],
                                 dtype=torch.long, device=self.device)
         self.sids = self.get_sids(semantic_ids.float())  # (sem_id_len, )
@@ -164,20 +168,20 @@ class Tree:
     def mask_result(self, result: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         return torch.where(mask, result, torch.tensor(float('-inf'), device=self.device))
 
-    def query(self, request_sem_ids: torch.Tensor, request_residuals: torch.Tensor, k: int) -> torch.Tensor:
+    def query(self, request_sem_ids: torch.Tensor, request_residuals: torch.Tensor, items_to_query: int) -> torch.Tensor:
         """
         :param request_sem_ids: батч из sem_ids (batch_size, sem_id_len)
         :param request_residuals: батч из остатков (batch_size, emb_dim)
-        :param k: количество ближайших элементов которые нужно взять int
+        :param items_to_query: количество ближайших элементов которые нужно взять int
         :return: тензор индексов ближайших k элементов из всех semantic_ids для каждого sem_id из батча (batch_size, k)
         """
         assert request_sem_ids.shape[0] == request_residuals.shape[0]
         assert request_sem_ids.shape[1] == self.sem_id_len
         assert request_residuals.shape[1] == self.emb_dim
-        assert 0 <= k < self.sem_ids_count
+        assert 0 <= items_to_query < self.sem_ids_count
 
-        ol, ol_mask = self.calc_ol(request_sem_ids, k)
-        il, il_mask = self.calc_il(request_sem_ids, k)
+        ol, ol_mask = self.calc_ol(request_sem_ids, items_to_query)
+        il, il_mask = self.calc_il(request_sem_ids, items_to_query)
 
         il_mask = il_mask.detach().cpu()
         ol_mask = ol_mask.detach().cpu()
@@ -200,4 +204,5 @@ class Tree:
                                ~torch.cat([torch.ones_like(il_mask), torch.zeros_like(ol_mask)], dim=1),
                                ~torch.cat([il_mask, ol_mask], dim=1)))
 
-        return (ids % self.sem_ids_count)[:, :self.sem_ids_count][:, :k]  # (batch_size, k)
+        ids = (ids % self.sem_ids_count)[:, :self.sem_ids_count][:, :items_to_query]  # (batch_size, k)
+        return self.item_ids[ids]

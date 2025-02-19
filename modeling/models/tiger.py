@@ -2,7 +2,7 @@ import json
 
 import torch
 from models.base import SequentialTorchModel
-from rqvae_utils import CollisionSolver, Trie
+from rqvae_utils import CollisionSolver, SimplifiedTree
 from torch import nn
 from utils import DEVICE, create_masked_tensor, get_activation_function
 
@@ -87,7 +87,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
 
-        self._trie = Trie(rqvae_model)
+        self._trie = SimplifiedTree(rqvae_model)
 
         self._trie.build_tree_structure(
             item_id_to_semantic_id.to(DEVICE),
