@@ -14,8 +14,9 @@ class SimplifiedTree:
         self.full_embeddings: torch.Tensor = torch.empty((0, 0))
         self.item_ids: torch.Tensor = torch.empty((0, 0))
 
-    def build_tree_structure(self, semantic_ids: torch.Tensor, residuals: torch.Tensor, item_ids: torch.Tensor) -> None:
+    def build_tree_structure(self, semantic_ids: torch.Tensor, residuals: torch.Tensor, item_ids: torch.Tensor, sum_with_residuals: bool = True) -> None:
         """
+        :param sum_with_residuals: флаг, отвечающий за то учитывать ли остатки при выборе кандидатов
         :param semantic_ids: (sem_ids_count, sem_id_len)
         :param residuals: (sem_ids_count, emb_dim)
         :param item_ids: (sem_ids_count,)
@@ -26,7 +27,7 @@ class SimplifiedTree:
         assert item_ids.shape == (self.sem_ids_count,)
 
         semantic_ids = semantic_ids.to(self.device)
-        residuals = residuals.to(self.device).float()
+        residuals = residuals.to(self.device).float() if sum_with_residuals else torch.zeros_like(residuals, device=self.device, dtype=torch.float)
         self.full_embeddings = self.calculate_full(semantic_ids).float() + residuals
         self.item_ids = item_ids
 

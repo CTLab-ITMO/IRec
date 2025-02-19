@@ -93,6 +93,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             item_id_to_semantic_id.to(DEVICE),
             item_id_to_residual.to(DEVICE),
             item_ids.to(DEVICE),
+            sum_with_residuals=False
         )
 
         self._bos_token_id = self._codebook_sizes[0]
@@ -234,7 +235,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             residuals = tgt_embeddings[:, -1, :]
             semantic_ids = semantic_ids.to(torch.int64)
 
-            item_ids = self._trie.query(semantic_ids, residuals, items_to_query=20)
+            item_ids = self._trie.query(semantic_ids, items_to_query=20)
 
             return item_ids
 

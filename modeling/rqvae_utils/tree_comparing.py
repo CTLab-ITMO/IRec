@@ -26,7 +26,7 @@ def calc_sid(sid, codebook_size):
 def stats(query_sem_id, codebook_size, sids, item_ids):
     for sem_id, ids in zip(query_sem_id.tolist(), item_ids.tolist()):
         print(calc_sid(torch.tensor(sem_id), codebook_size))
-        print(sids[torch.tensor(ids)])
+        print(sids[torch.tensor(ids)][:10])
 
 
 if __name__ == "__main__":
@@ -48,14 +48,16 @@ if __name__ == "__main__":
     trie = Trie(rqvae_model)
     tree = Tree(emb_table, DEVICE)
     simplified_tree = SimplifiedTree(emb_table, DEVICE)
+    simplified_tree_wr = SimplifiedTree(emb_table, DEVICE)
     alphabet_size = 10
 
     N = 12101
     K = 3
 
     semantic_ids = torch.randint(0, alphabet_size, (N, K), dtype=torch.int64).to(DEVICE)
-    residuals = torch.zeros_like(torch.randn(N, embedding_dim)).to(DEVICE)
+    residuals = torch.randn(N, embedding_dim).to(DEVICE)
     item_ids = torch.arange(5, N + 5).to(DEVICE)
+    print(residuals[0])
 
     now = time.time()
     trie.build_tree_structure(semantic_ids, residuals, item_ids)
@@ -68,6 +70,10 @@ if __name__ == "__main__":
     now = time.time()
     simplified_tree.build_tree_structure(semantic_ids, residuals, item_ids)
     print(f"Time for simplified tree init: {(time.time() - now) * 1000:.2f} ms")
+
+    now = time.time()
+    simplified_tree_wr.build_tree_structure(semantic_ids, residuals, item_ids, False)
+    print(f"Time for simplified tree  without residuals init: {(time.time() - now) * 1000:.2f} ms")
 
     full_embeddings = tree.calculate_full(semantic_ids, residuals).sum(1)
     print(torch.all((full_embeddings == simplified_tree.full_embeddings) == True))
@@ -85,7 +91,7 @@ if __name__ == "__main__":
         now = time.time()
         item_ids = trie.query(q_semantic_ids, q_residuals, items_to_query)
         total_time += time.time() - now
-        stats(q_semantic_ids[:3], 256, tree.sids, item_ids[:3])
+        stats(q_semantic_ids[:1], 256, tree.sids, item_ids[:1])
 
     print(f"Time per query: {total_time / n_exps * 1000:.2f} ms")
 
@@ -95,7 +101,7 @@ if __name__ == "__main__":
         now = time.time()
         simplified_tree_ids = simplified_tree.query(q_semantic_ids, items_to_query)
         total_time += time.time() - now
-        stats(q_semantic_ids[:3], 256, tree.sids, simplified_tree_ids[:3])
+        stats(q_semantic_ids[:1], 256, tree.sids, simplified_tree_ids[:1])
 
     print(f"Time per query: {total_time / n_exps * 1000:.2f} ms")
 
@@ -103,9 +109,9 @@ if __name__ == "__main__":
 
     for i in range(n_exps):
         now = time.time()
-        simplified_tree_ids = simplified_tree._query(q_semantic_ids, items_to_query)
+        simplified_tree_ids = simplified_tree_wr.query(q_semantic_ids, items_to_query)
         total_time += time.time() - now
-        stats(q_semantic_ids[:3], 256, tree.sids, simplified_tree_ids[:3])
+        stats(q_semantic_ids[:1], 256, tree.sids, simplified_tree_ids[:1])
 
     print(f"Time per query: {total_time / n_exps * 1000:.2f} ms")
 
@@ -115,7 +121,7 @@ if __name__ == "__main__":
         now = time.time()
         tree_ids = tree.query(q_semantic_ids, q_residuals, items_to_query)
         total_time += time.time() - now
-        stats(q_semantic_ids[:3], 256, tree.sids, tree_ids[:3])
+        stats(q_semantic_ids[:1], 256, tree.sids, tree_ids[:1])
 
     print(f"Time per query: {total_time / n_exps * 1000:.2f} ms")
 
