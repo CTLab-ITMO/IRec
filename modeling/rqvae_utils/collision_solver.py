@@ -2,13 +2,15 @@ from collections import defaultdict
 
 import torch
 
+from utils import DEVICE
+
 
 class CollisionSolver:
     def __init__(self,
                  emb_dim: int,
                  sem_id_len: int,
                  codebook_size: int,
-                 device: torch.device = torch.device('cpu')):
+                 device: torch.device=DEVICE):
         """
         :param emb_dim: Длина остатка
         :param codebook_size: Количество элементов в одном кодбуке
@@ -49,15 +51,15 @@ class CollisionSolver:
         residuals = residuals.to(self.device)
         semantic_ids = semantic_ids.to(self.device)
 
-        unique_id = torch.einsum('nc,c->n', semantic_ids, self.key)  # хэши
+        unique_id = (semantic_ids * self.key).sum(dim=1)  # хэши
         unique_ids, inverse_indices, counts = torch.unique(unique_id, return_inverse=True, return_counts=True)
         sorted_indices = torch.argsort(inverse_indices)  # сортированные индексы чтобы совпадающие хэши шли подряд
 
         row_indices = inverse_indices[sorted_indices]  # отсортированные хэши
 
         offsets = torch.cumsum(counts, dim=0) - counts
-        col_indices = (torch.arange(semantic_ids_count)
-                       - offsets[row_indices])  # индексы от 0 до k внутри каждого набора из совпадающих хэшей
+        col_indices = torch.arange(semantic_ids_count, device=self.device) - offsets[
+            row_indices]  # индексы от 0 до k внутри каждого набора из совпадающих хэшей
 
         indices = torch.stack([
             unique_ids[row_indices],
@@ -89,7 +91,7 @@ class CollisionSolver:
         assert semantic_ids.shape[1] == self.sem_id_len
 
         semantic_ids = semantic_ids.to(self.device)
-        unique_ids = torch.einsum('nc,c->n', semantic_ids, self.key)
+        unique_ids = (semantic_ids * self.key).sum(dim=1)
 
         candidates = torch.stack([self._sem_ids_sparse_tensor[key].to_dense() for key in unique_ids])
         counts = torch.tensor([self.counts_dict[key.item()] for key in unique_ids], device=self.device)
@@ -99,7 +101,7 @@ class CollisionSolver:
 
     def get_pred_scores(self, semantic_ids: torch.Tensor, pred_residuals: torch.Tensor) -> dict[str, torch.Tensor]:
         """
-        :param semantic_ids: [batch_size, sem_id_len] semantic ids (без токена решающего коллизии)
+        :param semantic_id: [batch_size, sem_id_len] semantic ids (без токена решающего коллизии)
         :param pred_residuals: [batch_size, emb_dim] предсказанные остатки
 
         :return: Словарь с ключами:
@@ -114,7 +116,7 @@ class CollisionSolver:
         semantic_ids = semantic_ids.to(self.device)
         pred_residuals = pred_residuals.to(self.device)
 
-        unique_ids = torch.einsum('nc,c->n', semantic_ids, self.key)
+        unique_ids = (semantic_ids * self.key).sum(dim=1)
 
         candidates, mask = self.get_residuals_by_semantic_id_batch(semantic_ids)
 
@@ -132,7 +134,7 @@ class CollisionSolver:
     def get_true_dedup_tokens(self, semantic_ids: torch.Tensor, true_residuals: torch.Tensor) -> dict[
         str, torch.Tensor]:
         """
-        :param semantic_ids: [batch_size, sem_id_len] semantic ids (без токена решающего коллизии)
+        :param semantic_id: [batch_size, sem_id_len] semantic ids (без токена решающего коллизии)
         :param true_residuals: [batch_size, emb_dim] реальные остатки
 
         :return: Словарь с ключами:
@@ -169,7 +171,7 @@ class CollisionSolver:
         semantic_ids = semantic_ids.to(self.device)
         dedup_tokens = dedup_tokens.to(self.device)
 
-        unique_ids = torch.einsum('nc,c->n', semantic_ids, self.key)
+        unique_ids = (semantic_ids * self.key).sum(dim=1)
 
         item_ids = torch.stack(
             [self.item_ids_sparse_tensor[unique_ids[i]][dedup_tokens[i]] for i in range(semantic_ids.shape[0])])
