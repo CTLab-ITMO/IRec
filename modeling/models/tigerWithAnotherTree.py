@@ -2,14 +2,14 @@ import json
 
 import torch
 from models.base import SequentialTorchModel
-from rqvae_utils import CollisionSolver, SimplifiedTree
+from rqvae_utils import CollisionSolver, Tree
 from torch import nn
 from utils import DEVICE, create_masked_tensor, get_activation_function
 
 from .rqvae import RqVaeModel
 
 
-class TigerModel(SequentialTorchModel, config_name="tiger"):
+class TigerModel2(SequentialTorchModel, config_name="tigerWithAnotherTree"):
     def __init__(
         self,
         rqvae_model,
@@ -87,13 +87,12 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
 
-        self._trie = SimplifiedTree(rqvae_model)
+        self._trie = Tree(rqvae_model)
 
         self._trie.build_tree_structure(
             item_id_to_semantic_id.to(DEVICE),
             item_id_to_residual.to(DEVICE),
-            item_ids.to(DEVICE),
-            sum_with_residuals=True
+            item_ids.to(DEVICE)
         )
 
         self._bos_token_id = self._codebook_sizes[0]
@@ -235,7 +234,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             residuals = tgt_embeddings[:, -1, :]
             semantic_ids = semantic_ids.to(torch.int64)
 
-            item_ids = self._trie.query(semantic_ids, items_to_query=20)
+            item_ids = self._trie.query(semantic_ids, residuals, items_to_query=20)
 
             return item_ids
 

@@ -18,3 +18,4 @@ from .sasrec_ce import SasRecCeModel
 from .s3rec import S3RecModel
 from .rqvae import RqVaeModel
 from .tiger import TigerModel
+from .tigerWithAnotherTree import TigerModel2

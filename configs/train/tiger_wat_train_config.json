@@ -1,5 +1,5 @@
 {
-  "experiment_name": "tiger",
+  "experiment_name": "tigerWithAnotherTree",
   "best_metric": "validation/ndcg@20",
   "train_epochs_num": 50,
   "dataset": {
@@ -33,7 +33,7 @@
     }
   },
   "model": {
-    "type": "tiger",
+    "type": "tigerWithAnotherTree",
     "rqvae_train_config_path": "../configs/train/rqvae_train_config.json",
     "rqvae_checkpoint_path": "../checkpoints/rqvae_beauty_final_state.pth",
     "embs_extractor_path": "../data/Beauty/rqvae/data_full.pt",
