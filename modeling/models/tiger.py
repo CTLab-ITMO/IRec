@@ -69,15 +69,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         self._solver: CollisionSolver = solver
 
-        self._codebook_sizes = rqvae_model.codebook_sizes
-
-        self._codebook_item_embeddings_stacked = torch.stack(
-            [codebook for codebook in rqvae_model.codebooks]
-        )
-        self._codebook_item_embeddings_stacked.requires_grad = (
-            False  # TODOPK maybe unfreeeze later
-        )
-
         self._item_id_to_semantic_id = item_id_to_semantic_id
         self._item_id_to_residual = item_id_to_residual
 
@@ -85,15 +76,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
 
-        self._trie = SimplifiedTree(rqvae_model)
-
-        self._trie.build_tree_structure(
-            item_id_to_semantic_id.to(DEVICE),
-            item_id_to_residual.to(DEVICE),
-            item_ids.to(DEVICE),
-            sum_with_residuals=True
-        )
-
+        self._codebook_sizes = rqvae_model.codebook_sizes
         self._bos_token_id = self._codebook_sizes[0]
         self._bos_weight = nn.Parameter(
             torch.nn.init.trunc_normal_(
@@ -109,6 +92,19 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         )  # + 2 for bos token & residual
 
         self._init_weights(initializer_range)
+
+        self._codebook_item_embeddings_stacked = nn.Parameter(torch.stack(
+            [codebook for codebook in rqvae_model.codebooks]
+        ), requires_grad=False)
+        
+        self._trie = SimplifiedTree(self._codebook_item_embeddings_stacked)
+
+        self._trie.build_tree_structure(
+            item_id_to_semantic_id.to(DEVICE),
+            item_id_to_residual.to(DEVICE),
+            item_ids.to(DEVICE),
+            sum_with_residuals=False
+        )
 
     @classmethod
     def init_rqvae(cls, config) -> RqVaeModel:

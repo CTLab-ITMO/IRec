@@ -1,20 +1,17 @@
 import numpy as np
 import torch
 
-from models import RqVaeModel
 from utils import DEVICE
 
 
 class Tree:
-    def __init__(self, rqvae_model: RqVaeModel, device: torch.device = DEVICE):
+    def __init__(self, embedding_table: torch.Tensor, device: torch.device = DEVICE):
         """
-        :param rqvae_model: обученная модель rq-vae
+        :param embedding_table: обученные эмбеддинги
         :param device: устройство
         """
         self.device: torch.device = device
-        self.embedding_table: torch.Tensor = torch.stack(
-            [cb for cb in rqvae_model.codebooks]
-        ).to(self.device)  # (semantic_id_len, codebook_size, emb_dim)
+        self.embedding_table: torch.Tensor = embedding_table  # (semantic_id_len, codebook_size, emb_dim)
         self.sem_id_len, self.codebook_size, self.emb_dim = self.embedding_table.shape
         self.key: torch.Tensor = torch.empty((0, 0))
         self.A: torch.Tensor = torch.empty((0, 0))  # будет (max_sem_id, )

@@ -1,7 +1,7 @@
 {
-  "experiment_name": "tiger",
+  "experiment_name": "tiger_simplified_no_residuals_freezed",
   "best_metric": "validation/ndcg@20",
-  "train_epochs_num": 50,
+  "train_epochs_num": 100,
   "dataset": {
     "type": "sequence_full",
     "path_to_data_dir": "../data",

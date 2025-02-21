@@ -1,19 +1,16 @@
 import torch
 
-from models import RqVaeModel
 from utils import DEVICE
 
 
 class SimplifiedTree:
-    def __init__(self, rqvae_model: RqVaeModel, device: torch.device = DEVICE):
+    def __init__(self, embedding_table: torch.Tensor, device: torch.device = DEVICE):
         """
-        :param rqvae_model: обученная модель rq-vae
+        :param embedding_table: обученные эмбеддинги
         :param device: устройство
         """
         self.device: torch.device = device
-        self.embedding_table: torch.Tensor = torch.stack(
-            [cb for cb in rqvae_model.codebooks]
-        ).to(self.device)  # (semantic_id_len, codebook_size, emb_dim
+        self.embedding_table: torch.Tensor = embedding_table  # (semantic_id_len, codebook_size, emb_dim)
         self.sem_id_len, self.codebook_size, self.emb_dim = self.embedding_table.shape
         self.sem_ids_count: int = 0
         self.full_embeddings: torch.Tensor = torch.empty((0, 0))
