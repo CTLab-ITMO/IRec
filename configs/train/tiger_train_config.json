@@ -1,5 +1,5 @@
 {
-  "experiment_name": "tiger_simplified_no_residuals_freezed",
+  "experiment_name": "tiger_simplified_no_residuals_unfreezed",
   "best_metric": "validation/ndcg@20",
   "train_epochs_num": 100,
   "dataset": {

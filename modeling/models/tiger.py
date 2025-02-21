@@ -93,7 +93,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         self._codebook_item_embeddings_stacked = nn.Parameter(torch.stack(
             [codebook for codebook in rqvae_model.codebooks]
-        ), requires_grad=False)
+        ))
         
         self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
         
