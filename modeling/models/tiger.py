@@ -74,8 +74,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         item_ids = torch.arange(1, len(item_id_to_semantic_id) + 1)
 
-        self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
-
         self._codebook_sizes = rqvae_model.codebook_sizes
         self._bos_token_id = self._codebook_sizes[0]
         self._bos_weight = nn.Parameter(
@@ -96,6 +94,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._codebook_item_embeddings_stacked = nn.Parameter(torch.stack(
             [codebook for codebook in rqvae_model.codebooks]
         ), requires_grad=False)
+        
+        self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
         
         self._trie = SimplifiedTree(self._codebook_item_embeddings_stacked)
 
