@@ -53,7 +53,6 @@ class CompositeLoss(TorchLoss, config_name='composite'):
 
         return total_loss
 
-# TODOPK CrossEntropy loss (logits, labels)
 class SampleLogSoftmaxLoss(TorchLoss, config_name='sample_logsoftmax'):
     def __init__(self, predictions_prefix, labels):
         super().__init__()
