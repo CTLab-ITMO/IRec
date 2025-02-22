@@ -97,6 +97,8 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
         all_sample_lengths = inputs[
             "{}.length".format(self._sequence_prefix)
         ]  # (batch_size)
+        
+        print(f"a {all_sample_events.max()=} {all_sample_events.min()=}")
 
         embeddings, mask = self._apply_sequential_encoder(
             all_sample_events, all_sample_lengths * (len(self._codebook_sizes) + 1)
