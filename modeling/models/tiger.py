@@ -224,7 +224,13 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         else:
             semantic_ids, tgt_embeddings = self._apply_decoder_autoregressive(
                 encoder_embeddings, encoder_mask
-            )  # (batch_size, len(self._codebook_sizes) + 2 (bos, residual)), (batch_size, len(self._codebook_sizes) + 2 (bos, residual), embedding_dim)
+            )  # (batch_size, len(self._codebook_sizes) (bos, residual)), (batch_size, len(self._codebook_sizes) + 2 (bos, residual), embedding_dim)
+
+            
+            # 1 4 6 -> lookup -> sum = emb (last embedding) # bs, embedding_dim
+            # take all embedings (from stacked) # all_items, embedding_dim
+            # take from sasrec eval (indices + 1)
+            # guarantee that all items are in correct order
 
             residuals = tgt_embeddings[:, -1, :]
             semantic_ids = semantic_ids.to(torch.int64)
@@ -232,6 +238,22 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             item_ids = self._trie.query(semantic_ids, items_to_query=20)
 
             return item_ids
+        
+        # else:  # eval mode
+        #     last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
+        #     # b - batch_size, n - num_candidates, d - embedding_dim
+        #     candidate_scores = torch.einsum(
+        #         'bd,nd->bn',
+        #         last_embeddings,
+        #         self._item_embeddings.weight
+        #     )  # (batch_size, num_items + 2)
+
+        #     _, indices = torch.topk(
+        #         candidate_scores,
+        #         k=20, dim=-1, largest=True
+        #     )  # (batch_size, 20)
+
+        #     return indices + 1
 
     def _apply_decoder(
         self, tgt_embeddings, label_lengths, encoder_embeddings, encoder_mask
@@ -258,12 +280,13 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         tgt_embeddings = tgt_embeddings + position_embeddings
 
-        tgt_embeddings = self._decoder_layernorm(
-            tgt_embeddings
-        )  # (batch_size, dec_seq_len, embedding_dim)
-        tgt_embeddings = self._decoder_dropout(
-            tgt_embeddings
-        )  # (batch_size, dec_seq_len, embedding_dim)
+        # TODOPK remove layernorm & dropout (for inference)
+        # tgt_embeddings = self._decoder_layernorm(
+        #     tgt_embeddings
+        # )  # (batch_size, dec_seq_len, embedding_dim)
+        # tgt_embeddings = self._decoder_dropout(
+        #     tgt_embeddings
+        # )  # (batch_size, dec_seq_len, embedding_dim)
 
         tgt_embeddings[~tgt_mask] = 0
 
@@ -289,6 +312,10 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             .unsqueeze(0)
             .expand(batch_size, 1, embedding_dim)
         )
+        
+        # curr_target_emb = () # <- layernorm, dropout & positional
+        # concat target <- [tgt_embs, cutt_tgt_emb]
+        # decoder(concat target) 
 
         semantic_ids = torch.tensor([], device=DEVICE)
 
@@ -303,20 +330,44 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
                     dim=1,
                 )
 
-            position_embeddings = self._codebook_embeddings(indexes.view(-1))
+            # 3
+            # 3 0
+            # 3 0 1
+            # 3 0 1 2
+            # 3 0 1 2 4
+
+            # bos_token = len(self._codebook_sizes)
+            # residual_token = len(self._codebook_sizes) + 1
+
+            # 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0
+            # 5 5 5 5 4 4 4 4 3 3 3 3 2 2 2 2 1 1 1 1
+            # 0 1 2 4 0 1 2 4 0 1 2 4 0 1 2 4 0 1 2 4
+
+            position_embeddings = self._codebook_embeddings(indexes.view(-1)) # cb + 2
 
             curr_embeddings = tgt_embeddings + position_embeddings.view(
                 batch_size, step + 1, embedding_dim
             )
+            
+            # TODOPK += last
+            # curr_embeddings = tgt_embeddings[:, -1] += position_embeddings.view(
+            #     batch_size, step + 1, embedding_dim
+            # )
 
-            curr_embeddings = self._decoder_layernorm(curr_embeddings)
-            curr_embeddings = self._decoder_dropout(curr_embeddings)
+            # curr_embeddings[:, -1, :] = self._decoder_layernorm(curr_embeddings)
+            # curr_embeddings[:, -1, :] = self._decoder_dropout(curr_embeddings)
 
+
+            # TODOPK KV caching
             decoder_output = self._decoder(
                 tgt=curr_embeddings,
                 memory=encoder_embeddings,
                 memory_key_padding_mask=~encoder_mask,
             )
+            
+            # TODOPK
+            # assert that prelast items don't change
+            # assert decoder changes only last index in dim = 1
 
             next_token_embedding = decoder_output[
                 :, -1, :

@@ -66,6 +66,7 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
         )
 
         # TODOPK ask about freezed masked & padding tokens
+        # TODOPK use rqvae embeddings instead of text embeddings (freeze / unfreeze)
 
         self._item_embeddings.weight.data.copy_(extended_embeddings)
 

@@ -53,7 +53,7 @@ class CompositeLoss(TorchLoss, config_name='composite'):
 
         return total_loss
 
-
+# TODOPK CrossEntropy loss (logits, labels)
 class SampleLogSoftmaxLoss(TorchLoss, config_name='sample_logsoftmax'):
     def __init__(self, predictions_prefix, labels):
         super().__init__()
@@ -78,15 +78,15 @@ class SampleLogSoftmaxLoss(TorchLoss, config_name='sample_logsoftmax'):
         
         if len(logits.shape) == 3:
             loss = -torch.gather(
-                torch.log_softmax(logits, dim=-1).view(batch_size * seq_len, logits.shape[-1]),
+                torch.log_softmax(logits, dim=-1).reshape(batch_size * seq_len, logits.shape[-1]),
                 dim=-1, 
-                index=candidates.view(batch_size * seq_len, 1)
+                index=candidates.reshape(batch_size * seq_len, 1)
             ).mean()
         else:
             loss = -torch.gather(
                 torch.log_softmax(logits, dim=-1),
                 dim=-1, 
-                index=candidates.view(batch_size, 1) # TODOPK check if this is correct
+                index=candidates.reshape(batch_size, 1)
             ).mean()
             
         return loss
