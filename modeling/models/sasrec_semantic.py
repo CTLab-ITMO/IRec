@@ -97,8 +97,6 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
         all_sample_lengths = inputs[
             "{}.length".format(self._sequence_prefix)
         ]  # (batch_size)
-        
-        print(f"a {all_sample_events.max()=} {all_sample_events.min()=}")
 
         embeddings, mask = self._apply_sequential_encoder(
             all_sample_events, all_sample_lengths * (len(self._codebook_sizes) + 1)
@@ -116,14 +114,11 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             all_embeddings = (
                 self._item_id_to_full_embedding
             )  # (num_items, embedding_dim)
-            
+
             all_embeddings = torch.cat(
-                [
-                    torch.zeros(1, self._embedding_dim, device=DEVICE),
-                    all_embeddings
-                ],
-                dim=0
-            )
+                [torch.zeros(1, self._embedding_dim, device=DEVICE), all_embeddings],
+                dim=0,
+            )  # (num_items + 1, embedding_dim)
 
             # a -- all_batch_events, n -- num_items, d -- embedding_dim
             all_scores = torch.einsum(
@@ -137,15 +132,13 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             sample_ids, _ = create_masked_tensor(
                 data=all_sample_events, lengths=all_sample_lengths
             )  # (batch_size, seq_len)
-            
-            print(f"{sample_ids.max()=} {sample_ids.min()=}")
 
             negative_scores = torch.scatter(
                 input=all_scores,
                 dim=1,
                 index=sample_ids,
                 src=torch.ones_like(sample_ids) * (-torch.inf),
-            )  # (all_batch_events, num_items)
+            )  # (all_batch_events, num_items + 1)
 
             return {
                 "positive_scores": positive_scores,
@@ -187,7 +180,9 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
                 )
             result.append(torch.stack(item_repr))
 
-        semantic_embeddings = torch.stack(result)
+        semantic_embeddings = torch.stack(
+            result
+        )  # len(events), len(codebook_sizes), embedding_dim
 
         # get residuals
         residual = self._item_id_to_residual[events - 1]
