@@ -121,7 +121,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             )  # (batch_size, num_items)
 
             positive_scores = torch.gather(
-                input=all_scores, dim=1, index=all_positive_sample_events[..., None]
+                input=all_scores, dim=1, index=all_positive_sample_events[..., None] - 1
             )  # (batch_size, 1)
 
             sample_ids, _ = create_masked_tensor(
@@ -131,7 +131,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             negative_scores = torch.scatter(
                 input=all_scores,
                 dim=1,
-                index=sample_ids,
+                index=sample_ids - 1,
                 src=torch.ones_like(sample_ids) * (-torch.inf),
             )  # (all_batch_events, num_items)
 
@@ -152,14 +152,14 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
                 candidate_scores, k=20, dim=-1, largest=True
             )  # (batch_size, 20)
 
-            return indices
+            return indices + 1
 
     def get_item_embeddings(self, events):
         embs = self._item_id_to_semantic_embedding[
             events - 1
         ]  # len(events), len(self._codebook_sizes) + 1, embedding_dim
-        return embs.view(
-            len(events) * (len(self._codebook_sizes) + 1), self._embedding_dim
+        return embs.reshape(
+            -1, self._embedding_dim
         )
 
     def get_init_item_embeddings(self, events):
