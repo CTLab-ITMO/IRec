@@ -132,7 +132,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
                 input=all_scores,
                 dim=1,
                 index=sample_ids - 1,
-                src=torch.ones_like(sample_ids) * (-torch.inf),
+                src=torch.ones_like(sample_ids - 1) * (-torch.inf),
             )  # (all_batch_events, num_items)
 
             return {
@@ -158,9 +158,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
         embs = self._item_id_to_semantic_embedding[
             events - 1
         ]  # len(events), len(self._codebook_sizes) + 1, embedding_dim
-        return embs.reshape(
-            -1, self._embedding_dim
-        )
+        return embs.reshape(-1, self._embedding_dim)
 
     def get_init_item_embeddings(self, events):
         # convert to semantic ids
