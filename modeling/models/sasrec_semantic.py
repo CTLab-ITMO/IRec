@@ -127,6 +127,8 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             sample_ids, _ = create_masked_tensor(
                 data=all_sample_events, lengths=all_sample_lengths
             )  # (batch_size, seq_len)
+            
+            print(f"{sample_ids.max()=} {sample_ids.min()=}")
 
             negative_scores = torch.scatter(
                 input=all_scores,
