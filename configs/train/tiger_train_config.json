@@ -63,16 +63,16 @@
     "type": "composite",
     "losses": [
       {
-        "type": "sample_logsoftmax",
+        "type": "ce",
         "predictions_prefix": "logits",
-        "labels": "semantic.labels",
+        "labels_prefix": "semantic.labels",
         "weight": 1.0,
         "output_prefix": "semantic_loss"
       },
       {
-        "type": "sample_logsoftmax",
+        "type": "ce",
         "predictions_prefix": "dedup.logits",
-        "labels": "dedup.labels",
+        "labels_prefix": "dedup.labels",
         "weight": 1.0,
         "output_prefix": "dedup_loss"
       }

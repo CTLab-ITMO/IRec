@@ -216,10 +216,10 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             )
 
             return {
-                "logits": decoder_prefix_scores,
-                "semantic.labels": semantic_ids,
+                "logits": decoder_prefix_scores.reshape(-1, decoder_prefix_scores.shape[2]),
+                "semantic.labels.ids": semantic_ids.reshape(-1),
                 "dedup.logits": pred_info["pred_scores"],
-                "dedup.labels": true_info["true_dedup_tokens"],
+                "dedup.labels.ids": true_info["true_dedup_tokens"],
             }
         else:
             semantic_ids, tgt_embeddings = self._apply_decoder_autoregressive(
@@ -358,7 +358,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             # curr_embeddings[:, -1, :] = self._decoder_dropout(curr_embeddings)
 
 
-            # TODOPK KV caching
             decoder_output = self._decoder(
                 tgt=curr_embeddings,
                 memory=encoder_embeddings,
@@ -372,12 +371,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             next_token_embedding = decoder_output[
                 :, -1, :
             ]  # batch_size x embedding_dim
-
-            # TODOPK ask if we take last
-            # torch.Size([256, 1, 64])
-            # torch.Size([256, 2, 64])
-            # torch.Size([256, 3, 64])
-            # torch.Size([256, 4, 64])
 
             if step < len(self._codebook_sizes):
                 codebook = self._codebook_item_embeddings_stacked[
