@@ -142,6 +142,7 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
             return {
                 "positive_scores": positive_scores,
                 "negative_scores": negative_scores,
+                "sample_ids": sample_ids,
             }
         else:  # eval mode
             last_embeddings = self._get_last_embedding(

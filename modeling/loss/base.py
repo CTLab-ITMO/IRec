@@ -333,6 +333,24 @@ class SASRecLoss(TorchLoss, config_name='sasrec'):
     def forward(self, inputs):
         positive_scores = inputs[self._positive_prefix]  # (x, embedding_dim)
         negative_scores = inputs[self._negative_prefix]  # (x, embedding_dim)
+        sample_ids = inputs["sample_ids"]
+        
+        num_items = negative_scores.shape[1] - 2
+        
+        possible_indices = torch.arange(1, num_items + 1, device=negative_scores.device) # 1, 2, ... num_items
+        mask = torch.ones_like(possible_indices, dtype=torch.bool) # True, True, ... True
+        mask[sample_ids - 1] = False # True, False, ... False, True, ... True
+        valid_indices = possible_indices[mask] # 1, 2, ... num_items, except sample_ids
+        
+        rand_idx = torch.randint(0, len(valid_indices), size=(negative_scores.shape[0], 1), device=negative_scores.device)
+        index = valid_indices[rand_idx]
+        
+        negative_scores = torch.gather(
+            input=negative_scores,
+            dim=1,
+            index=index,
+        )
+        
         assert positive_scores.shape[0] == negative_scores.shape[0]
 
         positive_loss = torch.log(nn.functional.sigmoid(positive_scores)).sum(dim=-1)  # (x)
