@@ -72,8 +72,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._item_id_to_semantic_id = item_id_to_semantic_id
         self._item_id_to_residual = item_id_to_residual
 
-        item_ids = torch.arange(1, len(item_id_to_semantic_id) + 1)
-
         self._codebook_sizes = rqvae_model.codebook_sizes
         self._bos_token_id = self._codebook_sizes[0]
         self._bos_weight = nn.Parameter(
@@ -93,10 +91,15 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._init_weights(initializer_range)
 
         self._codebook_item_embeddings_stacked = nn.Parameter(
-            torch.stack([codebook for codebook in rqvae_model.codebooks])
+            torch.stack([codebook for codebook in rqvae_model.codebooks]),
+            requires_grad=False # TODOPK compare with unfrozen codebooks
         )
 
+        item_ids = torch.arange(1, len(item_id_to_semantic_id) + 1)
         self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
+        self._item_id_to_semantic_embedding = nn.Parameter(
+            self._item_id_to_semantic_embedding, requires_grad=False # TODOPK compare with unfrozen codebooks
+        )
 
         self._trie = SimplifiedTree(self._codebook_item_embeddings_stacked)
 
@@ -241,6 +244,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
             return item_ids
 
+        # TODOPK (decompose tree)
         # else:  # eval mode
         #     last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
         #     # b - batch_size, n - num_candidates, d - embedding_dim

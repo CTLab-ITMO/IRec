@@ -34,6 +34,9 @@
   },
   "model": {
     "type": "sasrec_freezed",
+    "rqvae_train_config_path": "../configs/train/rqvae_train_config.json",
+    "rqvae_checkpoint_path": "../checkpoints/rqvae_beauty_final_state.pth",
+    "embs_extractor_path": "../data/Beauty/rqvae/data_full.pt",
     "sequence_prefix": "item",
     "positive_prefix": "labels",
     "negative_prefix": "negative",

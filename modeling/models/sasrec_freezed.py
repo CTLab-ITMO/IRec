@@ -1,11 +1,15 @@
 import torch
+from models.tiger import TigerModel
 from models import SequentialTorchModel
-from utils import create_masked_tensor
+from utils import DEVICE, create_masked_tensor
 
 
 class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
     def __init__(
         self,
+        rqvae_model,
+        item_id_to_semantic_id,
+        item_id_to_residual,
         sequence_prefix,
         positive_prefix,
         num_items,
@@ -36,43 +40,55 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
 
         self._init_weights(initializer_range)
 
-        df = torch.load("../data/Beauty/data_full.pt", weights_only=False)
-        precomputed_embeddings = torch.stack(df.sort_index().embeddings.tolist())
-
-        self._projector = torch.nn.Linear(
-            precomputed_embeddings.shape[1], embedding_dim
+        self._codebook_item_embeddings_stacked = torch.nn.Parameter(
+            torch.stack([codebook for codebook in rqvae_model.codebooks]),
+            requires_grad=False,  # TODOPK compare with unfrozen codebooks
         )
+        self._item_id_to_semantic_id = item_id_to_semantic_id
+        self._item_id_to_residual = item_id_to_residual
 
-        padding_embedding = torch.nn.init.trunc_normal_(
-            torch.zeros(1, precomputed_embeddings.shape[1]),
-            std=initializer_range,
-            a=-2 * initializer_range,
-            b=2 * initializer_range,
-        )
+        item_ids = torch.arange(1, len(item_id_to_semantic_id) + 1)
+        self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
+        self._item_id_to_semantic_embedding = torch.nn.Parameter(
+            self._item_id_to_semantic_embedding.sum(dim=1), requires_grad=False
+        ) # len(events), embedding_dim
 
-        mask_embedding = torch.nn.init.trunc_normal_(
-            torch.zeros(1, precomputed_embeddings.shape[1]),
-            std=initializer_range,
-            a=-2 * initializer_range,
-            b=2 * initializer_range,
-        )
+    def get_init_item_embeddings(self, events):
+        # convert to semantic ids
+        semantic_ids = self._item_id_to_semantic_id[
+            events - 1
+        ]  # len(events), len(codebook_sizes)
 
-        extended_embeddings = torch.cat(
-            [padding_embedding, precomputed_embeddings, mask_embedding], dim=0
-        )  # Shape: (num_items + 2, embedding_dim)
+        result = []
+        for semantic_id in semantic_ids:
+            item_repr = []
+            for codebook_idx, codebook_id in enumerate(semantic_id):
+                item_repr.append(
+                    self._codebook_item_embeddings_stacked[codebook_idx][codebook_id]
+                )
+            result.append(torch.stack(item_repr))
 
-        self._item_embeddings = torch.nn.Embedding(
-            num_embeddings=num_items + 2, embedding_dim=precomputed_embeddings.shape[1]
-        )
+        semantic_embeddings = torch.stack(result)
 
-        # TODOPK ask about freezed masked & padding tokens
-        # TODOPK use rqvae embeddings instead of text embeddings (freeze / unfreeze)
+        # get residuals
+        residual = self._item_id_to_residual[events - 1]
+        residual = residual.unsqueeze(1)
 
-        self._item_embeddings.weight.data.copy_(extended_embeddings)
+        # get true item embeddings
+        item_embeddings = torch.cat(
+            [semantic_embeddings, residual], dim=1
+        )  # len(events), len(self._codebook_sizes) + 1, embedding_dim
+
+        return item_embeddings
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
+        rqvae_model, semantic_ids, residuals, item_ids = TigerModel.init_rqvae(config)
+
         return cls(
+            rqvae_model=rqvae_model,
+            item_id_to_semantic_id=semantic_ids,
+            item_id_to_residual=residuals,
             sequence_prefix=config["sequence_prefix"],
             positive_prefix=config["positive_prefix"],
             num_items=kwargs["num_items"],
@@ -87,9 +103,9 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
 
     def get_item_embeddings(self, events=None):
         if events is None:
-            return self._projector(self._item_embeddings.weight)
+            return self._item_id_to_semantic_embedding
         else:
-            return self._projector(self._item_embeddings(events))
+            return self._item_id_to_semantic_embedding[events - 1]
 
     def forward(self, inputs):
         all_sample_events = inputs[
@@ -112,8 +128,13 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
                 embeddings, mask
             )  # (batch_size, embedding_dim)
 
-            all_embeddings = (
-                self.get_item_embeddings()
+            all_embeddings = torch.cat(
+                [
+                    torch.zeros(1, self._embedding_dim, device=DEVICE),
+                    self._item_id_to_semantic_embedding,
+                    torch.zeros(1, self._embedding_dim, device=DEVICE),
+                ],
+                dim=0,
             )  # (num_items + 2, embedding_dim)
 
             # a -- all_batch_events, n -- num_items + 2, d -- embedding_dim
@@ -128,7 +149,6 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
             sample_ids, _ = create_masked_tensor(
                 data=all_sample_events, lengths=all_sample_lengths
             )  # (batch_size, seq_len)
-
 
             negative_scores = torch.scatter(
                 input=all_scores,
