@@ -42,7 +42,7 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
 
         self._codebook_item_embeddings_stacked = torch.nn.Parameter(
             torch.stack([codebook for codebook in rqvae_model.codebooks]),
-            requires_grad=False,  # TODOPK compare with unfrozen codebooks
+            requires_grad=True,  # TODOPK compare with unfrozen codebooks
         )
         self._item_id_to_semantic_id = item_id_to_semantic_id
         self._item_id_to_residual = item_id_to_residual
@@ -50,8 +50,8 @@ class SasRecFreezedModel(SequentialTorchModel, config_name="sasrec_freezed"):
         item_ids = torch.arange(1, len(item_id_to_semantic_id) + 1)
         self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
         self._item_id_to_semantic_embedding = torch.nn.Parameter(
-            self._item_id_to_semantic_embedding.sum(dim=1), requires_grad=False
-        ) # len(events), embedding_dim
+            self._item_id_to_semantic_embedding.sum(dim=1), requires_grad=True
+        )  # len(events), embedding_dim
 
     def get_init_item_embeddings(self, events):
         # convert to semantic ids
