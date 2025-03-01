@@ -80,7 +80,7 @@
       },
       {
         "type": "validation",
-        "on_step": 64,
+        "on_step": 4096,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {
@@ -124,7 +124,7 @@
       },
       {
         "type": "eval",
-        "on_step": 256,
+        "on_step": 8192,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {

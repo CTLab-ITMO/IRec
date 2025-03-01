@@ -113,7 +113,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         )
 
     @classmethod
-    def init_rqvae(cls, config) -> RqVaeModel:
+    def init_rqvae(cls, config):
         rqvae_config = json.load(open(config["rqvae_train_config_path"]))
         rqvae_config["model"]["should_init_codebooks"] = False
 
