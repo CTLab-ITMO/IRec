@@ -1,7 +1,6 @@
 import torch
-from torch import nn
-
 from models import SequentialTorchModel
+from torch import nn
 from utils import DEVICE, create_masked_tensor
 
 from .tiger import TigerModel
@@ -43,9 +42,6 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
 
         self._codebook_sizes = rqvae_model.codebook_sizes
 
-        self._item_id_to_semantic_id = item_id_to_semantic_id
-        self._item_id_to_residual = item_id_to_residual
-
         self._codebook_embeddings = nn.Embedding(
             num_embeddings=len(self._codebook_sizes) + 2, embedding_dim=embedding_dim
         )  # + 2 for bos token & residual
@@ -55,21 +51,19 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
         self._codebook_item_embeddings_stacked = torch.stack(
             [codebook for codebook in rqvae_model.codebooks]
         )
-        self._codebook_item_embeddings_stacked.requires_grad = (
-            False  # TODOPK maybe unfreeeze later
-        )
-
-        item_ids = torch.arange(1, len(item_id_to_semantic_id) + 1)
+        self._codebook_item_embeddings_stacked = nn.Parameter(
+            self._codebook_item_embeddings_stacked, requires_grad=True
+        ) # TODOPK fix to use single rqvae codebook pointer
 
         self._item_id_to_semantic_embedding, self._item_id_to_full_embedding = (
-            self.get_init_item_embeddings(item_ids)
+            self.get_init_item_embeddings(item_id_to_semantic_id, item_id_to_residual)
         )
 
         self._item_id_to_semantic_embedding = nn.Parameter(
-            self._item_id_to_semantic_embedding, requires_grad=False
+            self._item_id_to_semantic_embedding, requires_grad=True
         )
         self._item_id_to_full_embedding = nn.Parameter(
-            self._item_id_to_full_embedding, requires_grad=False
+            self._item_id_to_full_embedding, requires_grad=True
         )
 
     @classmethod
@@ -170,9 +164,11 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
         ]  # len(events), len(self._codebook_sizes) + 1, embedding_dim
         return embs.reshape(-1, self._embedding_dim)
 
-    def get_init_item_embeddings(self, events):
+    def get_init_item_embeddings(self, item_id_to_semantic_id, item_id_to_residual):
+        events = torch.arange(1, len(item_id_to_semantic_id) + 1)
+
         # convert to semantic ids
-        semantic_ids = self._item_id_to_semantic_id[
+        semantic_ids = item_id_to_semantic_id[
             events - 1
         ]  # len(events), len(codebook_sizes)
 
@@ -190,7 +186,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
         )  # len(events), len(codebook_sizes), embedding_dim
 
         # get residuals
-        residual = self._item_id_to_residual[events - 1]
+        residual = item_id_to_residual[events - 1]
         # text_embeddings = self._item_id_to_text_embedding[events - 1]
         # residual = text_embeddings - semantic_embeddings.sum(dim=1)
         residual = residual.unsqueeze(1)
