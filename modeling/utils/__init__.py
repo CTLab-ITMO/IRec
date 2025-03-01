@@ -11,7 +11,7 @@ import numpy as np
 import torch
 
 if torch.cuda.is_available():
-    DEVICE = torch.device('cuda:1')
+    DEVICE = torch.device('cuda:0')
 # elif torch.backends.mps.is_available():
 #     DEVICE = torch.device("mps:0")
 else:
