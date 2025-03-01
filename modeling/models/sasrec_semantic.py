@@ -51,7 +51,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
         self._codebook_item_embeddings_stacked = nn.Parameter(
             torch.stack([codebook for codebook in rqvae_model.codebooks]),
             requires_grad=True,
-        )  # (ask is it ok to have separate codebooks and _item_id_to_semantic_embedding)
+        )  # TODOPK (ask is it ok to have separate codebooks and _item_id_to_semantic_embedding)
 
         self._item_id_to_semantic_embedding = nn.Parameter(
             self.get_init_item_embeddings(item_id_to_semantic_id, item_id_to_residual),

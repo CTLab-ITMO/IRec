@@ -71,7 +71,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._solver: CollisionSolver = solver
 
         self._codebook_sizes = rqvae_model.codebook_sizes
-        self._bos_token_id = self._codebook_sizes[0]
         self._bos_weight = nn.Parameter(
             torch.nn.init.trunc_normal_(
                 torch.zeros(embedding_dim),
@@ -91,7 +90,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._codebook_item_embeddings_stacked = nn.Parameter(
             torch.stack([codebook for codebook in rqvae_model.codebooks]),
             requires_grad=True,
-        )
+        )  # TODOPK (ask is it ok to have separate codebooks and _item_id_to_semantic_embedding)
 
         self._item_id_to_semantic_embedding = nn.Parameter(
             self.get_init_item_embeddings(item_id_to_semantic_id, item_id_to_residual),
