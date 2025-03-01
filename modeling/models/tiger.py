@@ -70,9 +70,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         self._solver: CollisionSolver = solver
 
-        self._item_id_to_semantic_id = item_id_to_semantic_id
-        self._item_id_to_residual = item_id_to_residual
-
         self._codebook_sizes = rqvae_model.codebook_sizes
         self._bos_token_id = self._codebook_sizes[0]
         self._bos_weight = nn.Parameter(
@@ -93,14 +90,12 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         self._codebook_item_embeddings_stacked = nn.Parameter(
             torch.stack([codebook for codebook in rqvae_model.codebooks]),
-            requires_grad=False,  # TODOPK compare with unfrozen codebooks
+            requires_grad=True,
         )
 
-        item_ids = torch.arange(1, len(item_id_to_semantic_id) + 1)
-        self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
         self._item_id_to_semantic_embedding = nn.Parameter(
-            self._item_id_to_semantic_embedding,
-            requires_grad=False,  # TODOPK compare with unfrozen codebooks
+            self.get_init_item_embeddings(item_id_to_semantic_id, item_id_to_residual),
+            requires_grad=True,
         )
 
         self._trie = SimplifiedTree(self._codebook_item_embeddings_stacked)
@@ -108,7 +103,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         self._trie.build_tree_structure(
             item_id_to_semantic_id.to(DEVICE),
             item_id_to_residual.to(DEVICE),
-            item_ids.to(DEVICE),
+            torch.arange(1, len(item_id_to_semantic_id) + 1).to(DEVICE),
             sum_with_residuals=False,
         )
 
@@ -380,23 +375,16 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             )
 
         return semantic_ids, tgt_embeddings
-
+ 
     def get_item_embeddings(self, events):
         embs = self._item_id_to_semantic_embedding[
             events - 1
         ]  # len(events), len(self._codebook_sizes) + 1, embedding_dim
-        return embs.view(
-            len(events) * (len(self._codebook_sizes) + 1), self._embedding_dim
-        )
+        return embs.reshape(-1, self._embedding_dim)
 
-    def get_init_item_embeddings(self, events):
-        # convert to semantic ids
-        semantic_ids = self._item_id_to_semantic_id[
-            events - 1
-        ]  # len(events), len(codebook_sizes)
-
+    def get_init_item_embeddings(self, item_id_to_semantic_id, item_id_to_residual):
         result = []
-        for semantic_id in semantic_ids:
+        for semantic_id in item_id_to_semantic_id:
             item_repr = []
             for codebook_idx, codebook_id in enumerate(semantic_id):
                 item_repr.append(
@@ -404,11 +392,11 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
                 )
             result.append(torch.stack(item_repr))
 
-        semantic_embeddings = torch.stack(result)
+        semantic_embeddings = torch.stack(
+            result
+        )  # len(events), len(codebook_sizes), embedding_dim
 
-        # get residuals
-        residual = self._item_id_to_residual[events - 1]
-        residual = residual.unsqueeze(1)
+        residual = item_id_to_residual.unsqueeze(1)
 
         # get true item embeddings
         item_embeddings = torch.cat(
