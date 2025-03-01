@@ -305,6 +305,18 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         )  # (batch_size, dec_seq_len, embedding_dim)
 
         return decoder_outputs
+    
+    def _decoder_pos_embeddings(self, lengths, mask):
+        def codebook_lambda(x):
+            non_bos = x < len(self._codebook_sizes)
+            x[non_bos] = (len(self._codebook_sizes) - 1) - x[non_bos]
+            return x  # 3, 0, 1, 2, 3, 0, 1, 2 ... len(self._codebook_sizes) = 3 for bos
+
+        codebook_embeddings = self._get_position_embeddings(
+            lengths, mask, codebook_lambda, self._codebook_embeddings
+        )
+
+        return codebook_embeddings
 
     def _apply_decoder_autoregressive(self, encoder_embeddings, encoder_mask):
         batch_size = encoder_embeddings.shape[0]
@@ -426,18 +438,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         )
 
         return position_embeddings + codebook_embeddings
-
-    def _decoder_pos_embeddings(self, lengths, mask):
-        def codebook_lambda(x):
-            non_bos = x < len(self._codebook_sizes)
-            x[non_bos] = (len(self._codebook_sizes) - 1) - x[non_bos]
-            return x  # 3, 0, 1, 2, 3, 0, 1, 2 ... len(self._codebook_sizes) = 3 for bos
-
-        codebook_embeddings = self._get_position_embeddings(
-            lengths, mask, codebook_lambda, self._codebook_embeddings
-        )
-
-        return codebook_embeddings
 
     def _get_position_embeddings(self, lengths, mask, position_lambda, embedding_layer):
         batch_size = mask.shape[0]
