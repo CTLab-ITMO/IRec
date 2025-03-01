@@ -48,22 +48,15 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
 
         self._init_weights(initializer_range)
 
-        self._codebook_item_embeddings_stacked = torch.stack(
-            [codebook for codebook in rqvae_model.codebooks]
-        )
         self._codebook_item_embeddings_stacked = nn.Parameter(
-            self._codebook_item_embeddings_stacked, requires_grad=True
-        ) # TODOPK fix to use single rqvae codebook pointer
-
-        self._item_id_to_semantic_embedding, self._item_id_to_full_embedding = (
-            self.get_init_item_embeddings(item_id_to_semantic_id, item_id_to_residual)
-        )
+            torch.stack([codebook for codebook in rqvae_model.codebooks]),
+            requires_grad=True,
+        )  # TODOPK fix to use single rqvae codebook pointer
+        # (ask is it ok to have separate codebooks and _item_id_to_semantic_embedding)
 
         self._item_id_to_semantic_embedding = nn.Parameter(
-            self._item_id_to_semantic_embedding, requires_grad=True
-        )
-        self._item_id_to_full_embedding = nn.Parameter(
-            self._item_id_to_full_embedding, requires_grad=True
+            self.get_init_item_embeddings(item_id_to_semantic_id, item_id_to_residual),
+            requires_grad=True,
         )
 
     @classmethod
@@ -110,7 +103,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             all_embeddings = torch.cat(
                 [
                     torch.zeros(1, self._embedding_dim, device=DEVICE),
-                    self._item_id_to_full_embedding,
+                    self._item_id_to_semantic_embedding.sum(dim=1),
                     torch.zeros(1, self._embedding_dim, device=DEVICE),
                 ],
                 dim=0,
@@ -149,14 +142,16 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             )  # (batch_size, embedding_dim)
             # b - batch_size, n - num_candidates, d - embedding_dim
             candidate_scores = torch.einsum(
-                "bd,nd->bn", last_embeddings, self._item_id_to_full_embedding
+                "bd,nd->bn",
+                last_embeddings,
+                self._item_id_to_semantic_embedding.sum(dim=1),
             )  # (batch_size, num_items)
 
             _, indices = torch.topk(
                 candidate_scores, k=20, dim=-1, largest=True
             )  # (batch_size, 20)
 
-            return indices + 1
+            return indices + 1  # tensors are 0 indexed
 
     def get_item_embeddings(self, events):
         embs = self._item_id_to_semantic_embedding[
@@ -165,15 +160,8 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
         return embs.reshape(-1, self._embedding_dim)
 
     def get_init_item_embeddings(self, item_id_to_semantic_id, item_id_to_residual):
-        events = torch.arange(1, len(item_id_to_semantic_id) + 1)
-
-        # convert to semantic ids
-        semantic_ids = item_id_to_semantic_id[
-            events - 1
-        ]  # len(events), len(codebook_sizes)
-
         result = []
-        for semantic_id in semantic_ids:
+        for semantic_id in item_id_to_semantic_id:
             item_repr = []
             for codebook_idx, codebook_id in enumerate(semantic_id):
                 item_repr.append(
@@ -185,20 +173,14 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             result
         )  # len(events), len(codebook_sizes), embedding_dim
 
-        # get residuals
-        residual = item_id_to_residual[events - 1]
-        # text_embeddings = self._item_id_to_text_embedding[events - 1]
-        # residual = text_embeddings - semantic_embeddings.sum(dim=1)
-        residual = residual.unsqueeze(1)
+        residual = item_id_to_residual.unsqueeze(1)
 
         # get true item embeddings
         item_embeddings = torch.cat(
             [semantic_embeddings, residual], dim=1
         )  # len(events), len(self._codebook_sizes) + 1, embedding_dim
 
-        full_embeddings = item_embeddings.sum(dim=1)
-
-        return item_embeddings, full_embeddings
+        return item_embeddings
 
     def _encoder_pos_embeddings(self, lengths, mask):
         def position_lambda(x):
