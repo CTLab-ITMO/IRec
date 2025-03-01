@@ -1,6 +1,7 @@
 import torch
-from models.tiger import TigerModel
+
 from models import SequentialTorchModel
+from models.tiger import TigerModel
 from utils import DEVICE, create_masked_tensor
 
 

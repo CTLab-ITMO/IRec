@@ -12,10 +12,10 @@ from .ngcf import NgcfModel
 from .pop import PopModel
 from .pure_mf import PureMF
 from .random import RandomModel
-from .sasrec import SasRecModel, SasRecInBatchModel
+from .rqvae import RqVaeModel
+from .s3rec import S3RecModel
+from .sasrec import SasRecInBatchModel, SasRecModel
+from .sasrec_ce import SasRecCeModel
 from .sasrec_freezed import SasRecFreezedModel
 from .sasrec_semantic import SasRecSemanticModel
-from .sasrec_ce import SasRecCeModel
-from .s3rec import S3RecModel
-from .rqvae import RqVaeModel
 from .tiger import TigerModel

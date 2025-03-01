@@ -1,8 +1,10 @@
 import torch
-from .tiger import TigerModel
+from torch import nn
+
 from models import SequentialTorchModel
 from utils import DEVICE, create_masked_tensor
-from torch import nn
+
+from .tiger import TigerModel
 
 
 class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
@@ -140,7 +142,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
                 src=torch.ones_like(sample_ids) * (-torch.inf),
             )  # (all_batch_events, num_items + 2)
             negative_scores[:, 0] = -torch.inf  # Padding idx
-            negative_scores[:, self._num_items + 1:] = -torch.inf  # Mask idx
+            negative_scores[:, self._num_items + 1 :] = -torch.inf  # Mask idx
 
             return {
                 "positive_scores": positive_scores,

@@ -1,4 +1,4 @@
 from .collision_solver import CollisionSolver
-from .trie import Trie
-from .tree import Tree
 from .simplified_tree import SimplifiedTree
+from .tree import Tree
+from .trie import Trie

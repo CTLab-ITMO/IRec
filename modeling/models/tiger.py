@@ -1,9 +1,10 @@
 import json
 
 import torch
+from torch import nn
+
 from models.base import SequentialTorchModel
 from rqvae_utils import CollisionSolver, SimplifiedTree
-from torch import nn
 from utils import DEVICE, create_masked_tensor, get_activation_function
 
 from .rqvae import RqVaeModel
@@ -81,7 +82,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
                 a=-2 * initializer_range,
                 b=2 * initializer_range,
             ),
-            requires_grad=True, # TODOPK added for bos
+            requires_grad=True,  # TODOPK added for bos
         )
 
         self._codebook_embeddings = nn.Embedding(
@@ -92,13 +93,14 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         self._codebook_item_embeddings_stacked = nn.Parameter(
             torch.stack([codebook for codebook in rqvae_model.codebooks]),
-            requires_grad=False # TODOPK compare with unfrozen codebooks
+            requires_grad=False,  # TODOPK compare with unfrozen codebooks
         )
 
         item_ids = torch.arange(1, len(item_id_to_semantic_id) + 1)
         self._item_id_to_semantic_embedding = self.get_init_item_embeddings(item_ids)
         self._item_id_to_semantic_embedding = nn.Parameter(
-            self._item_id_to_semantic_embedding, requires_grad=False # TODOPK compare with unfrozen codebooks
+            self._item_id_to_semantic_embedding,
+            requires_grad=False,  # TODOPK compare with unfrozen codebooks
         )
 
         self._trie = SimplifiedTree(self._codebook_item_embeddings_stacked)
@@ -329,13 +331,17 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             )
 
             assert last_position_embedding.shape == tgt_embeddings[:, -1, :].shape
-            assert tgt_embeddings.shape == torch.Size([batch_size, step + 1, embedding_dim])
+            assert tgt_embeddings.shape == torch.Size(
+                [batch_size, step + 1, embedding_dim]
+            )
 
             curr_step_embeddings = tgt_embeddings.clone()
             curr_step_embeddings[:, -1, :] = (
                 tgt_embeddings[:, -1, :] + last_position_embedding
             )
-            assert torch.allclose(tgt_embeddings[:, :-1, :], curr_step_embeddings[:, :-1, :])
+            assert torch.allclose(
+                tgt_embeddings[:, :-1, :], curr_step_embeddings[:, :-1, :]
+            )
             tgt_embeddings = curr_step_embeddings
 
             # curr_embeddings[:, -1, :] = self._decoder_layernorm(curr_embeddings[:, -1, :])

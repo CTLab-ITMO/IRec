@@ -1,25 +1,23 @@
-from models.base import TorchModel
-
-from utils import create_masked_tensor, DEVICE
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from models.base import TorchModel
+from utils import DEVICE, create_masked_tensor
 
-class LightGCNModel(TorchModel, config_name='light_gcn'):
 
+class LightGCNModel(TorchModel, config_name="light_gcn"):
     def __init__(
-            self,
-            user_prefix,
-            positive_prefix,
-            graph,
-            num_users,
-            num_items,
-            embedding_dim,
-            num_layers,
-            dropout=0.0,
-            initializer_range=0.02
+        self,
+        user_prefix,
+        positive_prefix,
+        graph,
+        num_users,
+        num_items,
+        embedding_dim,
+        num_layers,
+        dropout=0.0,
+        initializer_range=0.02,
     ):
         super().__init__()
         self._user_prefix = user_prefix
@@ -32,13 +30,11 @@ class LightGCNModel(TorchModel, config_name='light_gcn'):
         self._dropout_rate = dropout
 
         self._user_embeddings = nn.Embedding(
-            num_embeddings=self._num_users + 2,
-            embedding_dim=self._embedding_dim
+            num_embeddings=self._num_users + 2, embedding_dim=self._embedding_dim
         )
 
         self._item_embeddings = nn.Embedding(
-            num_embeddings=self._num_items + 2,
-            embedding_dim=self._embedding_dim
+            num_embeddings=self._num_items + 2, embedding_dim=self._embedding_dim
         )
 
         self._init_weights(initializer_range)
@@ -46,19 +42,21 @@ class LightGCNModel(TorchModel, config_name='light_gcn'):
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
-            user_prefix=config['user_prefix'],
-            positive_prefix=config['positive_prefix'],
-            graph=kwargs['graph'],
-            num_users=kwargs['num_users'],
-            num_items=kwargs['num_items'],
-            embedding_dim=config['embedding_dim'],
-            num_layers=config['num_layers'],
-            dropout=config.get('dropout', 0.0),
-            initializer_range=config.get('initializer_range', 0.02)
+            user_prefix=config["user_prefix"],
+            positive_prefix=config["positive_prefix"],
+            graph=kwargs["graph"],
+            num_users=kwargs["num_users"],
+            num_items=kwargs["num_items"],
+            embedding_dim=config["embedding_dim"],
+            num_layers=config["num_layers"],
+            dropout=config.get("dropout", 0.0),
+            initializer_range=config.get("initializer_range", 0.02),
         )
 
     def _apply_graph_encoder(self):
-        ego_embeddings = torch.cat((self._user_embeddings.weight, self._item_embeddings.weight), dim=0)
+        ego_embeddings = torch.cat(
+            (self._user_embeddings.weight, self._item_embeddings.weight), dim=0
+        )
         all_embeddings = [ego_embeddings]
 
         if self._dropout_rate > 0:  # drop some edges
@@ -89,8 +87,8 @@ class LightGCNModel(TorchModel, config_name='light_gcn'):
         return user_final_embeddings, item_final_embeddings
 
     def _get_embeddings(self, inputs, prefix, ego_embeddings, final_embeddings):
-        ids = inputs['{}.ids'.format(prefix)]  # (all_batch_events)
-        lengths = inputs['{}.length'.format(prefix)]  # (batch_size)
+        ids = inputs["{}.ids".format(prefix)]  # (all_batch_events)
+        lengths = inputs["{}.length".format(prefix)]  # (batch_size)
 
         final_embeddings = final_embeddings[ids]  # (all_batch_events, embedding_dim)
         ego_embeddings = ego_embeddings(ids)  # (all_batch_events, embedding_dim)
@@ -108,8 +106,9 @@ class LightGCNModel(TorchModel, config_name='light_gcn'):
         return padded_embeddings, padded_ego_embeddings, mask
 
     def forward(self, inputs):
-        all_final_user_embeddings, all_final_item_embeddings = \
-            self._apply_graph_encoder()  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
+        all_final_user_embeddings, all_final_item_embeddings = (
+            self._apply_graph_encoder()
+        )  # (num_users + 2, embedding_dim), (num_items + 2, embedding_dim)
 
         user_embeddings, user_ego_embeddings, user_mask = self._get_embeddings(
             inputs, self._user_prefix, self._user_embeddings, all_final_user_embeddings
@@ -117,63 +116,69 @@ class LightGCNModel(TorchModel, config_name='light_gcn'):
         user_embeddings = user_embeddings[user_mask]  # (batch_size, embedding_dim)
 
         if self.training:  # training mode
-            positive_item_ids = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
-            positive_item_lengths = inputs['{}.length'.format(self._positive_prefix)]  # (batch_size)
+            positive_item_ids = inputs[
+                "{}.ids".format(self._positive_prefix)
+            ]  # (all_batch_events)
+            positive_item_lengths = inputs[
+                "{}.length".format(self._positive_prefix)
+            ]  # (batch_size)
 
             batch_size = positive_item_lengths.shape[0]
             max_sequence_length = positive_item_lengths.max().item()
 
-            mask = torch.arange(
-                end=max_sequence_length,
-                device=DEVICE
-            )[None].tile([batch_size, 1]) < positive_item_lengths[:, None]  # (batch_size, max_seq_len)
+            mask = (
+                torch.arange(end=max_sequence_length, device=DEVICE)[None].tile(
+                    [batch_size, 1]
+                )
+                < positive_item_lengths[:, None]
+            )  # (batch_size, max_seq_len)
 
-            positive_user_ids = torch.arange(
-                batch_size,
-                device=DEVICE
-            )[None].tile([max_sequence_length, 1]).T  # (batch_size, max_seq_len)
+            positive_user_ids = (
+                torch.arange(batch_size, device=DEVICE)[None]
+                .tile([max_sequence_length, 1])
+                .T
+            )  # (batch_size, max_seq_len)
             positive_user_ids = positive_user_ids[mask]  # (all_batch_items)
-            user_embeddings = user_embeddings[positive_user_ids]  # (all_batch_items, embedding_dim)
+            user_embeddings = user_embeddings[
+                positive_user_ids
+            ]  # (all_batch_items, embedding_dim)
 
             all_scores = torch.einsum(
-                'ad,nd->an',
-                user_embeddings,
-                all_final_item_embeddings
+                "ad,nd->an", user_embeddings, all_final_item_embeddings
             )  # (all_batch_items, num_items + 2)
 
-            negative_mask = torch.zeros(self._num_items + 2, dtype=torch.bool, device=DEVICE)  # (num_items + 2)
+            negative_mask = torch.zeros(
+                self._num_items + 2, dtype=torch.bool, device=DEVICE
+            )  # (num_items + 2)
             negative_mask[positive_item_ids] = 1
 
             positive_scores = torch.gather(
-                input=all_scores,
-                dim=1,
-                index=positive_item_ids[..., None]
+                input=all_scores, dim=1, index=positive_item_ids[..., None]
             )  # (all_batch_items, 1)
 
             all_scores = torch.scatter_add(
                 input=all_scores,
                 dim=1,
                 index=positive_item_ids[..., None],
-                src=torch.ones_like(positive_item_ids[..., None]).float()
+                src=torch.ones_like(positive_item_ids[..., None]).float(),
             )  # (all_batch_items, num_items + 2)
 
             return {
-                'positive_scores': positive_scores,
-                'negative_scores': all_scores,
-                'item_embeddings': torch.cat((self._user_embeddings.weight, self._item_embeddings.weight), dim=0)
+                "positive_scores": positive_scores,
+                "negative_scores": all_scores,
+                "item_embeddings": torch.cat(
+                    (self._user_embeddings.weight, self._item_embeddings.weight), dim=0
+                ),
             }
         else:  # eval mode
             candidate_scores = torch.einsum(
-                'bd,nd->bn',
-                user_embeddings,
-                all_final_item_embeddings
+                "bd,nd->bn", user_embeddings, all_final_item_embeddings
             )  # (batch_size, num_items + 2)
             candidate_scores[:, 0] = -torch.inf
-            candidate_scores[:, self._num_items + 1:] = -torch.inf
+            candidate_scores[:, self._num_items + 1 :] = -torch.inf
 
             _, indices = torch.topk(
-                candidate_scores,
-                k=20, dim=-1, largest=True
+                candidate_scores, k=20, dim=-1, largest=True
             )  # (batch_size, 20)
 
             return indices
