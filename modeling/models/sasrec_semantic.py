@@ -48,13 +48,8 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
 
         self._init_weights(initializer_range)
 
-        self._codebook_item_embeddings_stacked = nn.Parameter(
-            torch.stack([codebook for codebook in rqvae_model.codebooks]),
-            requires_grad=True,
-        )  # (ask is it ok to have separate codebooks and _item_id_to_semantic_embedding)
-
         self._item_id_to_semantic_embedding = nn.Parameter(
-            self.get_init_item_embeddings(item_id_to_semantic_id, item_id_to_residual),
+            self.get_init_item_embeddings(rqvae_model, item_id_to_semantic_id, item_id_to_residual),
             requires_grad=True,
         )
 
@@ -158,13 +153,15 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
         ]  # len(events), len(self._codebook_sizes) + 1, embedding_dim
         return embs.reshape(-1, self._embedding_dim)
 
-    def get_init_item_embeddings(self, item_id_to_semantic_id, item_id_to_residual):
+    def get_init_item_embeddings(self, rqvae_model, item_id_to_semantic_id, item_id_to_residual):
+        codebooks = torch.stack([codebook for codebook in rqvae_model.codebooks])
+
         result = []
         for semantic_id in item_id_to_semantic_id:
             item_repr = []
             for codebook_idx, codebook_id in enumerate(semantic_id):
                 item_repr.append(
-                    self._codebook_item_embeddings_stacked[codebook_idx][codebook_id]
+                    codebooks[codebook_idx][codebook_id]
                 )
             result.append(torch.stack(item_repr))
 
