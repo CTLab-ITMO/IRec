@@ -1,0 +1,70 @@
+{
+  "experiment_name": "rqvae_beauty",
+  "train_steps_num": 1024,
+  "dataset": {
+    "type": "rqvae",
+    "path_to_data_dir": "../data",
+    "name": "Beauty",
+    "samplers": {
+      "type": "identity"
+    }
+  },
+  "dataloader": {
+    "train": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "embed"
+      },
+      "drop_last": false,
+      "shuffle": true
+    },
+    "validation": {
+      "type": "torch",
+      "batch_size": 256,
+      "batch_processor": {
+        "type": "embed"
+      },
+      "drop_last": false,
+      "shuffle": false
+    }
+  },
+  "model": {
+    "type": "rqvae",
+    "input_dim": 512,
+    "hidden_dim": 128,
+    "n_iter": 100,
+    "codebook_sizes": [256, 256, 256, 256],
+    "should_init_codebooks": true,
+    "should_reinit_unused_clusters": true,
+    "initializer_range": 0.02
+  },
+  "optimizer": {
+    "type": "basic",
+    "optimizer": {
+      "type": "adam",
+      "lr": 1e-4
+    },
+    "clip_grad_threshold": 5.0,
+    "scheduler": {
+      "type": "step",
+      "step_size": 100, 
+      "gamma": 0.96
+    }
+  },
+  "loss": {
+    "type": "rqvae_loss",
+    "beta": 0.25,
+    "output_prefix": "loss"
+  },
+  "callback": {
+    "type": "composite",
+    "callbacks": [
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "loss"
+      }
+    ]
+  }
+}

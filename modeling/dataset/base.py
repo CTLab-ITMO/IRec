@@ -1,4 +1,5 @@
 from collections import defaultdict
+import json
 
 from tqdm import tqdm
 
@@ -615,4 +616,74 @@ class ScientificDataset(BaseDataset, config_name='scientific'):
             'num_users': self.num_users,
             'num_items': self.num_items,
             'max_sequence_length': self.max_sequence_length
+        }
+
+
+class RqVaeDataset(BaseDataset, config_name='rqvae'):
+
+    def __init__(
+            self,
+            train_sampler,
+            validation_sampler,
+            test_sampler,
+            num_items
+    ):
+        self._train_sampler = train_sampler
+        self._validation_sampler = validation_sampler
+        self._test_sampler = test_sampler
+        self._num_items = num_items
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        data_dir_path = os.path.join(config['path_to_data_dir'], config['name'])
+        train_dataset, validation_dataset, test_dataset = [], [], []
+
+        dataset_path = os.path.join(data_dir_path, '{}.pt'.format('data_full'))
+        df = torch.load(dataset_path, weights_only=False)
+
+        for idx, sample in df.iterrows():
+            train_dataset.append({
+                'item.id': idx,
+                'item.embed': sample["embeddings"]
+            })
+            
+        logger.info('Train dataset size: {}'.format(len(train_dataset)))
+        logger.info('Test dataset size: {}'.format(len(test_dataset)))
+
+        train_sampler = TrainSampler.create_from_config(
+            config['samplers'],
+            dataset=train_dataset
+        )
+        validation_sampler = EvalSampler.create_from_config(
+            config['samplers'],
+            dataset=validation_dataset
+        )
+        test_sampler = EvalSampler.create_from_config(
+            config['samplers'],
+            dataset=test_dataset
+        )
+
+        return cls(
+            train_sampler=train_sampler,
+            validation_sampler=validation_sampler,
+            test_sampler=test_sampler,
+            num_items=len(df)
+        )
+
+    def get_samplers(self):
+        return self._train_sampler, self._validation_sampler, self._test_sampler
+
+    @property
+    def num_items(self):
+        return self._num_items
+
+    @property
+    def max_sequence_length(self):
+        return self._max_sequence_length
+
+    @property
+    def meta(self):
+        return {
+            'num_items': self.num_items,
+            'train_sampler': self._train_sampler
         }
