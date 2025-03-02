@@ -241,6 +241,9 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         #     item_ids = self._trie.query(semantic_ids, items_to_query=20)
 
         #     return item_ids
+        #     TODOPK
+        #     uid -> hash (murmurhash32) -> modulo (2000) -> get_embedding -> prepend
+        #     first iteration -> for each user get embedding
 
         else:  # eval mode
             semantic_ids, tgt_embeddings = self._apply_decoder_autoregressive(
@@ -366,9 +369,14 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             # curr_embeddings[:, -1, :] = self._decoder_layernorm(curr_embeddings[:, -1, :])
             # curr_embeddings[:, -1, :] = self._decoder_dropout(curr_embeddings[:, -1, :])
 
+            causal_mask = (
+                torch.tril(torch.ones(step + 1, step + 1)).bool().to(DEVICE)
+            )  # (dec_seq_len, dec_seq_len)
+
             decoder_output = self._decoder(
                 tgt=tgt_embeddings,
                 memory=encoder_embeddings,
+                tgt_mask=~causal_mask,
                 memory_key_padding_mask=~encoder_mask,
             )
 
