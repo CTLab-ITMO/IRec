@@ -320,6 +320,34 @@ class FpsLoss(TorchLoss, config_name="fps"):
         return loss
 
 
+class SASRecRealLoss(TorchLoss, config_name='sasrec_real'):
+
+    def __init__(
+            self,
+            positive_prefix,
+            negative_prefix,
+            output_prefix=None
+    ):
+        super().__init__()
+        self._positive_prefix = positive_prefix
+        self._negative_prefix = negative_prefix
+        self._output_prefix = output_prefix
+
+    def forward(self, inputs):
+        positive_scores = inputs[self._positive_prefix]  # (x)
+        negative_scores = inputs[self._negative_prefix]  # (x)
+        assert positive_scores.shape[0] == negative_scores.shape[0]
+
+        positive_loss = torch.log(nn.functional.sigmoid(positive_scores))  # (x)
+        negative_loss = torch.log(1.0 - nn.functional.sigmoid(negative_scores))  # (x)
+        loss = positive_loss + negative_loss  # (x)
+        loss = -loss.mean()  # (1)
+
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+
+        return loss
+
 class SASRecLoss(TorchLoss, config_name="sasrec"):
     def __init__(self, positive_prefix, negative_prefix, output_prefix=None):
         super().__init__()

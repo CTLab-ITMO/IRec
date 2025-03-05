@@ -78,7 +78,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
                 a=-2 * initializer_range,
                 b=2 * initializer_range,
             ),
-            requires_grad=True,  # TODOPK added for bos
+            requires_grad=True,
         )
 
         self._codebook_embeddings = nn.Embedding(
@@ -380,6 +380,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
                 memory_key_padding_mask=~encoder_mask,
             )
 
+            # TODOPK add assert for all except last layer (check if only last layer changes)
+            # TODOPK check decoder output for several outputs
             # TODOPK ASK it is not true?
             # assert that prelast items don't change
             # assert decoder changes only last index in dim = 1
