@@ -102,7 +102,9 @@ class SequentialTorchModel(TorchModel):
     def get_item_embeddings(self, events):
         return self._item_embeddings(events)
 
-    def _apply_sequential_encoder(self, events, lengths, add_cls_token=False):
+    def _apply_sequential_encoder(
+        self, events, lengths, add_cls_token=False, user_embeddings=None
+    ):
         embeddings = self.get_item_embeddings(
             events
         )  # (all_batch_events, embedding_dim)
@@ -136,6 +138,14 @@ class SequentialTorchModel(TorchModel):
                 (torch.ones((batch_size, 1), dtype=torch.bool, device=DEVICE), mask),
                 dim=1,
             )
+
+        if user_embeddings is not None:
+            embeddings = torch.cat((user_embeddings.unsqueeze(1), embeddings), dim=1)
+            mask = torch.cat(
+                (torch.ones((batch_size, 1), dtype=torch.bool, device=DEVICE), mask),
+                dim=1,
+            )
+            seq_len += 1  # TODOPK ask if this is correct
 
         if self._is_causal:
             causal_mask = (

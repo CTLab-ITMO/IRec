@@ -16,6 +16,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
         positive_prefix,
         negative_prefix,
         num_items,
+        num_users,
         max_sequence_length,
         embedding_dim,
         num_heads,
@@ -42,11 +43,17 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
         self._positive_prefix = positive_prefix
         self._negative_prefix = negative_prefix
 
+        self._num_users = num_users
+
         self._codebook_sizes = rqvae_model.codebook_sizes
 
         self._codebook_embeddings = nn.Embedding(
             num_embeddings=len(self._codebook_sizes) + 2, embedding_dim=embedding_dim
         )  # + 2 for bos token & residual
+
+        self._user_embeddings = nn.Embedding(
+            num_embeddings=self._num_users + 1, embedding_dim=embedding_dim
+        )
 
         self._init_weights(initializer_range)
 
@@ -69,6 +76,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             positive_prefix=config["positive_prefix"],
             negative_prefix=config["negative_prefix"],
             num_items=kwargs["num_items"],
+            num_users=kwargs["num_users"],
             max_sequence_length=kwargs["max_sequence_length"],
             embedding_dim=config["embedding_dim"],
             num_heads=config.get("num_heads", int(config["embedding_dim"] // 64)),
@@ -86,8 +94,12 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             "{}.length".format(self._sequence_prefix)
         ]  # (batch_size)
 
+        user_embeddings = self._user_embeddings(inputs["user.ids"])
+
         embeddings, mask = self._apply_sequential_encoder(
-            all_sample_events, all_sample_lengths * (len(self._codebook_sizes) + 1)
+            all_sample_events,
+            all_sample_lengths * (len(self._codebook_sizes) + 1),
+            user_embeddings=user_embeddings,
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
         last_embeddings = self._get_last_embedding(
