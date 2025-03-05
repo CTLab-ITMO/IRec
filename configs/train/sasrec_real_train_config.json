@@ -1,5 +1,5 @@
 {
-  "experiment_name": "sasrec_semantic_beauty_learnable",
+  "experiment_name": "sasrec_real_beauty",
   "best_metric": "validation/ndcg@20",
   "train_epochs_num": 100,
   "dataset": {
@@ -34,10 +34,7 @@
     }
   },
   "model": {
-    "type": "sasrec_semantic",
-    "rqvae_train_config_path": "../configs/train/rqvae_train_config.json",
-    "rqvae_checkpoint_path": "../checkpoints/rqvae_beauty_final_state.pth",
-    "embs_extractor_path": "../data/Beauty/rqvae/data_full.pt",
+    "type": "sasrec_real",
     "sequence_prefix": "item",
     "positive_prefix": "labels",
     "negative_prefix": "negative",

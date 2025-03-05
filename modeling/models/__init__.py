@@ -17,5 +17,6 @@ from .s3rec import S3RecModel
 from .sasrec import SasRecInBatchModel, SasRecModel
 from .sasrec_ce import SasRecCeModel
 from .sasrec_freezed import SasRecFreezedModel
+from .sasrec_real import SasRecRealModel
 from .sasrec_semantic import SasRecSemanticModel
 from .tiger import TigerModel

@@ -1,7 +1,7 @@
 .idea
 __pycache__
 data/*
-tensorboard_logs/*
+*tensorboard_logs*/*
 saved_logs/*
 .venv
 papers
