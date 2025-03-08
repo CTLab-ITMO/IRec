@@ -860,6 +860,122 @@ class ScientificDataset(BaseDataset, config_name="scientific"):
         }
 
 
+class ScientificFullDataset(ScientificDataset, config_name="scientific_full"):
+    def __init__(
+        self,
+        train_sampler,
+        validation_sampler,
+        test_sampler,
+        num_users,
+        num_items,
+        max_sequence_length,
+    ):
+        self._train_sampler = train_sampler
+        self._validation_sampler = validation_sampler
+        self._test_sampler = test_sampler
+        self._num_users = num_users
+        self._num_items = num_items
+        self._max_sequence_length = max_sequence_length
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        data_dir_path = os.path.join(config["path_to_data_dir"], config["name"])
+        max_sequence_length = config["max_sequence_length"]
+        max_user_id, max_item_id = 0, 0
+        train_dataset, validation_dataset, test_dataset = [], [], []
+
+        dataset_path = os.path.join(data_dir_path, "{}.txt".format("all_data"))
+        with open(dataset_path, "r") as f:
+            data = f.readlines()
+
+        for sample in data:
+            sample = sample.strip("\n").split(" ")
+            user_id = int(sample[0])
+            item_ids = [int(item_id) for item_id in sample[1:]]
+
+            max_user_id = max(max_user_id, user_id)
+            max_item_id = max(max_item_id, max(item_ids))
+
+            assert len(item_ids) >= 5
+
+            for prefix_length in range(5, len(item_ids) + 1):
+                prefix = item_ids[:prefix_length]
+
+                train_dataset.append(
+                    {
+                        "user.ids": [user_id],
+                        "user.length": 1,
+                        "item.ids": prefix[:-2][-max_sequence_length:],
+                        "item.length": len(prefix[:-2][-max_sequence_length:]),
+                    }
+                )
+                assert len(prefix[:-2][-max_sequence_length:]) == len(
+                    set(prefix[:-2][-max_sequence_length:])
+                )
+                validation_dataset.append(
+                    {
+                        "user.ids": [user_id],
+                        "user.length": 1,
+                        "item.ids": prefix[:-1][-max_sequence_length:],
+                        "item.length": len(prefix[:-1][-max_sequence_length:]),
+                    }
+                )
+                assert len(prefix[:-1][-max_sequence_length:]) == len(
+                    set(prefix[:-1][-max_sequence_length:])
+                )
+                test_dataset.append(
+                    {
+                        "user.ids": [user_id],
+                        "user.length": 1,
+                        "item.ids": prefix[-max_sequence_length:],
+                        "item.length": len(prefix[-max_sequence_length:]),
+                    }
+                )
+                assert len(prefix[-max_sequence_length:]) == len(
+                    set(prefix[-max_sequence_length:])
+                )
+
+        logger.info("Train dataset size: {}".format(len(train_dataset)))
+        logger.info("Test dataset size: {}".format(len(test_dataset)))
+        logger.info("Max user id: {}".format(max_user_id))
+        logger.info("Max item id: {}".format(max_item_id))
+        logger.info("Max sequence length: {}".format(max_sequence_length))
+        logger.info(
+            "{} dataset sparsity: {}".format(
+                config["name"],
+                (len(train_dataset) + len(test_dataset)) / max_user_id / max_item_id,
+            )
+        )
+
+        train_sampler = TrainSampler.create_from_config(
+            config["samplers"],
+            dataset=train_dataset,
+            num_users=max_user_id,
+            num_items=max_item_id,
+        )
+        validation_sampler = EvalSampler.create_from_config(
+            config["samplers"],
+            dataset=validation_dataset,
+            num_users=max_user_id,
+            num_items=max_item_id,
+        )
+        test_sampler = EvalSampler.create_from_config(
+            config["samplers"],
+            dataset=test_dataset,
+            num_users=max_user_id,
+            num_items=max_item_id,
+        )
+
+        return cls(
+            train_sampler=train_sampler,
+            validation_sampler=validation_sampler,
+            test_sampler=test_sampler,
+            num_users=max_user_id,
+            num_items=max_item_id,
+            max_sequence_length=max_sequence_length,
+        )
+
+
 class RqVaeDataset(BaseDataset, config_name="rqvae"):
     def __init__(self, train_sampler, validation_sampler, test_sampler, num_items):
         self._train_sampler = train_sampler
