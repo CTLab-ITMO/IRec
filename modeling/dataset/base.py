@@ -274,6 +274,7 @@ class SequenceFullDataset(SequenceDataset, config_name="sequence_full"):
         max_seq_len = max([train_seq_len, valid_seq_len, test_seq_len])
 
         logger.info("Train dataset size: {}".format(len(train_dataset)))
+        logger.info("Validation dataset size: {}".format(len(validation_dataset)))
         logger.info("Test dataset size: {}".format(len(test_dataset)))
         logger.info("Max user id: {}".format(max_user_id))
         logger.info("Max item id: {}".format(max_item_id))
@@ -909,7 +910,9 @@ class ScientificFullDataset(ScientificDataset, config_name="scientific_full"):
             assert len(item_ids) >= 5
 
             for prefix_length in range(5, len(item_ids) + 1):
-                prefix = item_ids[:prefix_length]
+                prefix = item_ids[
+                    :prefix_length
+                ]  # TODOPK no sliding window, only incrmenting sequence from last 50 items
 
                 train_dataset.append(
                     {
@@ -947,6 +950,7 @@ class ScientificFullDataset(ScientificDataset, config_name="scientific_full"):
             )
 
         logger.info("Train dataset size: {}".format(len(train_dataset)))
+        logger.info("Validation dataset size: {}".format(len(validation_dataset)))
         logger.info("Test dataset size: {}".format(len(test_dataset)))
         logger.info("Max user id: {}".format(max_user_id))
         logger.info("Max item id: {}".format(max_item_id))
