@@ -61,7 +61,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             self.get_init_item_embeddings(
                 rqvae_model, item_id_to_semantic_id, item_id_to_residual
             ),
-            requires_grad=False,
+            requires_grad=True,
         )
 
     @classmethod
