@@ -323,7 +323,7 @@ class SequenceFullDataset(SequenceDataset, config_name="sequence_full"):
 
     @classmethod
     def flatten_item_sequence(cls, item_ids):
-        min_history_length = 3  # TODOPK make this configurable
+        min_history_length = 3
         histories = []
         for i in range(min_history_length - 1, len(item_ids)):
             histories.append(item_ids[: i + 1])
@@ -373,14 +373,24 @@ class SequenceFullDataset(SequenceDataset, config_name="sequence_full"):
 
             dataset = []
             for user_id, item_ids in zip(user_sequences, item_sequences):
-                flattened_item_ids = cls.flatten_item_sequence(item_ids)
-                for seq in flattened_item_ids:
+                if part == "train":
+                    flattened_item_ids = cls.flatten_item_sequence(item_ids)
+                    for seq in flattened_item_ids:
+                        dataset.append(
+                            {
+                                "user.ids": [user_id],
+                                "user.length": 1,
+                                "item.ids": seq,
+                                "item.length": len(seq),
+                            }
+                        )
+                else:
                     dataset.append(
                         {
                             "user.ids": [user_id],
                             "user.length": 1,
-                            "item.ids": seq,
-                            "item.length": len(seq),
+                            "item.ids": item_ids,
+                            "item.length": len(item_ids),
                         }
                     )
 
@@ -912,28 +922,29 @@ class ScientificFullDataset(ScientificDataset, config_name="scientific_full"):
                 assert len(prefix[:-2][-max_sequence_length:]) == len(
                     set(prefix[:-2][-max_sequence_length:])
                 )
-                validation_dataset.append(
-                    {
-                        "user.ids": [user_id],
-                        "user.length": 1,
-                        "item.ids": prefix[:-1][-max_sequence_length:],
-                        "item.length": len(prefix[:-1][-max_sequence_length:]),
-                    }
-                )
-                assert len(prefix[:-1][-max_sequence_length:]) == len(
-                    set(prefix[:-1][-max_sequence_length:])
-                )
-                test_dataset.append(
-                    {
-                        "user.ids": [user_id],
-                        "user.length": 1,
-                        "item.ids": prefix[-max_sequence_length:],
-                        "item.length": len(prefix[-max_sequence_length:]),
-                    }
-                )
-                assert len(prefix[-max_sequence_length:]) == len(
-                    set(prefix[-max_sequence_length:])
-                )
+
+            validation_dataset.append(
+                {
+                    "user.ids": [user_id],
+                    "user.length": 1,
+                    "item.ids": item_ids[:-1][-max_sequence_length:],
+                    "item.length": len(item_ids[:-1][-max_sequence_length:]),
+                }
+            )
+            assert len(item_ids[:-1][-max_sequence_length:]) == len(
+                set(item_ids[:-1][-max_sequence_length:])
+            )
+            test_dataset.append(
+                {
+                    "user.ids": [user_id],
+                    "user.length": 1,
+                    "item.ids": item_ids[-max_sequence_length:],
+                    "item.length": len(item_ids[-max_sequence_length:]),
+                }
+            )
+            assert len(item_ids[-max_sequence_length:]) == len(
+                set(item_ids[-max_sequence_length:])
+            )
 
         logger.info("Train dataset size: {}".format(len(train_dataset)))
         logger.info("Test dataset size: {}".format(len(test_dataset)))
