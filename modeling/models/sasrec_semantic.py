@@ -94,9 +94,12 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
             "{}.length".format(self._sequence_prefix)
         ]  # (batch_size)
 
+        user_embeddings = self._user_embeddings(inputs["user.ids"])
+
         embeddings, mask = self._apply_sequential_encoder(
             all_sample_events,
             all_sample_lengths * (len(self._codebook_sizes) + 1),
+            user_embeddings=user_embeddings,
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
         last_embeddings = self._get_last_embedding(
