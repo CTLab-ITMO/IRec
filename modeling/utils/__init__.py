@@ -11,7 +11,7 @@ from utils.grid_search import Params
 from utils.registry import MetaParent
 
 if torch.cuda.is_available():
-    DEVICE = torch.device("cuda")
+    DEVICE = torch.device("cuda:1")
 else:
     DEVICE = torch.device("cpu")
 
