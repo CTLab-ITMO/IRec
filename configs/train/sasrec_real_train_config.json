@@ -1,9 +1,9 @@
 {
-  "experiment_name": "sasrec_real_beauty",
+  "experiment_name": "sasrec_real_beauty_loo",
   "best_metric": "validation/ndcg@20",
   "train_epochs_num": 100,
   "dataset": {
-    "type": "sequence_full",
+    "type": "scientific_full",
     "path_to_data_dir": "../data",
     "name": "Beauty",
     "max_sequence_length": 50,
