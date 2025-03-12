@@ -62,14 +62,13 @@ class SasRecFullModel(SequentialTorchModel, config_name="sasrec_full"):
             all_sample_events, all_sample_lengths
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
-        if self.training:  # training mode
-            # queries
-            in_batch_queries_embeddings = embeddings[
-                mask
-            ]  # (all_batch_events, embedding_dim)
+        last_embeddings = self._get_last_embedding(
+            embeddings, mask
+        )  # (batch_size, embedding_dim)
 
+        if self.training:  # training mode
             all_scores = torch.einsum(
-                "bd,nd->bn", in_batch_queries_embeddings, self._item_embeddings.weight
+                "bd,nd->bn", last_embeddings, self._item_embeddings.weight
             )  # (all_batch_events, num_items + 2)
 
             # positives
@@ -79,10 +78,6 @@ class SasRecFullModel(SequentialTorchModel, config_name="sasrec_full"):
 
             return {"labels.ids": in_batch_positive_events, "logits": all_scores}
         else:  # eval mode
-            last_embeddings = self._get_last_embedding(
-                embeddings, mask
-            )  # (batch_size, embedding_dim)
-
             # b - batch_size, n - num_candidates, d - embedding_dim
             candidate_scores = torch.einsum(
                 "bd,nd->bn", last_embeddings, self._item_embeddings.weight
