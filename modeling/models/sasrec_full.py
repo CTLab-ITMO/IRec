@@ -2,12 +2,11 @@ import torch
 from models.base import SequentialTorchModel
 
 
-class SasRecRealModel(SequentialTorchModel, config_name="sasrec_real"):
+class SasRecFullModel(SequentialTorchModel, config_name="sasrec_full"):
     def __init__(
         self,
         sequence_prefix,
         positive_prefix,
-        negative_prefix,
         num_items,
         max_sequence_length,
         embedding_dim,
@@ -33,7 +32,6 @@ class SasRecRealModel(SequentialTorchModel, config_name="sasrec_real"):
         )
         self._sequence_prefix = sequence_prefix
         self._positive_prefix = positive_prefix
-        self._negative_prefix = negative_prefix
 
         self._init_weights(initializer_range)
 
@@ -42,7 +40,6 @@ class SasRecRealModel(SequentialTorchModel, config_name="sasrec_real"):
         return cls(
             sequence_prefix=config["sequence_prefix"],
             positive_prefix=config["positive_prefix"],
-            negative_prefix=config["negative_prefix"],
             num_items=kwargs["num_items"],
             max_sequence_length=kwargs["max_sequence_length"],
             embedding_dim=config["embedding_dim"],
@@ -65,38 +62,27 @@ class SasRecRealModel(SequentialTorchModel, config_name="sasrec_real"):
             all_sample_events, all_sample_lengths
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
-        last_embeddings = self._get_last_embedding(
-            embeddings, mask
-        )  # (batch_size, embedding_dim)
-
         if self.training:  # training mode
+            # queries
+            in_batch_queries_embeddings = embeddings[
+                mask
+            ]  # (all_batch_events, embedding_dim)
+
+            all_scores = torch.einsum(
+                "bd,nd->bn", in_batch_queries_embeddings, self._item_embeddings.weight
+            )  # (all_batch_events, num_items + 2)
+
             # positives
             in_batch_positive_events = inputs[
                 "{}.ids".format(self._positive_prefix)
             ]  # (all_batch_events)
-            in_batch_positive_embeddings = self._item_embeddings(
-                in_batch_positive_events
-            )  # (all_batch_events, embedding_dim)
-            positive_scores = torch.einsum(
-                "bd,bd->b", last_embeddings, in_batch_positive_embeddings
-            )  # (all_batch_events)
 
-            # negatives
-            in_batch_negative_events = inputs[
-                "{}.ids".format(self._negative_prefix)
-            ]  # (all_batch_events)
-            in_batch_negative_embeddings = self._item_embeddings(
-                in_batch_negative_events
-            )  # (all_batch_events, embedding_dim)
-            negative_scores = torch.einsum(
-                "bd,bd->b", last_embeddings, in_batch_negative_embeddings
-            )  # (all_batch_events)
-
-            return {
-                "positive_scores": positive_scores,
-                "negative_scores": negative_scores,
-            }
+            return {"labels.ids": in_batch_positive_events, "logits": all_scores}
         else:  # eval mode
+            last_embeddings = self._get_last_embedding(
+                embeddings, mask
+            )  # (batch_size, embedding_dim)
+
             # b - batch_size, n - num_candidates, d - embedding_dim
             candidate_scores = torch.einsum(
                 "bd,nd->bn", last_embeddings, self._item_embeddings.weight

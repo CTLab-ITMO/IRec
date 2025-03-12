@@ -320,14 +320,8 @@ class FpsLoss(TorchLoss, config_name="fps"):
         return loss
 
 
-class SASRecRealLoss(TorchLoss, config_name='sasrec_real'):
-
-    def __init__(
-            self,
-            positive_prefix,
-            negative_prefix,
-            output_prefix=None
-    ):
+class SASRecRealLoss(TorchLoss, config_name="sasrec_real"):
+    def __init__(self, positive_prefix, negative_prefix, output_prefix=None):
         super().__init__()
         self._positive_prefix = positive_prefix
         self._negative_prefix = negative_prefix
@@ -347,6 +341,7 @@ class SASRecRealLoss(TorchLoss, config_name='sasrec_real'):
             inputs[self._output_prefix] = loss.cpu().item()
 
         return loss
+
 
 class SASRecLoss(TorchLoss, config_name="sasrec"):
     def __init__(self, positive_prefix, negative_prefix, output_prefix=None):
@@ -414,10 +409,10 @@ class SamplesSoftmaxLoss(TorchLoss, config_name="sampled_softmax"):
 
     def forward(self, inputs):
         queries_embeddings = inputs[self._queries_prefix]  # (batch_size, embedding_dim)
-        positive_embeddings = inputs[
+        positive_ids, positive_embeddings = inputs[
             self._positive_prefix
         ]  # (batch_size, embedding_dim)
-        negative_embeddings = inputs[
+        negative_ids, negative_embeddings = inputs[
             self._negative_prefix
         ]  # (num_negatives, embedding_dim) or (batch_size, num_negatives, embedding_dim)
 
@@ -431,6 +426,15 @@ class SamplesSoftmaxLoss(TorchLoss, config_name="sampled_softmax"):
             negative_scores = torch.einsum(
                 "bd,nd->bn", queries_embeddings, negative_embeddings
             )  # (batch_size, num_negatives)
+
+            all_scores = torch.cat(
+                [positive_scores, negative_scores], dim=1
+            )  # (batch_size, 1 + num_negatives)
+            logits = torch.log_softmax(
+                all_scores, dim=1
+            )  # (batch_size, 1 + num_negatives)
+            loss = (-logits)[:, 0]  # (batch_size)
+            loss = loss.mean()  # (1)
         else:
             assert (
                 negative_embeddings.dim() == 3
@@ -439,13 +443,8 @@ class SamplesSoftmaxLoss(TorchLoss, config_name="sampled_softmax"):
             negative_scores = torch.einsum(
                 "bd,bnd->bn", queries_embeddings, negative_embeddings
             )  # (batch_size, num_negatives)
-        all_scores = torch.cat(
-            [positive_scores, negative_scores], dim=1
-        )  # (batch_size, 1 + num_negatives)
 
-        logits = torch.log_softmax(all_scores, dim=1)  # (batch_size, 1 + num_negatives)
-        loss = (-logits)[:, 0]  # (batch_size)
-        loss = loss.mean()  # (1)
+            assert False, "ask Vladimir wtf is it "
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()
