@@ -83,7 +83,9 @@ class SasRecInBatchModel(SequentialTorchModel, config_name="sasrec_in_batch"):
             random_ids = torch.randperm(in_batch_positive_events.shape[0])
             if num_in_batch_negatives == -1:
                 num_in_batch_negatives = batch_size
-            in_batch_negative_ids = in_batch_positive_events[random_ids][
+            in_batch_negative_ids = in_batch_positive_events[
+                random_ids
+            ][  # TODOPK as khow many negatives here (currently whole batch)
                 :num_in_batch_negatives
             ]
 
