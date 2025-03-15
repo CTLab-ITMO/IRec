@@ -7,10 +7,12 @@ import torch
 from tqdm import tqdm
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
+from utils import DEVICE
+
 tqdm.pandas()
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model_name = "google-t5/t5-small"
+device = DEVICE
+model_name = "google-t5/t5-base"
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
@@ -91,3 +93,7 @@ def search_similar_items(items_with_tuples, clust2search, max_cnt=5):
         if cnt >= max_cnt:
             return similars
     return similars
+
+
+if __name__ == "__main__":
+    get_data(False)
