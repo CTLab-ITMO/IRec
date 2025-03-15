@@ -120,6 +120,8 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
                 "bd,bd->b", last_embeddings, in_batch_positive_embeddings
             )  # (all_batch_events)
 
+            # TODOPK normalize in all models embeddings for stability
+
             # negatives
             in_batch_negative_events = inputs[
                 "{}.ids".format(self._negative_prefix)
