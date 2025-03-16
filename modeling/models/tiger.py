@@ -80,8 +80,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         )
 
         self._codebook_embeddings = nn.Embedding(
-            num_embeddings=len(self._codebook_sizes) + 2, embedding_dim=embedding_dim
-        )  # + 2 for bos token & residual
+            num_embeddings=(len(self._codebook_sizes) + 1) + 1, embedding_dim=embedding_dim
+        )  # + 1 for bos token
 
         self._init_weights(initializer_range)
 
@@ -139,16 +139,16 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
     def get_full_sids(self, sids, ids, codebook_size):
         assert sids.shape[0] == ids.shape[0]
 
-        ids = ids.to(DEVICE)
-        sids = sids.to(DEVICE)
+        ids = ids.detach().to(DEVICE)
+        sids = sids.detach().to(DEVICE)
 
-        key = torch.tensor([codebook_size ** i for i in range(sids.shape[1])], device=DEVICE)
+        key = torch.tensor([codebook_size ** i for i in range(sids.shape[1])], device=DEVICE, requires_grad=False)
 
-        shuffled_indices = torch.randperm(len(ids))
+        shuffled_indices = torch.randperm(len(ids), device=DEVICE)
         shuffled_ids = ids[shuffled_indices]
         shuffled_sids = sids[shuffled_indices]
 
-        col_tokens = torch.zeros(ids.shape, device=DEVICE, dtype=torch.long)
+        col_tokens = torch.zeros(ids.shape, device=DEVICE, dtype=torch.long, requires_grad=False)
 
         hash_dict = defaultdict(int)
 
@@ -160,12 +160,15 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         full_sids = torch.cat([shuffled_sids, col_tokens.unsqueeze(1)], dim=1)
         unshuffled_indices = shuffled_indices.argsort()
 
-        return shuffled_ids[unshuffled_indices], full_sids[unshuffled_indices]
+        return (
+            shuffled_ids[unshuffled_indices].detach(),
+            full_sids[unshuffled_indices].detach()
+        )
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
         rqvae_model, sids, _, ids = cls.init_rqvae(config)
-        ids_tensor = torch.tensor(ids, dtype=torch.long, device=DEVICE)
+        ids_tensor = torch.tensor(ids, dtype=torch.long, device=DEVICE, requires_grad=False)
 
         sids_tensor = sids.clone().detach()
 
@@ -347,7 +350,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             .expand(batch_size, 1, embedding_dim)
         )
 
-        semantic_ids = torch.tensor([], device=DEVICE, dtype=torch.int64)
+        semantic_ids = torch.tensor([], device=DEVICE, dtype=torch.int64, requires_grad=False)
 
         for step in range(len(self._codebook_sizes) + 1):  # semantic_id_seq + residual
             index = len(self._codebook_sizes) if step == 0 else step - 1
@@ -447,7 +450,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         stacked_codebooks = self._codebook_item_embeddings_stacked.reshape(
             (len(self._codebook_sizes) + 1) * self._codebook_sizes[0], self._embedding_dim)
 
-        offsets = torch.tensor([0, 256, 512, 768], dtype=torch.long, device=DEVICE)
+        offsets = torch.tensor([0, 256, 512, 768], dtype=torch.long, device=DEVICE, requires_grad=False)
         sem_ids_with_offsets = sem_ids + offsets.unsqueeze(0)
 
         return stacked_codebooks[sem_ids_with_offsets]
@@ -459,7 +462,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             )  # 5 5 5 5 4 4 4 4 ..., +1 for residual
 
         position_embeddings = self._get_position_embeddings(
-            lengths, mask, position_lambda, self._position_embeddings
+            lengths, mask, position_lambda, self._codebook_embeddings
         )
 
         def codebook_lambda(x):
