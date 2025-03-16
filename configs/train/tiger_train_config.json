@@ -1,7 +1,7 @@
 {
   "experiment_name": "tiger_simplified_no_residuals_unfreezed",
   "best_metric": "validation/ndcg@20",
-  "train_epochs_num": 100,
+  "train_epochs_num": 10000,
   "dataset": {
     "type": "sequence_full",
     "path_to_data_dir": "../data",
@@ -15,7 +15,7 @@
   "dataloader": {
     "train": {
       "type": "torch",
-      "batch_size": 256,
+      "batch_size": 5,
       "batch_processor": {
         "type": "basic"
       },
@@ -24,7 +24,7 @@
     },
     "validation": {
       "type": "torch",
-      "batch_size": 256,
+      "batch_size": 5,
       "batch_processor": {
         "type": "basic"
       },
@@ -55,7 +55,7 @@
     "type": "basic",
     "optimizer": {
       "type": "adam",
-      "lr": 0.001
+      "lr": 3e-4
     },
     "clip_grad_threshold": 5.0
   },
@@ -82,7 +82,7 @@
       },
       {
         "type": "validation",
-        "on_step": 1024,
+        "on_step": 2,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {
@@ -126,7 +126,7 @@
       },
       {
         "type": "eval",
-        "on_step": 2048,
+        "on_step": 2,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {

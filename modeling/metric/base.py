@@ -57,6 +57,7 @@ class NDCGMetric(BaseMetric, config_name="ndcg"):
         discount_factor = 1 / torch.log2(
             torch.arange(1, self._k + 1, 1).float() + 1.0
         ).to(hits.device)  # (k)
+        print(f"hits {hits}, discount factor {discount_factor}")
         dcg = torch.einsum("bk,k->b", hits, discount_factor)  # (batch_size)
 
         return dcg.cpu().tolist()

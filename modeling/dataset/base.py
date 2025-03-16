@@ -255,7 +255,7 @@ class SequenceFullDataset(SequenceDataset, config_name="sequence_full"):
         validation_dataset, valid_max_user_id, valid_max_item_id, valid_seq_len = (
             cls._create_dataset(
                 dir_path=data_dir_path,
-                part="valid",
+                part="train",
                 max_sequence_length=config["max_sequence_length"],
                 use_cached=config.get("use_cached", False),
             )
@@ -263,12 +263,17 @@ class SequenceFullDataset(SequenceDataset, config_name="sequence_full"):
         test_dataset, test_max_user_id, test_max_item_id, test_seq_len = (
             cls._create_dataset(
                 dir_path=data_dir_path,
-                part="test",
+                part="train",
                 max_sequence_length=config["max_sequence_length"],
                 use_cached=config.get("use_cached", False),
             )
         )
 
+        train_dataset = train_dataset[:5]
+        validation_dataset = validation_dataset[:5]
+        test_dataset = test_dataset[:5]
+        #
+        # import code; code.interact(local=locals())
         max_user_id = max([train_max_user_id, valid_max_user_id, test_max_user_id])
         max_item_id = max([train_max_item_id, valid_max_item_id, test_max_item_id])
         max_seq_len = max([train_seq_len, valid_seq_len, test_seq_len])
