@@ -251,7 +251,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
             _, indices = torch.topk(candidate_scores, k=20, dim=-1, largest=True)  # (batch_size, 20)
 
-            assert self.assert_item_range(indices + 1) # tensors are 0 indexed
+            assert self.assert_item_range(indices + 1)  # tensors are 0 indexed
             # now = time.time()
             # print(f"forward eval: {(now - forward_start_time) * 1000:.2f} ms")
             return indices + 1
@@ -462,7 +462,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             )  # 5 5 5 5 4 4 4 4 ..., +1 for residual
 
         position_embeddings = self._get_position_embeddings(
-            lengths, mask, position_lambda, self._codebook_embeddings
+            lengths, mask, position_lambda, self._position_embeddings
         )
 
         def codebook_lambda(x):
@@ -495,9 +495,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
 
         # print(f"{positions.tolist()[:20]=}")
 
-        assert (positions >= 0).all() and (
-                positions < embedding_layer.num_embeddings
-        ).all()
+        assert (positions >= 0).all()
+        assert (positions < embedding_layer.num_embeddings).all()
 
         position_embeddings = embedding_layer(
             positions
