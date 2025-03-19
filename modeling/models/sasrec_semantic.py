@@ -90,7 +90,7 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
                 "{}.ids".format(self._positive_prefix)
             ]  # (all_batch_events)
 
-            last_embeddings = self._get_last_embedding(
+            last_embeddings = self._get_last_embedding( #здесь просто apply_decoder
                 embeddings, mask
             )  # (batch_size, embedding_dim)
 
