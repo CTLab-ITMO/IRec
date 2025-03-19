@@ -2,6 +2,7 @@ import json
 from collections import defaultdict
 
 import torch
+from numpy.ma.core import indices
 from torch import nn
 
 from models.base import SequentialTorchModel
@@ -89,7 +90,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         )
 
         self._codebook_item_embeddings_stacked = nn.Parameter(
-            torch.rand(1, 12101, self._embedding_dim),
+            truncated_init((1, 12101, self._embedding_dim), initializer_range),
             requires_grad=True
         ) #(sem_id_len, codebook_size, embedding_dim)
         # print(self._codebook_item_embeddings_stacked.shape)
@@ -214,7 +215,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             "{}.length".format(self._sequence_prefix)
         ]  # (batch_size)
         # print(f"all_sample_events.shape {all_sample_events.shape}")
-
         batch_embeddings = self.get_item_embeddings(all_sample_events)  # (all_batch_events, embedding_dim)
 
         encoder_embeddings, encoder_mask = self._apply_sequential_encoder(
@@ -230,6 +230,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             # print(f"decoder tgt embeddings input shape {tgt_embeddings.shape}")
             # print(f"label_lengths {label_lengths.shape}, {label_lengths}")
             # print(f"decoder_inputs: {decoder_inputs.shape}")
+            assert torch.all(label_lengths == 1)
             tgt_embeddings, tgt_mask = create_masked_tensor(
                 data=decoder_inputs, lengths=label_lengths * self.sem_id_len
             )  # (batch_size, dec_seq_len, embedding_dim), (batch_size, dec_seq_len)
@@ -246,8 +247,13 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
                 decoder_outputs,
                 self._codebook_item_embeddings_stacked,
             )
+            sorted_values, sorted_indices = torch.sort(decoder_prefix_scores[0].squeeze(0), descending=True)
+
+            # print(all_sample_events[:5], sorted_indices[:5])  # tensor([2, 0, 1, 3])
+            # assert False
             assert self.assert_item_range(label_events)
             semantic_ids = self._item_id_to_semantic_id[label_events - 1]
+            # print(f"semantic_ids {semantic_ids}")
             # now = time.time()
             # print(f"forward train: {(now - forward_start_time) * 1000:.2f} ms")
             return {
@@ -267,6 +273,8 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             # ]
             #
             # [[1, 5, 2], [3, 7, 6]]
+            # print(encoder_embeddings[0], all_sample_events[:5])
+            # print(f"decoder output: {decoder_outputs[0]}")
             full_embeddings = decoder_outputs.sum(dim=1)  # (batch_size, embedding_dim)
             candidate_scores = torch.einsum(
                 "bd,nd->bn",
@@ -279,6 +287,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             assert self.assert_item_range(indices + 1)  # tensors are 0 indexed
             # now = time.time()
             # print(f"forward eval: {(now - forward_start_time) * 1000:.2f} ms")
+            # print(indices[0, :5] + 1)
             return indices + 1
 
     def _apply_sequential_encoder(self, embeddings, lengths, add_cls_token=False):
@@ -326,7 +335,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             [bos_embeddings, tgt_embeddings[:, :-1, :]], dim=1
         )  # remove residual by using :-1
         label_len = tgt_mask.shape[1]
-
+        # print("shape", tgt_embeddings.shape)
         assert label_len == self.sem_id_len
         # print(f"bos {bos_embeddings}")
         lengths = torch.ones(size=[batch_size], device=DEVICE, dtype=torch.long) * label_len
@@ -335,6 +344,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         # print(f"final decoder pos embs {position_embeddings[:100, 0, :5]}")
         assert torch.allclose(position_embeddings[~tgt_mask], tgt_embeddings[~tgt_mask])
 
+        # print("pos emb shape", position_embeddings.shape)
         tgt_embeddings = tgt_embeddings + position_embeddings
 
         tgt_embeddings[~tgt_mask] = 0
@@ -395,6 +405,7 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
                 tgt_mask=~causal_mask,
                 memory_key_padding_mask=~encoder_mask,
             )
+            # print(f"real_dec_output {decoder_output}")
 
             # TODOPK ASK it is not true?
             # assert that prelast items don't change
@@ -463,7 +474,6 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             self.sem_id_len * self._codebook_size, self._embedding_dim)
 
         sem_ids_with_offsets = sem_ids + self.offsets.unsqueeze(0)
-
         return stacked_codebooks[sem_ids_with_offsets]
 
     def _encoder_pos_embeddings(self, lengths, mask):
@@ -523,3 +533,12 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
         )  # (batch_size, seq_len, embedding_dim)
 
         return position_embeddings
+
+
+def truncated_init(shape, initializer_range):
+    return torch.nn.init.trunc_normal_(
+        torch.zeros(shape),
+        std=initializer_range,
+        a=-2 * initializer_range,
+        b=2 * initializer_range,
+    )
