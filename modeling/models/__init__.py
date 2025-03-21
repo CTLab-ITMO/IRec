@@ -19,4 +19,5 @@ from .sasrec_ce import SasRecCeModel
 from .sasrec_full import SasRecFullModel
 from .sasrec_real import SasRecRealModel
 from .sasrec_semantic import SasRecSemanticModel
+from .tiger_from_sasrec import TigerFromSasRec
 from .tiger import TigerModel
