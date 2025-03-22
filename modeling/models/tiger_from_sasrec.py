@@ -60,12 +60,11 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             num_embeddings=self._num_users + 1, embedding_dim=embedding_dim
         )
 
+        self.codebooks =  torch.stack([codebook for codebook in rqvae_model.codebooks])
         self._init_weights(initializer_range)
 
         self._item_id_to_semantic_embedding = nn.Parameter(
-            self.get_init_item_embeddings(
-                rqvae_model, item_id_to_semantic_id
-            ),
+            self.get_init_item_embeddings(item_id_to_semantic_id),
             requires_grad=True,
         )
         self.item_ids = item_ids
@@ -198,18 +197,17 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
         return embs.reshape(-1, self._embedding_dim)
 
     def get_init_item_embeddings(
-        self, rqvae_model, item_id_to_semantic_id
+        self, item_id_to_semantic_id
     ):
-        codebooks = torch.stack([codebook for codebook in rqvae_model.codebooks])
 
         result = []
         for semantic_id in item_id_to_semantic_id:
             item_repr = []
             for codebook_idx, codebook_id in enumerate(semantic_id):
                 if codebook_idx == 3:
-                    item_repr.append(codebooks[codebook_idx - 1][codebook_id]) #TODO костыль на проверку
+                    item_repr.append(self.codebooks[codebook_idx - 1][codebook_id]) #TODO костыль на проверку
                 else:
-                    item_repr.append(codebooks[codebook_idx][codebook_id])
+                    item_repr.append(self.codebooks[codebook_idx][codebook_id])
             result.append(torch.stack(item_repr))
 
         semantic_embeddings = torch.stack(
