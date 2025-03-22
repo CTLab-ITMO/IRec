@@ -64,7 +64,7 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             rqvae_model.codebooks[0],
             rqvae_model.codebooks[1],
             rqvae_model.codebooks[2],
-            rqvae_model.codebooks[2]
+            torch.zeros_like(rqvae_model.codebooks[2], requires_grad=False, device=DEVICE)
         ])
         self._init_weights(initializer_range)
 
