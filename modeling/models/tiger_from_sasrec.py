@@ -50,8 +50,10 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
 
         self._codebook_sizes = [256, 256, 256, 256]
 
+        self.sem_id_len = len(self._codebook_sizes)
+
         self._codebook_embeddings = nn.Embedding(
-            num_embeddings=len(self._codebook_sizes) + 2, embedding_dim=embedding_dim
+            num_embeddings=self.sem_id_len + 1, embedding_dim=embedding_dim
         )  # + 2 for bos token & residual
 
         self._user_embeddings = nn.Embedding(
@@ -136,7 +138,7 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
 
         embeddings, mask = self._apply_sequential_encoder(
             all_sample_events,
-            all_sample_lengths * (len(self._codebook_sizes) + 1),
+            all_sample_lengths * self.sem_id_len,
             user_embeddings=user_embeddings,
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
@@ -214,28 +216,22 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             result
         )  # len(events), len(codebook_sizes), embedding_dim
 
-        residual = torch.zeros((semantic_embeddings.shape[0], 1, self._embedding_dim), device=DEVICE) #TODO здесь будут токены с коллизиями
+        # print(f"item embs {semantic_embeddings.shape}")
+        assert semantic_embeddings.shape == (semantic_embeddings.shape[0], self.sem_id_len, self._embedding_dim)
 
-        # get true item embeddings
-        item_embeddings = torch.cat(
-            [semantic_embeddings, residual], dim=1
-        )  # len(events), len(self._codebook_sizes) + 1, embedding_dim
-
-        return item_embeddings
+        return semantic_embeddings
 
     def _encoder_pos_embeddings(self, lengths, mask):
         def position_lambda(x):
-            return x // (
-                len(self._codebook_sizes) + 1
-            )  # 5 5 5 5 4 4 4 4 ..., +1 for residual
+            return x // self.sem_id_len # 5 5 5 5 4 4 4 4 ..., +1 for residual
 
         position_embeddings = self._get_position_embeddings(
             lengths, mask, position_lambda, self._position_embeddings
         )
 
         def codebook_lambda(x):
-            x = len(self._codebook_sizes) - x % (len(self._codebook_sizes) + 1)
-            x[x == len(self._codebook_sizes)] = len(self._codebook_sizes) + 1
+            x = len(self._codebook_sizes) - x % self.sem_id_len
+            x[x == len(self._codebook_sizes)] = self.sem_id_len
             # 0 1 2 4 0 1 2 4 ... # len(self._codebook_sizes) + 1 = 4 for residual
             return x
 
