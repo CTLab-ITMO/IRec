@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import torch
 from models import SequentialTorchModel
 from torch import nn
@@ -11,6 +13,7 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
         self,
         rqvae_model,
         item_id_to_semantic_id,
+        item_ids,
         sequence_prefix,
         positive_prefix,
         negative_prefix,
@@ -45,7 +48,7 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
 
         self._num_users = num_users
 
-        self._codebook_sizes = rqvae_model.codebook_sizes
+        self._codebook_sizes = [256, 256, 256, 256]
 
         self._codebook_embeddings = nn.Embedding(
             num_embeddings=len(self._codebook_sizes) + 2, embedding_dim=embedding_dim
@@ -63,14 +66,50 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             ),
             requires_grad=True,
         )
+        self.item_ids = item_ids
+
+    @staticmethod
+    def get_full_sids(sids, ids, codebook_size):
+        assert sids.shape[0] == ids.shape[0]
+
+        ids = ids.detach().to(DEVICE)
+        sids = sids.detach().to(DEVICE)
+
+        key = torch.tensor([codebook_size ** i for i in range(sids.shape[1])], device=DEVICE, requires_grad=False)
+
+        shuffled_indices = torch.randperm(len(ids), device=DEVICE)
+        shuffled_ids = ids[shuffled_indices]
+        shuffled_sids = sids[shuffled_indices]
+
+        col_tokens = torch.zeros(ids.shape, device=DEVICE, dtype=torch.long, requires_grad=False)
+
+        hash_dict = defaultdict(int)
+
+        for (i, sid) in enumerate(shuffled_sids):
+            sid_hash = (sid * key).sum().item()
+            col_tokens[i] = hash_dict[sid_hash]
+            hash_dict[sid_hash] += 1
+
+        full_sids = torch.cat([shuffled_sids, col_tokens.unsqueeze(1)], dim=1)
+        unshuffled_indices = shuffled_indices.argsort()
+
+        return (
+            shuffled_ids[unshuffled_indices].detach(),
+            full_sids[unshuffled_indices].detach()
+        )
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        rqvae_model, semantic_ids, _, _ = TigerModel.init_rqvae(config)
+        rqvae_model, sids, residuals, ids = TigerModel.init_rqvae(config)
+
+        ids_tensor = torch.tensor(ids, dtype=torch.long, device=DEVICE, requires_grad=False)
+        sids_tensor = sids.clone().detach()
+        item_ids, semantic_ids = cls.get_full_sids(sids_tensor, ids_tensor, rqvae_model.codebook_sizes[0])
 
         return cls(
             rqvae_model=rqvae_model,
             item_id_to_semantic_id=semantic_ids,
+            item_ids=item_ids,
             sequence_prefix=config["sequence_prefix"],
             positive_prefix=config["positive_prefix"],
             negative_prefix=config["negative_prefix"],
@@ -165,14 +204,17 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
         for semantic_id in item_id_to_semantic_id:
             item_repr = []
             for codebook_idx, codebook_id in enumerate(semantic_id):
-                item_repr.append(codebooks[codebook_idx][codebook_id])
+                if codebook_idx == 3:
+                    item_repr.append(codebooks[codebook_idx - 1][codebook_id]) #TODO костыль на проверку
+                else:
+                    item_repr.append(codebooks[codebook_idx][codebook_id])
             result.append(torch.stack(item_repr))
 
         semantic_embeddings = torch.stack(
             result
         )  # len(events), len(codebook_sizes), embedding_dim
 
-        residual = torch.zeros_like(semantic_embeddings[:, 0, :]) #TODO здесь будут токены с коллизиями
+        residual = torch.zeros((semantic_embeddings.shape[0], 1, self._embedding_dim), device=DEVICE) #TODO здесь будут токены с коллизиями
 
         # get true item embeddings
         item_embeddings = torch.cat(
