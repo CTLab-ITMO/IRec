@@ -10,24 +10,24 @@ from .tiger import TigerModel
 
 class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
     def __init__(
-        self,
-        rqvae_model,
-        item_id_to_semantic_id,
-        item_ids,
-        sequence_prefix,
-        positive_prefix,
-        negative_prefix,
-        num_items,
-        num_users,
-        max_sequence_length,
-        embedding_dim,
-        num_heads,
-        num_layers,
-        dim_feedforward,
-        dropout=0.0,
-        activation="relu",
-        layer_norm_eps=1e-9,
-        initializer_range=0.02,
+            self,
+            rqvae_model,
+            item_id_to_semantic_id,
+            item_ids,
+            sequence_prefix,
+            positive_prefix,
+            negative_prefix,
+            num_items,
+            num_users,
+            max_sequence_length,
+            embedding_dim,
+            num_heads,
+            num_layers,
+            dim_feedforward,
+            dropout=0.0,
+            activation="relu",
+            layer_norm_eps=1e-9,
+            initializer_range=0.02,
     ):
         super().__init__(
             num_items=num_items,
@@ -60,14 +60,21 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             num_embeddings=self._num_users + 1, embedding_dim=embedding_dim
         )
 
-        self.codebooks =  torch.stack([codebook for codebook in rqvae_model.codebooks])
+        self.codebooks = torch.stack([
+            rqvae_model.codebooks[0],
+            rqvae_model.codebooks[1],
+            rqvae_model.codebooks[2],
+            rqvae_model.codebooks[2]
+        ])
         self._init_weights(initializer_range)
 
+        self._item_id_to_semantic_id = item_id_to_semantic_id
+        self.item_ids = item_ids
+
         self._item_id_to_semantic_embedding = nn.Parameter(
-            self.get_init_item_embeddings(item_id_to_semantic_id),
+            self.get_init_item_embeddings(),
             requires_grad=True,
         )
-        self.item_ids = item_ids
 
     @staticmethod
     def get_full_sids(sids, ids, codebook_size):
@@ -154,7 +161,8 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             ]  # (all_batch_events)
             in_batch_positive_embeddings = item_embeddings[
                 in_batch_positive_events - 1
-            ]  # (all_batch_events, embedding_dim)
+                ]  # (all_batch_events, embedding_dim)
+            # print(f"last_embeddings={last_embeddings.shape} in_batch_positive_embeddings {in_batch_positive_embeddings.shape}")
             positive_scores = torch.einsum(
                 "bd,bd->b", last_embeddings, in_batch_positive_embeddings
             )  # (all_batch_events)
@@ -167,7 +175,7 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             ]  # (all_batch_events)
             in_batch_negative_embeddings = item_embeddings[
                 in_batch_negative_events - 1
-            ]  # (all_batch_events, embedding_dim)
+                ]  # (all_batch_events, embedding_dim)
             negative_scores = torch.einsum(
                 "bd,bd->b", last_embeddings, in_batch_negative_embeddings
             )  # (all_batch_events)
@@ -191,37 +199,42 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             return indices + 1  # tensors are 0 indexed
 
     def get_item_embeddings(self, events):
-        embs = self._item_id_to_semantic_embedding[
-            events - 1
-        ]  # len(events), len(self._codebook_sizes) + 1, embedding_dim
-        return embs.reshape(-1, self._embedding_dim)
+        sids = self._item_id_to_semantic_id[events - 1]
+        assert sids.shape == (events.shape[0], self.sem_id_len)
+        result = self._get_embeddings(sids).reshape(self.sem_id_len * events.shape[0],
+                                                    self._embedding_dim)  # (4 * ..., embedding_dim)
+        assert result.shape == (4 * events.shape[0], self._embedding_dim)
+        # print(f"label items, events.shape: {events.shape}, result.shape {result.shape}")
+        return result
 
-    def get_init_item_embeddings(
-        self, item_id_to_semantic_id
-    ):
+    def calculate_full(self, sem_ids: torch.Tensor) -> torch.Tensor:
+        return self._get_embeddings(sem_ids).sum(1)  # (n, embedding_dim)
 
-        result = []
-        for semantic_id in item_id_to_semantic_id:
-            item_repr = []
-            for codebook_idx, codebook_id in enumerate(semantic_id):
-                if codebook_idx == 3:
-                    item_repr.append(self.codebooks[codebook_idx - 1][codebook_id]) #TODO костыль на проверку
-                else:
-                    item_repr.append(self.codebooks[codebook_idx][codebook_id])
-            result.append(torch.stack(item_repr))
+    def _get_embeddings(self, sem_ids: torch.Tensor) -> torch.Tensor:
+        """
+        :param sem_ids: набор из sem ids (n, sem_id_len)
+        :return: эмбеддинг для каждого sem_id из набора (n, sem_id_len, embedding_dim)
+        """
+        assert sem_ids.shape[1] == self.sem_id_len
+        # [[1, 2, 3, 4], [5, 6, 7, 8]] TODO проверить еще раз
+        offsets = torch.tensor([0, 256, 512, 768], device=DEVICE)
+        stacked_codebooks = self.codebooks.reshape(
+            self.sem_id_len * self._codebook_sizes[0], self._embedding_dim)
 
-        semantic_embeddings = torch.stack(
-            result
-        )  # len(events), len(codebook_sizes), embedding_dim
+        sem_ids_with_offsets = sem_ids + offsets.unsqueeze(0)
 
-        # print(f"item embs {semantic_embeddings.shape}")
-        assert semantic_embeddings.shape == (semantic_embeddings.shape[0], self.sem_id_len, self._embedding_dim)
+        return stacked_codebooks[sem_ids_with_offsets]
 
-        return semantic_embeddings
+    def get_init_item_embeddings(self):
+        sids = self._item_id_to_semantic_id[self.item_ids - 1]
+        assert sids.shape == (self.item_ids.shape[0], self.sem_id_len)
+        result = self._get_embeddings(sids)
+        assert result.shape == (self.item_ids.shape[0], 4, self._embedding_dim)
+        return result
 
     def _encoder_pos_embeddings(self, lengths, mask):
         def position_lambda(x):
-            return x // self.sem_id_len # 5 5 5 5 4 4 4 4 ..., +1 for residual
+            return x // self.sem_id_len  # 5 5 5 5 4 4 4 4 ..., +1 for residual
 
         position_embeddings = self._get_position_embeddings(
             lengths, mask, position_lambda, self._position_embeddings
@@ -258,7 +271,7 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
         # print(f"{positions.tolist()[:20]=}")
 
         assert (positions >= 0).all() and (
-            positions < embedding_layer.num_embeddings
+                positions < embedding_layer.num_embeddings
         ).all()
 
         position_embeddings = embedding_layer(
