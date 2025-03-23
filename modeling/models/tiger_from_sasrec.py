@@ -3,7 +3,7 @@ from collections import defaultdict
 import torch
 from models import SequentialTorchModel
 from torch import nn
-from utils import DEVICE, create_masked_tensor
+from utils import DEVICE, create_masked_tensor, get_activation_function
 
 from .tiger import TigerModel
 
@@ -55,6 +55,33 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
         self._codebook_embeddings = nn.Embedding(
             num_embeddings=self.sem_id_len + 1, embedding_dim=embedding_dim
         )  # + 2 for bos token & residual
+
+        self._bos_weight = nn.Parameter(
+            torch.nn.init.trunc_normal_(
+                torch.zeros(embedding_dim),
+                std=initializer_range,
+                a=-2 * initializer_range,
+                b=2 * initializer_range,
+            ),
+            requires_grad=True,  # TODOPK added for bos
+        )
+
+        transformer_decoder_layer = nn.TransformerDecoderLayer(
+            d_model=embedding_dim,
+            nhead=num_heads,
+            dim_feedforward=dim_feedforward,
+            dropout=dropout,
+            activation=get_activation_function(activation),
+            layer_norm_eps=layer_norm_eps,
+            batch_first=True,
+        )
+
+        num_decoder_layers=2
+
+        self._decoder = nn.TransformerDecoder(
+            transformer_decoder_layer, num_decoder_layers
+        )
+
 
         self._user_embeddings = nn.Embedding(
             num_embeddings=self._num_users + 1, embedding_dim=embedding_dim
@@ -161,7 +188,7 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             decoder_prefix_scores = torch.einsum(
                 "bsd,scd->bsc",
                 decoder_outputs,
-                self._codebook_item_embeddings_stacked,
+                self.codebooks,
             )
             semantic_ids = self._item_id_to_semantic_id[label_events - 1]
             return {
@@ -357,7 +384,7 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
 
             assert step < self.sem_id_len  # TODO почему?
 
-            codebook = self._codebook_item_embeddings_stacked[step]  # codebook_size x embedding_dim
+            codebook = self.codebooks[step]  # codebook_size x embedding_dim
             closest_semantic_ids = torch.argmax(
                 torch.einsum("bd,cd->bc", next_token_embedding, codebook), dim=1
             )  # batch_size
@@ -377,12 +404,24 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             tgt_embeddings = torch.cat(
                 [tgt_embeddings, next_token_embedding.unsqueeze(1)], dim=1
             )
-            # TODO спросить Петю про self.decoder_test
-            if self.decoder_test is None or self.decoder_test.shape[1] > self.sem_id_len:
-                self.decoder_test = tgt_embeddings
-            else:
-                assert torch.allclose(self.decoder_test, tgt_embeddings[:, :-1, :], rtol=0, atol=1)
-                self.decoder_test = tgt_embeddings
+
         # now = time.time()
         return tgt_embeddings
+
+    def _decoder_pos_embeddings(self, lengths, mask):
+        def codebook_lambda(x):  # TODO разобраться и посмотреть
+            # print("decoder_pos_embeddings", self.sem_id_len, x[:10])
+            non_bos = x < self.sem_id_len - 1
+            x[non_bos] = (self.sem_id_len - 2) - x[non_bos]
+            x[~non_bos] = self.sem_id_len
+            # print(x[:20])
+            # print(non_bos[:20])
+            # assert torch.all(x[:9] == torch.tensor([4, 0, 1, 2, 4, 0, 1, 2, 4]))
+            return x  # 4, 0, 1, 2, 4, 0, 1, 2 ... sem_id_len = 4 for bos
+
+        codebook_embeddings = self._get_position_embeddings(
+            lengths, mask, codebook_lambda, self._codebook_embeddings
+        )
+
+        return codebook_embeddings
 
