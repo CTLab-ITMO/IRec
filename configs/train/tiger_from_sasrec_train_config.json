@@ -63,10 +63,11 @@
     "type": "composite",
     "losses": [
       {
-        "type": "sasrec_real",
-        "positive_prefix": "positive_scores",
-        "negative_prefix": "negative_scores",
-        "output_prefix": "downstream_loss"
+        "type": "ce",
+        "predictions_prefix": "logits",
+        "labels_prefix": "semantic.labels",
+        "weight": 1.0,
+        "output_prefix": "semantic_loss"
       }
     ],
     "output_prefix": "loss"
