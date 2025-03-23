@@ -1,12 +1,12 @@
 {
   "experiment_name": "tiger_from_sasrec",
   "best_metric": "validation/ndcg@20",
-  "train_epochs_num": 100,
+  "train_epochs_num": 10000,
   "dataset": {
     "type": "sequence_full",
     "path_to_data_dir": "../data",
     "name": "Beauty",
-    "max_sequence_length": 50,
+    "max_sequence_length": 256,
     "samplers": {
       "type": "last_item_prediction",
       "num_negatives_train": 1,
@@ -82,7 +82,7 @@
       },
       {
         "type": "validation",
-        "on_step": 1024,
+        "on_step": 32,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {
@@ -126,7 +126,7 @@
       },
       {
         "type": "eval",
-        "on_step": 2048,
+        "on_step": 32,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {
