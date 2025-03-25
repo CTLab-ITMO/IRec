@@ -1,6 +1,6 @@
 {
   "start_from": 0,
-  "experiment_name": "sasrec_grid_in_batch_beauty_loss_ce",
+  "experiment_name": "sasrec_grid_random_beauty_num_neg",
   "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "sequence",
@@ -13,6 +13,11 @@
     }
   },
   "dataset_params": {
+    "num_negatives_train": [
+      100,
+      500,
+      1000
+    ]
   },
   "dataloader": {
     "train": {
@@ -35,7 +40,7 @@
     }
   },
   "model": {
-    "type": "sasrec_in_batch",
+    "type": "sasrec_popular",
     "sequence_prefix": "item",
     "positive_prefix": "positive",
     "negative_prefix": "negative",
@@ -50,15 +55,8 @@
   },
   "model_params": {
     "dropout": [
-      0.1,
-      0.2,
-      0.3,
-      0.4,
-      0.5,
-      0.6,
-      0.7,
-      0.8,
-      0.9]
+      0.5
+    ]
   },
   "optimizer": {
     "type": "basic",

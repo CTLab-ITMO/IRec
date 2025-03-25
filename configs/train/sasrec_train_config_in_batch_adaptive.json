@@ -1,5 +1,5 @@
 {
-  "experiment_name": "bert4rec_all_rank_beauty_bce_0-3_0-2",
+  "experiment_name": "sasrec_in_batch_beauty_loss_ce_adaptive",
   "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "sequence",
@@ -7,8 +7,7 @@
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
-      "mask_prob": 0.3,
-      "type": "masked_item_prediction",
+      "type": "next_item_prediction",
       "negative_sampler_type": "random"
     }
   },
@@ -33,16 +32,16 @@
     }
   },
   "model": {
-    "type": "bert4rec_all_rank",
-    "user_prefix": "user",
+    "type": "sasrec_in_batch",
     "sequence_prefix": "item",
-    "labels_prefix": "labels",
+    "positive_prefix": "positive",
+    "negative_prefix": "negative",
     "candidate_prefix": "candidates",
     "embedding_dim": 64,
     "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
-    "dropout": 0.2,
+    "dropout": 0.4,
     "activation": "gelu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
@@ -59,11 +58,10 @@
     "type": "composite",
     "losses": [
       {
-        "type": "bert4rec_sasrec",
-        "predictions_prefix": "logits",
-        "labels_prefix": "labels",
-        "output_prefix": "downstream_loss",
-        "weight": 1.0
+        "type": "sasrec_ce_adaptive",
+        "positive_prefix": "positive_scores",
+        "negative_prefix": "negative_scores",
+        "output_prefix": "downstream_loss"
       }
     ],
     "output_prefix": "loss"

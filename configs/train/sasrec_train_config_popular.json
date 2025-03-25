@@ -1,5 +1,5 @@
 {
-  "experiment_name": "sasrec_popular_beauty",
+  "experiment_name": "sasrec_popular_beauty_loss_ce_0-6",
   "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "sequence",
@@ -42,7 +42,7 @@
     "num_heads": 2,
     "num_layers": 2,
     "dim_feedforward": 256,
-    "dropout": 0.3,
+    "dropout": 0.6,
     "activation": "gelu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
@@ -59,7 +59,7 @@
     "type": "composite",
     "losses": [
       {
-        "type": "sasrec",
+        "type": "sasrec_ce",
         "positive_prefix": "positive_scores",
         "negative_prefix": "negative_scores",
         "output_prefix": "downstream_loss"

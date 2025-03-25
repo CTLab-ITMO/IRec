@@ -393,25 +393,29 @@ class SasRecInBatchModel(SasRecModel, config_name='sasrec_in_batch'):
 
             # positives
             in_batch_positive_events = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
-            in_batch_positive_embeddings = self._item_embeddings(
-                in_batch_positive_events
-            )  # (all_batch_events, embedding_dim)
+            in_batch_positive_embeddings = self._item_embeddings(in_batch_positive_events)  # (all_batch_events, embedding_dim)
+            in_batch_positive_counts = inputs['positive_counts.ids']
 
             # negatives
-            batch_size = all_sample_lengths.shape[0]
-            random_ids = torch.randperm(in_batch_positive_events.shape[0])
-            in_batch_negative_ids = in_batch_positive_events[random_ids][:batch_size]
+            batch_size = all_sample_lengths.shape[0] # scalar
+            random_ids = torch.randperm(in_batch_positive_events.shape[0]) # (batch_size)
+            in_batch_negative_ids = in_batch_positive_events[random_ids][:batch_size] # (batch_size)
+            in_batch_negative_counts = in_batch_positive_counts[random_ids][:batch_size] # (batch_size)
+            all_counts = inputs['counts.ids'][0] # scalar
 
-            in_batch_negative_embeddings = self._item_embeddings(
-                in_batch_negative_ids
-            )  # (batch_size, embedding_dim)
+            in_batch_negative_embeddings = self._item_embeddings(in_batch_negative_ids)  # (batch_size, embedding_dim)
 
             in_batch_negative_scores = in_batch_queries_embeddings @ in_batch_negative_embeddings.T
             in_batch_positive_scores = (in_batch_queries_embeddings * in_batch_positive_embeddings).sum(dim=-1)
 
+            # import code
+            # code.interact(local=locals())
             return {
-                'positive_scores': in_batch_positive_scores,
-                'negative_scores': in_batch_negative_scores
+                'positive_scores': in_batch_positive_scores, # [i]
+                'negative_scores': in_batch_negative_scores, # [i]
+                'positive_counts': in_batch_positive_counts,
+                'negative_counts': in_batch_negative_counts, # all
+                'all_counts': all_counts #
             }
         else:  # eval mode
             last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
