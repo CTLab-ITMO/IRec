@@ -1,10 +1,8 @@
-from collections import defaultdict
-
 import torch
-from models import SequentialTorchModel
 from torch import nn
-from utils import DEVICE, create_masked_tensor, get_activation_function
 
+from models import SequentialTorchModel
+from utils import DEVICE, create_masked_tensor, get_activation_function
 from .tiger import TigerModel
 
 
@@ -76,12 +74,11 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             batch_first=True,
         )
 
-        num_decoder_layers=2
+        num_decoder_layers = 2
 
         self._decoder = nn.TransformerDecoder(
             transformer_decoder_layer, num_decoder_layers
         )
-
 
         self._user_embeddings = nn.Embedding(
             num_embeddings=self._num_users + 1, embedding_dim=embedding_dim
@@ -92,48 +89,20 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             rqvae_model.codebooks[1],
             rqvae_model.codebooks[2]
         ]), requires_grad=True)
+        # эмбеддинги для каждого из айтемов, потом уменьшать
+        # sasrec train==valid
+        #
         self._init_weights(initializer_range)
 
         self._item_id_to_semantic_id = item_id_to_semantic_id
         self.item_ids = torch.tensor(item_ids, device=DEVICE)
-
-    @staticmethod
-    def get_full_sids(sids, ids, codebook_size):
-        assert sids.shape[0] == ids.shape[0]
-
-        ids = ids.detach().to(DEVICE)
-        sids = sids.detach().to(DEVICE)
-
-        key = torch.tensor([codebook_size ** i for i in range(sids.shape[1])], device=DEVICE, requires_grad=False)
-
-        shuffled_indices = torch.randperm(len(ids), device=DEVICE)
-        shuffled_ids = ids[shuffled_indices]
-        shuffled_sids = sids[shuffled_indices]
-
-        col_tokens = torch.zeros(ids.shape, device=DEVICE, dtype=torch.long, requires_grad=False)
-
-        hash_dict = defaultdict(int)
-
-        for (i, sid) in enumerate(shuffled_sids):
-            sid_hash = (sid * key).sum().item()
-            col_tokens[i] = hash_dict[sid_hash]
-            hash_dict[sid_hash] += 1
-
-        full_sids = torch.cat([shuffled_sids, col_tokens.unsqueeze(1)], dim=1)
-        unshuffled_indices = shuffled_indices.argsort()
-
-        return (
-            shuffled_ids[unshuffled_indices].detach(),
-            full_sids[unshuffled_indices].detach()
-        )
+        # if __name__ == '__main__':
+        #     for (key, value) in model.named_parameters:
+        #         print(key, value.shape)
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
         rqvae_model, sids, residuals, ids = TigerModel.init_rqvae(config)
-
-        ids_tensor = torch.tensor(ids, dtype=torch.long, device=DEVICE, requires_grad=False)
-        sids_tensor = sids.clone().detach()
-        # item_ids, semantic_ids = cls.get_full_sids(sids_tensor, ids_tensor, rqvae_model.codebook_sizes[0])
 
         return cls(
             rqvae_model=rqvae_model,
@@ -200,7 +169,6 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             decoder_outputs = self._apply_decoder_autoregressive(
                 encoder_embeddings, encoder_mask
             )  # (batch_size, sem_id_len, (batch_size, self.sem_id_len + 1, embedding_dim)
-            print(decoder_outputs.shape)
             decoder_outputs = decoder_outputs[:, :-1, :]
 
             full_embeddings = decoder_outputs.sum(dim=1)
@@ -219,9 +187,9 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
         assert sids.shape == (events.shape[0], self.sem_id_len)
         result = self._get_embeddings(sids)
         result_reshaped = (result.reshape(self.sem_id_len * events.shape[0],
-                                                    self._embedding_dim))  # (4 * ..., embedding_dim)
+                                          self._embedding_dim))  # (4 * ..., embedding_dim)
         assert result[0].shape == result_reshaped[:self.sem_id_len].shape
-        assert torch.allclose(result[0],result_reshaped[:self.sem_id_len])
+        assert torch.allclose(result[0], result_reshaped[:self.sem_id_len])
         assert result_reshaped.shape == (self.sem_id_len * events.shape[0], self._embedding_dim)
         # print(f"label items, events.shape: {events.shape}, result.shape {result.shape}")
         return result_reshaped
@@ -262,9 +230,11 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
         )
 
         def codebook_lambda(x):
-            x = len(self._codebook_sizes) - x % self.sem_id_len
-            x[x == len(self._codebook_sizes)] = self.sem_id_len
+            x = len(self._codebook_sizes) - 1 - x % self.sem_id_len
+            # print(f"encoder {x[:10]}")
             # 0 1 2 4 0 1 2 4 ... # len(self._codebook_sizes) + 1 = 4 for residual
+            if len(x) > 9:
+                assert torch.all(x[:9] == torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2]))
             return x
 
         codebook_embeddings = self._get_position_embeddings(
@@ -412,11 +382,13 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
         def codebook_lambda(x):  # TODO разобраться и посмотреть
             # print("decoder_pos_embeddings", self.sem_id_len, x[:10])
             non_bos = x < self.sem_id_len - 1
+            # print(non_bos)
             x[non_bos] = (self.sem_id_len - 2) - x[non_bos]
             x[~non_bos] = self.sem_id_len
             # print(x[:20])
             # print(non_bos[:20])
-            # assert torch.all(x[:9] == torch.tensor([4, 0, 1, 2, 4, 0, 1, 2, 4]))
+            if len(x) > 9:
+                assert torch.all(x[:9] == torch.tensor([3, 0, 1, 3, 0, 1, 3, 0, 1]))
             return x  # 4, 0, 1, 2, 4, 0, 1, 2 ... sem_id_len = 4 for bos
 
         codebook_embeddings = self._get_position_embeddings(
@@ -424,4 +396,3 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
         )
 
         return codebook_embeddings
-

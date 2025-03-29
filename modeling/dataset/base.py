@@ -260,6 +260,7 @@ class SequenceFullDataset(SequenceDataset, config_name="sequence_full"):
                 use_cached=config.get("use_cached", False),
             )
         )
+
         test_dataset, test_max_user_id, test_max_item_id, test_seq_len = (
             cls._create_dataset(
                 dir_path=data_dir_path,

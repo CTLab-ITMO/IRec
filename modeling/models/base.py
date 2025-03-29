@@ -108,7 +108,7 @@ class SequentialTorchModel(TorchModel):
         embeddings = self.get_item_embeddings(
             events
         )  # (all_batch_events, embedding_dim)
-        print(embeddings.shape[0], sum(lengths))
+        # print(embeddings.shape[0], sum(lengths))
         assert embeddings.shape[0] == sum(lengths)
 
         embeddings, mask = create_masked_tensor(
