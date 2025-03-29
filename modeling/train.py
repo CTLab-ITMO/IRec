@@ -31,7 +31,7 @@ def train(
     epoch_num = 0
     current_metric = 0
 
-    epochs_threshold = 40
+    epochs_threshold = 400
 
     best_epoch = 0
     best_checkpoint = None
