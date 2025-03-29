@@ -234,7 +234,7 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             # print(f"encoder {x[:10]}")
             # 0 1 2 4 0 1 2 4 ... # len(self._codebook_sizes) + 1 = 4 for residual
             if len(x) > 9:
-                assert torch.all(x[:9] == torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2]))
+                assert torch.all(x[:9] == torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2], device=DEVICE))
             return x
 
         codebook_embeddings = self._get_position_embeddings(
@@ -388,7 +388,7 @@ class TigerFromSasRec(SequentialTorchModel, config_name="tiger_from_sasrec"):
             # print(x[:20])
             # print(non_bos[:20])
             if len(x) > 9:
-                assert torch.all(x[:9] == torch.tensor([3, 0, 1, 3, 0, 1, 3, 0, 1]))
+                assert torch.all(x[:9] == torch.tensor([3, 0, 1, 3, 0, 1, 3, 0, 1], device=DEVICE))
             return x  # 4, 0, 1, 2, 4, 0, 1, 2 ... sem_id_len = 4 for bos
 
         codebook_embeddings = self._get_position_embeddings(

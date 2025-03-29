@@ -270,9 +270,9 @@ class SequenceFullDataset(SequenceDataset, config_name="sequence_full"):
             )
         )
         print("test", len(train_dataset), len(validation_dataset), len(test_dataset))
-        train_dataset = train_dataset[:5000]
-        validation_dataset = validation_dataset[:5000]
-        test_dataset = test_dataset[:5000]
+        train_dataset = train_dataset[:3000]
+        validation_dataset = validation_dataset[:3000]
+        test_dataset = test_dataset[:3000]
 
 
         #
