@@ -141,11 +141,9 @@ class CrossEntropyLossSasrec(TorchLoss, config_name='sasrec_ce'):
 # all_counts ()
 # negative_counts (num_negatives)
 def process_log_q(positive_logits, negative_logits, all_counts, negative_counts):
-    # Вычисляем поправку log(q) для негативных примеров
     log_q = torch.log(negative_counts / all_counts) # (num_negatives)
     adjusted_neg_logits = negative_logits - log_q # (all_samples, num_negatives)
 
-    # Объединяем положительный и скорректированные негативные логиты
     combined_logits = torch.cat([positive_logits.unsqueeze(1), adjusted_neg_logits], dim=1) # (all_samples, num_negatives + 1)
 
     loss = -torch.logsoftmax(combined_logits, dim=-1)[:, 0].mean()
@@ -189,7 +187,7 @@ def log_softmax_without_self(logits: torch.Tensor, dim: int = -1) -> torch.Tenso
     Вычисляет log-softmax, исключая текущий элемент из знаменателя.
     """
     log_softmax_normal = torch.log_softmax(logits, dim=dim)
-    correction = torch.log1p(-torch.exp(log_softmax_normal))
+    correction = torch.log(-torch.expm1(log_softmax_normal) + 1e-8)
     return log_softmax_normal - correction
 
 class CrossEntropyLossSasrecAdaptive(TorchLoss, config_name='sasrec_ce_adaptive'):
@@ -206,32 +204,30 @@ class CrossEntropyLossSasrecAdaptive(TorchLoss, config_name='sasrec_ce_adaptive'
         self._output_prefix = output_prefix
 
     def forward(self, inputs):
-        positive_scores = inputs[self._positive_prefix].unsqueeze(1) # (x, 1)
+        # import code
+        # code.interact(local=locals())
+        positive_scores = inputs[self._positive_prefix].unsqueeze(1)  # (x, 1)
         negative_scores = inputs[self._negative_prefix]  # (x, num_negatives)
         assert positive_scores.shape[0] == negative_scores.shape[0]
         all_counts = inputs['all_counts'] # ()
         negative_counts = inputs['negative_counts'] # (num_negatives)
         positive_counts = inputs['positive_counts'] # (x)
 
+        batch_size = negative_scores.shape[-1]
+
         log_q = torch.log(negative_counts[None, :] / (all_counts - positive_counts[:, None])) # (x, num_negatives)
         negative_scores = negative_scores - log_q  # (x, num_negatives)
 
-        all_logits = torch.cat((positive_scores, negative_scores), dim=1) # (x, num_negatives + 1)
-        loss = -log_softmax_without_self(all_logits, dim=-1)[:, 0].mean() # ()
+        all_logits = torch.cat((positive_scores, negative_scores), dim=1)  # (all_samples, num_negatives + 1)
+        loss = -torch.log_softmax(all_logits, dim=-1)[:, 0]  # (x)
 
-        positive_scores_sg = positive_scores.detach() # (x, 1)
-        negative_scores_sg = negative_scores.detach() # (x, num_negatives)
-        all_counts_sg = all_counts.detach()  # ()
-        negative_counts_sg = negative_counts.detach() # (num_negatives)
-        positive_counts_sg = positive_counts.detach() # (x)
+        negative_scores = negative_scores - log_q - torch.log(torch.ones_like(negative_scores) * (batch_size - 1)) # (x, num_negatives)
+        all_logits = torch.cat((positive_scores, negative_scores), dim=1)  # (all_samples, num_negatives + 1)
+        prob = torch.softmax(all_logits, dim=-1)[:, 0]  # (x)
+        multiplier = (1.0 - prob).detach()  # (x)
 
-        log_q_sg = torch.log(negative_counts_sg[None, :] / (all_counts_sg - positive_counts_sg[:, None]))  # (x, num_negatives)
-        negative_scores_sg = negative_scores_sg - log_q_sg
-        negative_scores_sg = negative_scores_sg - torch.log(torch.tensor(negative_counts_sg.shape[0], device=negative_scores_sg.device))
-        all_logits_sg = torch.cat((positive_scores_sg, negative_scores_sg), dim=1)  # (x, num_negatives + 1)
-        loss_sg = -torch.log_softmax(all_logits_sg, dim=-1)[:, 0].mean()
-
-        loss = (1 - loss_sg) * loss
+        loss *= multiplier
+        loss = loss.mean()
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()
