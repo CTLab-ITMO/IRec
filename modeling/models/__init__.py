@@ -13,6 +13,7 @@ from .pop import PopModel
 from .pure_mf import PureMF
 from .random import RandomModel
 from .rqvae import RqVaeModel
+from .rqvae_large import RqVaeModelLarge
 from .s3rec import S3RecModel
 from .sasrec_in_batch import SasRecInBatchModel
 from .sasrec_ce import SasRecCeModel

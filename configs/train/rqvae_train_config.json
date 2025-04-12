@@ -1,5 +1,5 @@
 {
-  "experiment_name": "rqvae_beauty",
+  "experiment_name": "rqvae_large_beauty",
   "train_epochs_num": 200,
   "dataset": {
     "type": "rqvae",
@@ -30,8 +30,9 @@
     }
   },
   "model": {
-    "type": "rqvae",
+    "type": "rqvae_large",
     "embedding_dim": 512,
+    "intermediate_dims": [256, 128],
     "hidden_dim": 64,
     "n_iter": 100,
     "codebook_sizes": [256, 256, 256],

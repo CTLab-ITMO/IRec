@@ -3,7 +3,7 @@ import json
 import numpy as np
 import torch
 
-from models import RqVaeModel
+from models import RqVaeModel, RqVaeModelLarge
 from utils import DEVICE
 
 
@@ -20,7 +20,7 @@ if __name__ == "__main__":
     config = config["model"]
     rqvae_config = json.load(open(config["rqvae_train_config_path"]))
     rqvae_config["model"]["should_init_codebooks"] = False
-    rqvae_model = RqVaeModel.create_from_config(rqvae_config["model"]).to(DEVICE)
+    rqvae_model = RqVaeModelLarge.create_from_config(rqvae_config["model"]).to(DEVICE)
     rqvae_model.load_state_dict(
         torch.load(config["rqvae_checkpoint_path"], weights_only=True)
     )
