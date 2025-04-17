@@ -13,7 +13,7 @@ from utils.registry import MetaParent
 if torch.cuda.is_available():
     DEVICE = torch.device("cuda")
 else:
-    DEVICE = torch.device("cpu")
+    DEVICE = torch.device("mps")
 
 
 def parse_args():

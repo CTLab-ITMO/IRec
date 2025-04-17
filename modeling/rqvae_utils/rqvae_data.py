@@ -1,5 +1,6 @@
 import gzip
 import json
+import pickle
 import random
 
 import pandas as pd
@@ -54,6 +55,7 @@ def preprocess(row: pd.Series):
 
 
 def get_data(cached=True):
+    print("fda")
     if not cached:
         df = getDF("../data/meta_Beauty.json.gz")
 
@@ -75,7 +77,12 @@ def get_data(cached=True):
         with torch.no_grad():
             df["embeddings"] = df["combined_text"].progress_apply(encode_text)
     else:
-        df = torch.load("../data/Beauty/data_full.pt", weights_only=False)
+        print("bababa", flush=True)
+        with open('final_data_reduced.pkl', 'rb') as file:
+            data_reduced = pickle.load(file)
+
+        df = torch.from_numpy(data_reduced)
+        print(df, flush=True)
 
     return df
 

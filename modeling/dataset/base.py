@@ -7,6 +7,7 @@ from collections import defaultdict
 import numpy as np
 import scipy.sparse as sp
 import torch
+from pyarrow.dataset import dataset
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
@@ -1003,12 +1004,23 @@ class RqVaeDataset(BaseDataset, config_name="rqvae"):
         data_dir_path = os.path.join(config["path_to_data_dir"], config["name"])
         train_dataset, validation_dataset, test_dataset = [], [], []
 
-        dataset_path = os.path.join(data_dir_path, "{}.pt".format("data_full"))
-        df = torch.load(dataset_path, weights_only=False)
+        dataset_path = os.path.join(data_dir_path, "{}.pkl".format("final_data_reduced"))
 
-        for idx, sample in df.iterrows():
-            train_dataset.append({"item.id": idx, "item.embed": sample["embeddings"]})
+        with open(dataset_path, 'rb') as file:
+            data_reduced = pickle.load(file)
 
+        embeddings_np = data_reduced['embedding']  # Assuming this is a numpy array
+        item_ids = data_reduced['item_id']  # Array or list of item IDs
+        print(len(embeddings_np), len(embeddings_np[0]))
+        embeddings_tensor = torch.tensor(embeddings_np)
+
+        train_dataset = []
+        for idx, item_id in enumerate(item_ids):
+            train_dataset.append({
+                "item.id": item_id,
+                "item.embed": embeddings_tensor[idx]
+            })
+        print(train_dataset[0])
         logger.info("Train dataset size: {}".format(len(train_dataset)))
         logger.info("Test dataset size: {}".format(len(test_dataset)))
 
@@ -1026,7 +1038,7 @@ class RqVaeDataset(BaseDataset, config_name="rqvae"):
             train_sampler=train_sampler,
             validation_sampler=validation_sampler,
             test_sampler=test_sampler,
-            num_items=len(df),
+            num_items=len(test_dataset),
         )
 
     def get_samplers(self):
