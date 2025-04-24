@@ -1,10 +1,10 @@
 {
   "pred_prefix": "logits",
   "label_prefix": "labels",
-  "experiment_name": "bert4rec_beauty_grid_0-5_0-1__",
+  "experiment_name": "bert4rec_all_rank_beauty",
   "dataset": {
     "type": "sequence",
-    "path_to_data_dir": "../data",
+    "path_to_data_dir": "../data/sasrec_in_batch",
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
@@ -34,7 +34,7 @@
     }
   },
   "model": {
-    "type": "bert4rec",
+    "type": "bert4rec_all_rank",
     "sequence_prefix": "item",
     "labels_prefix": "labels",
     "candidate_prefix": "candidates",

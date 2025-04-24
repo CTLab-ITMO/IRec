@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 
-class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
+class Bert4RecModelInBatch(SequentialTorchModel, config_name='bert4rec_in_batch'):
 
     def __init__(
             self,
@@ -73,21 +73,42 @@ class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
 
         embeddings = self._output_projection(embeddings)  # (batch_size, seq_len, embedding_dim)
         # embeddings = torch.nn.functional.gelu(embeddings)  # (batch_size, seq_len, embedding_dim)
-        embeddings = torch.einsum(
-            'bsd,nd->bsn', embeddings, self._item_embeddings.weight
-        )  # (batch_size, seq_len, num_items)
         # embeddings += self._bias[None, None, :]  # (batch_size, seq_len, num_items)
 
         if self.training:  # training mode
-            all_sample_labels = inputs['{}.ids'.format(self._labels_prefix)]  # (all_batch_events)
-            embeddings = embeddings[mask]  # (all_batch_events, num_items)
-            labels_mask = (all_sample_labels != 0).bool()  # (all_batch_events)
+            # TODO: move 'not_masked_item' to config
+            all_sample_not_masked = inputs['not_masked_item.ids'] # (all_batch_events)
 
-            needed_logits = embeddings[labels_mask]  # (non_zero_events, num_items)
-            needed_labels = all_sample_labels[labels_mask]  # (non_zero_events)
+            random_indices = torch.randperm(all_sample_not_masked.shape[0])[:embeddings.shape[0]] # (batch_size)
+            random_in_batch_negative_ids = all_sample_not_masked[random_indices] # (batch_size)
+            random_in_batch_negative_embeddings = self._item_embeddings.weight[random_in_batch_negative_ids] # (batch_size)
+
+            embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
+            all_sample_labels = inputs['{}.ids'.format(self._labels_prefix)]  # (all_batch_events)
+            labels_mask = (all_sample_labels != 0).bool()  # (all_batch_events)
+            non_zero_embeddings = embeddings[labels_mask] # (non_zero_events, embedding_dim)
+            non_zero_labels = all_sample_labels[labels_mask] # (non_zero_events)
+
+            # non_zero_samples_logits = torch.einsum(
+            #     'bd,nd->bn', non_zero_embeddings, random_in_batch_negative_embeddings
+            # )  # (non_zero_events, num_negatives=batch_size)
+            non_zero_samples_logits = non_zero_embeddings @ random_in_batch_negative_embeddings.T # (non_zero_events, num_negatives=batch_size)
+            non_zero_labels_embeddings = self._item_embeddings.weight[non_zero_labels] # (non_zero_events, embedding_dim)
+            # non_zero_labels_logits = (non_zero_embeddings @ non_zero_labels_embeddings.T).diagonal().unsqueeze(1) # (non_zero_events, 1)
+            non_zero_labels_logits = (non_zero_embeddings * non_zero_labels_embeddings).sum(dim=-1).unsqueeze(1) # (non_zero_events, 1)
+
+            needed_logits = torch.cat((non_zero_labels_logits, non_zero_samples_logits), dim=1)  # (non_zero_events, num_negatives + 1=batch_size + 1)
+            # needed_labels = all_sample_labels[labels_mask]  # (non_zero_events)
+
+            needed_labels = torch.zeros(len(needed_logits), dtype=torch.long, device=needed_logits.device) # (non_zero_events)
 
             return {'logits': needed_logits, 'labels.ids': needed_labels}
-        else:  # eval mode
+        else:
+            # eval mode
+            embeddings = torch.einsum(
+                'bsd,nd->bsn', embeddings, self._item_embeddings.weight
+            )  # (batch_size, seq_len, num_items)
+
             candidate_scores = self._get_last_embedding(embeddings, mask)  # (batch_size, num_items)
             candidate_scores[:, 0] = -torch.inf
             candidate_scores[:, self._num_items + 1:] = -torch.inf

@@ -1,12 +1,13 @@
 import utils
 from utils import parse_args, create_logger, DEVICE, fix_random_seed
 
-from callbacks import BaseCallback
+from callbacks import BaseCallback, EvalCallback, ValidationCallback
 from dataset import BaseDataset
 from dataloader import BaseDataloader
 from loss import BaseLoss
 from models import BaseModel
 from optimizer import BaseOptimizer
+from infer import inference
 
 import copy
 import json
@@ -124,7 +125,7 @@ def main():
     logger.debug('Everything is ready for training process!')
 
     # Train process
-    _ = train(
+    best_model_checkpoint = train(
         dataloader=train_dataloader,
         model=model,
         optimizer=optimizer,
@@ -134,6 +135,27 @@ def main():
         step_cnt=config.get('train_steps_num'),
         best_metric=config.get('best_metric')
     )
+
+    eval_model = BaseModel.create_from_config(config['model'], **dataset.meta).to(DEVICE)
+    eval_model.load_state_dict(best_model_checkpoint)
+
+    for cl in callback._callbacks:
+        if isinstance(cl, EvalCallback):
+            metrics = cl._metrics
+            pred_prefix = cl._pred_prefix
+            labels_prefix = cl._labels_prefix
+            break
+    else:
+        for cl in callback._callbacks:
+            if isinstance(cl, ValidationCallback):
+                metrics = cl._metrics
+                pred_prefix = cl._pred_prefix
+                labels_prefix = cl._labels_prefix
+                break
+        else:
+            assert False
+
+    inference(eval_dataloader, eval_model, metrics, pred_prefix, labels_prefix)
 
     logger.debug('Saving model...')
     checkpoint_path = '../checkpoints/{}_final_state.pth'.format(config['experiment_name'])

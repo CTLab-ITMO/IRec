@@ -1,4 +1,5 @@
 from dataset.samplers.base import TrainSampler, EvalSampler
+from dataset.negative_samplers.base import BaseNegativeSampler
 
 import copy
 import numpy as np
@@ -6,21 +7,27 @@ import numpy as np
 
 class MaskedItemPredictionTrainSampler(TrainSampler, config_name='masked_item_prediction'):
 
-    def __init__(self, dataset, num_users, num_items, mask_prob=0.0):
+    def __init__(self, dataset, num_users, num_items, negative_sampler, mask_prob=0.0, num_negatives=0):
         super().__init__()
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
         self._mask_item_idx = self._num_items + 1
         self._mask_prob = mask_prob
+        self._negative_sampler = negative_sampler
+        self._num_negatives = num_negatives
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
+        negative_sampler = BaseNegativeSampler.create_from_config({'type': config['negative_sampler_type']}, **kwargs)
+
         return cls(
             dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
-            mask_prob=config.get('mask_prob', 0.0)
+            negative_sampler=negative_sampler,
+            mask_prob=config.get('mask_prob', 0.0),
+            num_negatives=config.get('num_negatives_train', 0)
         )
 
     def __getitem__(self, index):
@@ -53,17 +60,38 @@ class MaskedItemPredictionTrainSampler(TrainSampler, config_name='masked_item_pr
         masked_sequence[-1] = self._mask_item_idx
         labels[-1] = item_sequence[-1]
 
-        return {
-            'user.ids': sample['user.ids'],
-            'user.length': sample['user.length'],
+        if self._num_negatives == 0:
+            return {
+                'user.ids': sample['user.ids'],
+                'user.length': sample['user.length'],
 
-            'item.ids': masked_sequence,
-            'item.length': len(masked_sequence),
+                'item.ids': masked_sequence,
+                'item.length': len(masked_sequence),
 
-            'labels.ids': labels,
-            'labels.length': len(labels)
-        }
+                'labels.ids': labels,
+                'labels.length': len(labels),
 
+                'not_masked_item.ids': item_sequence,
+                'not_masked_item.length': len(item_sequence)
+            }
+        else:
+            negative_sequence = self._negative_sampler.generate_negative_samples(
+                sample, self._num_negatives
+            )
+
+            return {
+                'user.ids': sample['user.ids'],
+                'user.length': sample['user.length'],
+
+                'item.ids': masked_sequence,
+                'item.length': len(masked_sequence),
+
+                'labels.ids': labels,
+                'labels.length': len(labels),
+
+                'negative_item.ids': negative_sequence,
+                'negative_item.length': len(negative_sequence)
+            }
 
 class MaskedItemPredictionEvalSampler(EvalSampler, config_name='masked_item_prediction'):
 

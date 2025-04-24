@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 
-class Bert4RecModel(SequentialTorchModel, config_name='bert4rec'):
+class Bert4RecModelAllRank(SequentialTorchModel, config_name='bert4rec_all_rank'):
 
     def __init__(
             self,
