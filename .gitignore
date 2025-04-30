@@ -9,3 +9,4 @@ checkpoints/*
 .ruff_cache
 .mypy_cache
 .vscode
+wandb/*

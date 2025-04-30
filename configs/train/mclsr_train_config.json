@@ -1,6 +1,7 @@
 {
   "experiment_name": "mclsr_beauty_test",
   "train_epochs_num": 50,
+  "use_wandb":true,
   "dataset": {
     "type": "graph",
     "use_user_graph": true,

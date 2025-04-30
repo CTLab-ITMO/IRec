@@ -18,6 +18,7 @@ import copy
 import json
 import os
 import torch
+import wandb
 
 logger = create_logger(name=__name__)
 seed_val = 42
@@ -94,6 +95,13 @@ def main():
     fix_random_seed(seed_val)
     config = parse_args()
 
+    if config.get('use_wandb', False):
+        wandb.init(
+            project='irec',
+            name=config['experiment_name'],
+            sync_tensorboard=True
+        )
+    
     irec.utils.tensorboards.GLOBAL_TENSORBOARD_WRITER = (
         irec.utils.tensorboards.TensorboardWriter(config['experiment_name'])
     )
@@ -177,6 +185,9 @@ def main():
     )
     torch.save(model.state_dict(), checkpoint_path)
     logger.debug('Saved model as {}'.format(checkpoint_path))
+
+    if config.get('use_wandb', False):
+        wandb.finish()
 
 
 if __name__ == '__main__':

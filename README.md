@@ -71,3 +71,4 @@ The script has 1 input argument: `params` which is the path to the json file wit
 
 -`callbacks` Different additional traning 
 
+-`use_wandb` Enable Weights & Biases logging for experiment tracking

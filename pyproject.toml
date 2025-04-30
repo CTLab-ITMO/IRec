@@ -17,6 +17,7 @@ dependencies = [
     "polars==1.27.*",
     "matplotlib==3.9.*",
     "tensorboard==2.19.*",
+    "wandb==0.19.*",
 ]
 
 [project.optional-dependencies]
