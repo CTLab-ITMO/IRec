@@ -2,8 +2,8 @@
   "experiment_name": "sasrec_in_batch_test",
   "best_metric": "eval/ndcg@20",
   "dataset": {
-    "type": "sequence",
-    "path_to_data_dir": "../data",
+    "type": "scientific",
+    "path_to_data_dir": "data",
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {

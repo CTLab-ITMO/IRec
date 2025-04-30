@@ -4,7 +4,7 @@
   "experiment_name": "gru4rec_beauty_grid__0-2__",
   "dataset": {
     "type": "sequence",
-    "path_to_data_dir": "../data",
+    "path_to_data_dir": "./data",
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
