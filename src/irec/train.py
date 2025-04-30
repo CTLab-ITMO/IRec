@@ -99,9 +99,9 @@ def main():
         wandb.init(
             project='irec',
             name=config['experiment_name'],
-            sync_tensorboard=True
+            sync_tensorboard=True,
         )
-    
+
     irec.utils.tensorboards.GLOBAL_TENSORBOARD_WRITER = (
         irec.utils.tensorboards.TensorboardWriter(config['experiment_name'])
     )
