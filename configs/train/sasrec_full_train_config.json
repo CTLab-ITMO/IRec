@@ -1,13 +1,14 @@
 {
-  "experiment_name": "sasrec_beauty",
+  "experiment_name": "sasrec_full_beauty",
   "best_metric": "validation/ndcg@20",
+  "train_epochs_num": 100,
   "dataset": {
-    "type": "sequence",
+    "type": "sequence_full",
     "path_to_data_dir": "../data",
     "name": "Beauty",
     "max_sequence_length": 50,
     "samplers": {
-      "type": "next_item_prediction",
+      "type": "last_item_prediction",
       "negative_sampler_type": "random"
     }
   },
@@ -32,9 +33,9 @@
     }
   },
   "model": {
-    "type": "sasrec",
+    "type": "sasrec_full",
     "sequence_prefix": "item",
-    "positive_prefix": "positive",
+    "positive_prefix": "labels",
     "negative_prefix": "negative",
     "candidate_prefix": "candidates",
     "embedding_dim": 64,
@@ -58,9 +59,9 @@
     "type": "composite",
     "losses": [
       {
-        "type": "sasrec",
-        "positive_prefix": "positive_scores",
-        "negative_prefix": "negative_scores",
+        "type": "ce",
+        "predictions_prefix": "logits",
+        "labels_prefix": "labels",
         "output_prefix": "downstream_loss"
       }
     ],
@@ -76,7 +77,7 @@
       },
       {
         "type": "validation",
-        "on_step": 64,
+        "on_step": 1024,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {
@@ -120,7 +121,7 @@
       },
       {
         "type": "eval",
-        "on_step": 256,
+        "on_step": 2048,
         "pred_prefix": "logits",
         "labels_prefix": "labels",
         "metrics": {

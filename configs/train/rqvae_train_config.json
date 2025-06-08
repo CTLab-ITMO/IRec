@@ -1,6 +1,6 @@
 {
   "experiment_name": "rqvae_beauty",
-  "train_steps_num": 1024,
+  "train_epochs_num": 200,
   "dataset": {
     "type": "rqvae",
     "path_to_data_dir": "../data",
@@ -31,10 +31,10 @@
   },
   "model": {
     "type": "rqvae",
-    "input_dim": 512,
-    "hidden_dim": 128,
+    "embedding_dim": 512,
+    "hidden_dim": 64,
     "n_iter": 100,
-    "codebook_sizes": [256, 256, 256, 256],
+    "codebook_sizes": [256, 256, 256],
     "should_init_codebooks": true,
     "should_reinit_unused_clusters": true,
     "initializer_range": 0.02
@@ -43,14 +43,9 @@
     "type": "basic",
     "optimizer": {
       "type": "adam",
-      "lr": 1e-4
+      "lr": 5e-5
     },
-    "clip_grad_threshold": 5.0,
-    "scheduler": {
-      "type": "step",
-      "step_size": 100, 
-      "gamma": 0.96
-    }
+    "clip_grad_threshold": 5.0
   },
   "loss": {
     "type": "rqvae_loss",

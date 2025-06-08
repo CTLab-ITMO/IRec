@@ -1,22 +1,20 @@
-from models.base import TorchModel
-
-from utils import create_masked_tensor, get_activation_function
-
 import torch
 from torch import nn
 
+from models.base import TorchModel
+from utils import create_masked_tensor, get_activation_function
+
 
 class GRUModel(TorchModel):
-
     def __init__(
-            self,
-            num_items,
-            max_sequence_length,
-            embedding_dim,
-            num_layers,
-            dropout=0.0,
-            activation='relu',
-            layer_norm_eps=1e-5
+        self,
+        num_items,
+        max_sequence_length,
+        embedding_dim,
+        num_layers,
+        dropout=0.0,
+        activation="relu",
+        layer_norm_eps=1e-5,
     ):
         super().__init__()
         self._num_items = num_items
@@ -25,11 +23,12 @@ class GRUModel(TorchModel):
 
         self._item_embeddings = nn.Embedding(
             num_embeddings=num_items + 2,  # add zero embedding + mask embedding
-            embedding_dim=embedding_dim
+            embedding_dim=embedding_dim,
         )
         self._position_embeddings = nn.Embedding(
-            num_embeddings=max_sequence_length + 1,  # in order to include `max_sequence_length` value
-            embedding_dim=embedding_dim
+            num_embeddings=max_sequence_length
+            + 1,  # in order to include `max_sequence_length` value
+            embedding_dim=embedding_dim,
         )
 
         self._layernorm = nn.LayerNorm(embedding_dim, eps=layer_norm_eps)
@@ -41,7 +40,7 @@ class GRUModel(TorchModel):
             num_layers=num_layers,
             batch_first=True,
             dropout=dropout,
-            bidirectional=False
+            bidirectional=False,
         )
 
         self._hidden_to_output_projection = nn.Linear(embedding_dim, num_items)
@@ -51,27 +50,31 @@ class GRUModel(TorchModel):
         embeddings = self._item_embeddings(events)  # (all_batch_events, embedding_dim)
 
         embeddings, mask = create_masked_tensor(
-            data=embeddings,
-            lengths=lengths
+            data=embeddings, lengths=lengths
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
         batch_size = mask.shape[0]
         seq_len = mask.shape[1]
 
-        positions = torch.arange(
-            start=seq_len - 1, end=-1, step=-1, device=mask.device
-        )[None].tile([batch_size, 1]).long()  # (batch_size, seq_len)
+        positions = (
+            torch.arange(start=seq_len - 1, end=-1, step=-1, device=mask.device)[None]
+            .tile([batch_size, 1])
+            .long()
+        )  # (batch_size, seq_len)
         positions_mask = positions < lengths[:, None]  # (batch_size, max_seq_len)
 
         positions = positions[positions_mask]  # (all_batch_events)
-        position_embeddings = self._position_embeddings(positions)  # (all_batch_events, embedding_dim)
+        position_embeddings = self._position_embeddings(
+            positions
+        )  # (all_batch_events, embedding_dim)
         position_embeddings, _ = create_masked_tensor(
-            data=position_embeddings,
-            lengths=lengths
+            data=position_embeddings, lengths=lengths
         )  # (batch_size, seq_len, embedding_dim)
         assert torch.allclose(position_embeddings[~mask], embeddings[~mask])
 
-        embeddings = embeddings + position_embeddings  # (batch_size, seq_len, embedding_dim)
+        embeddings = (
+            embeddings + position_embeddings
+        )  # (batch_size, seq_len, embedding_dim)
 
         embeddings = self._layernorm(embeddings)  # (batch_size, seq_len, embedding_dim)
         embeddings = self._dropout(embeddings)  # (batch_size, seq_len, embedding_dim)
@@ -82,14 +85,16 @@ class GRUModel(TorchModel):
             input=embeddings,
             lengths=lengths.cpu(),
             batch_first=True,
-            enforce_sorted=False
+            enforce_sorted=False,
         )
 
         hidden = torch.zeros(
-            self._num_layers, batch_size, self._embedding_dim,
+            self._num_layers,
+            batch_size,
+            self._embedding_dim,
             dtype=embeddings.dtype,
             device=embeddings.device,
-            requires_grad=True
+            requires_grad=True,
         )  # (num_layers, batch_size, embedding_dim)
         out, hidden = self._encoder(packed_embeddings, hidden)
         embeddings, embedding_lengths = torch.nn.utils.rnn.pad_packed_sequence(
@@ -102,21 +107,20 @@ class GRUModel(TorchModel):
         return embeddings, mask
 
 
-class GRU4RecModel(GRUModel, config_name='gru4rec'):
-
+class GRU4RecModel(GRUModel, config_name="gru4rec"):
     def __init__(
-            self,
-            sequence_prefix,
-            positive_prefix,
-            negative_prefix,
-            num_items,
-            max_sequence_length,
-            embedding_dim,
-            num_layers,
-            dropout=0.0,
-            activation='relu',
-            layer_norm_eps=1e-5,
-            initializer_range=0.02
+        self,
+        sequence_prefix,
+        positive_prefix,
+        negative_prefix,
+        num_items,
+        max_sequence_length,
+        embedding_dim,
+        num_layers,
+        dropout=0.0,
+        activation="relu",
+        layer_norm_eps=1e-5,
+        initializer_range=0.02,
     ):
         super().__init__(
             num_items=num_items,
@@ -125,7 +129,7 @@ class GRU4RecModel(GRUModel, config_name='gru4rec'):
             num_layers=num_layers,
             dropout=dropout,
             activation=activation,
-            layer_norm_eps=layer_norm_eps
+            layer_norm_eps=layer_norm_eps,
         )
 
         self._sequence_prefix = sequence_prefix
@@ -136,35 +140,42 @@ class GRU4RecModel(GRUModel, config_name='gru4rec'):
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
-            sequence_prefix=config['sequence_prefix'],
-            positive_prefix=config['positive_prefix'],
-            negative_prefix=config['negative_prefix'],
-            num_items=kwargs['num_items'],
-            max_sequence_length=kwargs['max_sequence_length'],
-            embedding_dim=config['embedding_dim'],
-            num_layers=config['num_layers'],
-            dropout=config.get('dropout', 0.0),
-            activation=config.get('activation', 'tanh'),
-            layer_norm_eps=config.get('layer_norm_eps', 1e-5),
-            initializer_range=config.get('initializer_range', 0.02)
+            sequence_prefix=config["sequence_prefix"],
+            positive_prefix=config["positive_prefix"],
+            negative_prefix=config["negative_prefix"],
+            num_items=kwargs["num_items"],
+            max_sequence_length=kwargs["max_sequence_length"],
+            embedding_dim=config["embedding_dim"],
+            num_layers=config["num_layers"],
+            dropout=config.get("dropout", 0.0),
+            activation=config.get("activation", "tanh"),
+            layer_norm_eps=config.get("layer_norm_eps", 1e-5),
+            initializer_range=config.get("initializer_range", 0.02),
         )
 
     def forward(self, inputs):
-        all_sample_events = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
-        all_sample_lengths = inputs['{}.length'.format(self._sequence_prefix)]  # (batch_size)
+        all_sample_events = inputs[
+            "{}.ids".format(self._sequence_prefix)
+        ]  # (all_batch_events)
+        all_sample_lengths = inputs[
+            "{}.length".format(self._sequence_prefix)
+        ]  # (batch_size)
 
         embeddings, mask = self._apply_sequential_encoder(
-            events=all_sample_events,
-            lengths=all_sample_lengths
+            events=all_sample_events, lengths=all_sample_lengths
         )  # (batch_size, seq_len, embedding_dim) (batch_size, seq_len)
 
         if self.training:  # training mode
-            all_positive_sample_events = inputs['{}.ids'.format(self._positive_prefix)]  # (all_batch_events)
+            all_positive_sample_events = inputs[
+                "{}.ids".format(self._positive_prefix)
+            ]  # (all_batch_events)
             all_positive_sample_embeddings = self._item_embeddings(
                 all_positive_sample_events
             )  # (all_batch_events, embedding_dim)
 
-            all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
+            all_sample_embeddings = embeddings[
+                mask
+            ]  # (all_batch_events, embedding_dim)
 
             sample_end_idx = torch.cumsum(all_sample_lengths, dim=0)  # (batch_size)
             sample_begin_idx = sample_end_idx - all_sample_lengths  # (batch_size)
@@ -173,44 +184,47 @@ class GRU4RecModel(GRUModel, config_name='gru4rec'):
             sample_begin_idx = sample_begin_idx[:, None]  # (batch_size, 1)
 
             negative_indices = torch.tile(
-                torch.arange(start=0, end=all_positive_sample_events.shape[0], device=all_sample_lengths.device).long()[None],
-                dims=[all_sample_lengths.shape[0], 1]
+                torch.arange(
+                    start=0,
+                    end=all_positive_sample_events.shape[0],
+                    device=all_sample_lengths.device,
+                ).long()[None],
+                dims=[all_sample_lengths.shape[0], 1],
             )  # (batch_size, all_batch_events)
 
-            negative_mask = (negative_indices >= sample_begin_idx) & (negative_indices < sample_end_idx)
+            negative_mask = (negative_indices >= sample_begin_idx) & (
+                negative_indices < sample_end_idx
+            )
             negative_mask = torch.repeat_interleave(
                 negative_mask, all_sample_lengths, dim=0
             )
 
             negative_scores = torch.einsum(
-                'ad,bd->ab',
+                "ad,bd->ab",
                 all_sample_embeddings,
-                self._item_embeddings(all_sample_events)
+                self._item_embeddings(all_sample_events),
             )  # (all_batch_events, all_batch_events)
-            
+
             positive_scores = torch.einsum(
-                'ad,ad->a',
-                all_sample_embeddings,
-                all_positive_sample_embeddings
+                "ad,ad->a", all_sample_embeddings, all_positive_sample_embeddings
             )  # (all_batch_events)
 
             return {
-                'positive_scores': positive_scores[..., None],
-                'negative_scores': negative_scores,
+                "positive_scores": positive_scores[..., None],
+                "negative_scores": negative_scores,
             }
         else:  # eval mode
-            last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
+            last_embeddings = self._get_last_embedding(
+                embeddings, mask
+            )  # (batch_size, embedding_dim)
             candidate_scores = torch.einsum(
-                'bd,nd->bn',
-                last_embeddings,
-                self._item_embeddings.weight
+                "bd,nd->bn", last_embeddings, self._item_embeddings.weight
             )  # (batch_size, num_items)
             candidate_scores[:, 0] = -torch.inf
-            candidate_scores[:, self._num_items + 1:] = -torch.inf
+            candidate_scores[:, self._num_items + 1 :] = -torch.inf
 
             _, indices = torch.topk(
-                candidate_scores,
-                k=20, dim=-1, largest=True
+                candidate_scores, k=20, dim=-1, largest=True
             )  # (batch_size, 20)
 
             return indices

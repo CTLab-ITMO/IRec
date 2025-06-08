@@ -1,10 +1,19 @@
-from .base import TrainSampler, EvalSampler
-from .cl4srec import Cl4SRecTrainSampler, Cl4SRecEvalSampler
-from .duorec import DuorecTrainSampler, DuoRecEvalSampler
-from .next_item_prediction import NextItemPredictionTrainSampler, NextItemPredictionEvalSampler
-from .last_item_prediction import LastItemPredictionTrainSampler, LastItemPredictionEvalSampler
-from .masked_item_prediction import MaskedItemPredictionTrainSampler, MaskedItemPredictionEvalSampler
-from .mclsr import MCLSRTrainSampler, MCLSRPredictionEvalSampler
-from .pop import PopTrainSampler, PopEvalSampler
-from .s3rec import S3RecPretrainTrainSampler, S3RecPretrainEvalSampler
-from .identity import IdentityTrainSampler, IdentityEvalSampler
+from .base import EvalSampler, TrainSampler
+from .cl4srec import Cl4SRecEvalSampler, Cl4SRecTrainSampler
+from .duorec import DuoRecEvalSampler, DuorecTrainSampler
+from .identity import IdentityEvalSampler, IdentityTrainSampler
+from .last_item_prediction import (
+    LastItemPredictionEvalSampler,
+    LastItemPredictionTrainSampler,
+)
+from .masked_item_prediction import (
+    MaskedItemPredictionEvalSampler,
+    MaskedItemPredictionTrainSampler,
+)
+from .mclsr import MCLSRPredictionEvalSampler, MCLSRTrainSampler
+from .next_item_prediction import (
+    NextItemPredictionEvalSampler,
+    NextItemPredictionTrainSampler,
+)
+from .pop import PopEvalSampler, PopTrainSampler
+from .s3rec import S3RecPretrainEvalSampler, S3RecPretrainTrainSampler
