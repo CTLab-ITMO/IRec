@@ -5,23 +5,23 @@ description = "IRec framework"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "faiss-cpu>=1.10.0",
-    "pandas>=2.2.3",
-    "scipy>=1.15.2",
+    "faiss-cpu>=1",
+    "pandas>=2",
+    "scipy>=1",
     "seaborn>=0.13.2",
-    "tensorboard>=2.19.0",
-    "torch>=2.6.0",
-    "transformers>=4.51.0",
+    "tensorboard>=2",
+    "torch>=2.7",
+    "transformers>=4.51",
 ]
 
 [tool.uv.sources]
 torch = [
-  { index = "pytorch-cu124" },
+  { index = "pytorch-cu128" },
 ]
 
 [[tool.uv.index]]
-name = "pytorch-cu124"
-url = "https://download.pytorch.org/whl/cu124"
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [dependency-groups]
