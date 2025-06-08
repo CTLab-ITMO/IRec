@@ -19,4 +19,4 @@ from .sasrec_full import SasRecFullModel
 from .sasrec_in_batch import SasRecInBatchModel
 from .sasrec_real import SasRecRealModel
 from .sasrec_semantic import SasRecSemanticModel
-from .tiger import TigerModel
+from .tiger import NewTiger

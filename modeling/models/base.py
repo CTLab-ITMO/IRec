@@ -31,6 +31,13 @@ class TorchModel(nn.Module, BaseModel):
                     a=-2 * initializer_range,
                     b=2 * initializer_range
                 )
+            elif "bos_embedding" in key:
+                nn.init.trunc_normal_(
+                    value.data,
+                    std=initializer_range,
+                    a=-2 * initializer_range,
+                    b=2 * initializer_range,
+                )
             else:
                 raise ValueError(f'Unknown transformer weight: {key}')
 
