@@ -1,11 +1,7 @@
-from dataset.samplers.base import TrainSampler, EvalSampler
-
 import copy
 
 from dataset.samplers.base import EvalSampler, TrainSampler
 from dataset.negative_samplers.base import BaseNegativeSampler
-
-class LastItemPredictionTrainSampler(TrainSampler, config_name='last_item_prediction'):
 
 class LastItemPredictionTrainSampler(TrainSampler, config_name="last_item_prediction"):
     def __init__(self, dataset, num_users, num_items, negative_sampler, num_negatives):
