@@ -5,7 +5,7 @@ from dataset.negative_samplers.base import BaseNegativeSampler
 from tqdm import tqdm
 
 
-class RandomNegativeSampler(BaseNegativeSampler, config_name="random"):
+class RandomNegativeSampler(BaseNegativeSampler, config_name='random'):
     @classmethod
     def create_from_config(cls, _, **kwargs):
         return cls(
