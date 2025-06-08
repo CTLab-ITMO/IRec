@@ -272,8 +272,8 @@ class SequenceFullDataset(SequenceDataset, config_name='sequence_full'):
     def flatten_item_sequence(cls, item_ids):
         min_history_length = 3 # TODOPK make this configurable
         histories = []
-        for i in range(min_history_length-1, len(item_ids)):
-            histories.append(item_ids[:i+1])
+        for i in range(min_history_length, len(item_ids) + 1):
+            histories.append(item_ids[:i])
         return histories
     
     @classmethod
@@ -791,11 +791,30 @@ class ScientificFullDataset(ScientificDataset, config_name="scientific_full"):
             max_item_id = max(max_item_id, max(item_ids))
 
             assert len(item_ids) >= 5
+            
+            # item_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
+            # prefix_length: 5, 6, 7, 8, 9, 10
             for prefix_length in range(5, len(item_ids) + 1):
+                # prefix = [1, 2, 3, 4, 5]
+                # prefix = [1, 2, 3, 4, 5, 6]
+                # prefix = [1, 2, 3, 4, 5, 6, 7]
+                # prefix = [1, 2, 3, 4, 5, 6, 7, 8]
+                # prefix = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+                # prefix = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+                
+                
+                
                 prefix = item_ids[
                     :prefix_length
                 ]  # TODOPK no sliding window, only incrmenting sequence from last 50 items
+
+                # prefix[:-2] = [1, 2, 3]
+                # prefix[:-2] = [1, 2, 3, 4]
+                # prefix[:-2] = [1, 2, 3, 4, 5]
+                # prefix[:-2] = [1, 2, 3, 4, 5, 6]
+                # prefix[:-2] = [1, 2, 3, 4, 5, 6, 7]
+                # prefix[:-2] = [1, 2, 3, 4, 5, 6, 7, 8]
 
                 train_dataset.append(
                     {
@@ -809,6 +828,7 @@ class ScientificFullDataset(ScientificDataset, config_name="scientific_full"):
                     set(prefix[:-2][-max_sequence_length:])
                 )
 
+            # item_ids[:-1] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
             validation_dataset.append(
                 {
                     "user.ids": [user_id],
@@ -820,6 +840,8 @@ class ScientificFullDataset(ScientificDataset, config_name="scientific_full"):
             assert len(item_ids[:-1][-max_sequence_length:]) == len(
                 set(item_ids[:-1][-max_sequence_length:])
             )
+            
+            # item_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
             test_dataset.append(
                 {
                     "user.ids": [user_id],
