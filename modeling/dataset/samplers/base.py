@@ -1,9 +1,10 @@
-import copy
-
 from utils import MetaParent
+
+import copy
 
 
 class TrainSampler(metaclass=MetaParent):
+
     def __init__(self):
         self._dataset = None
 
@@ -19,6 +20,7 @@ class TrainSampler(metaclass=MetaParent):
 
 
 class EvalSampler(metaclass=MetaParent):
+
     def __init__(self, dataset, num_users, num_items):
         super().__init__()
         self._dataset = dataset
@@ -35,14 +37,16 @@ class EvalSampler(metaclass=MetaParent):
     def __getitem__(self, index):
         sample = copy.deepcopy(self._dataset[index])
 
-        item_sequence = sample["item.ids"][:-1]
-        next_item = sample["item.ids"][-1]
+        item_sequence = sample['item.ids'][:-1]
+        next_item = sample['item.ids'][-1]
 
         return {
-            "user.ids": sample["user.ids"],
-            "user.length": sample["user.length"],
-            "item.ids": item_sequence,
-            "item.length": len(item_sequence),
-            "labels.ids": [next_item],
-            "labels.length": 1,
+            'user.ids': sample['user.ids'],
+            'user.length': sample['user.length'],
+
+            'item.ids': item_sequence,
+            'item.length': len(item_sequence),
+
+            'labels.ids': [next_item],
+            'labels.length': 1
         }

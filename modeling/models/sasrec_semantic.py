@@ -1,9 +1,9 @@
 import torch
+from .tiger import TigerModel
 from models import SequentialTorchModel
 from torch import nn
 from utils import DEVICE, create_masked_tensor
-
-from .tiger import TigerModel
+from torch import nn
 
 
 class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):

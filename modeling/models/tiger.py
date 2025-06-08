@@ -1,10 +1,9 @@
 import json
 
 import torch
-from torch import nn
-
 from models.base import SequentialTorchModel
 from rqvae_utils import CollisionSolver, SimplifiedTree
+from torch import nn
 from utils import DEVICE, create_masked_tensor, get_activation_function
 
 from .rqvae import RqVaeModel
@@ -353,17 +352,13 @@ class TigerModel(SequentialTorchModel, config_name="tiger"):
             )
 
             assert last_position_embedding.shape == tgt_embeddings[:, -1, :].shape
-            assert tgt_embeddings.shape == torch.Size(
-                [batch_size, step + 1, embedding_dim]
-            )
+            assert tgt_embeddings.shape == torch.Size([batch_size, step + 1, embedding_dim])
 
             curr_step_embeddings = tgt_embeddings.clone()
             curr_step_embeddings[:, -1, :] = (
                 tgt_embeddings[:, -1, :] + last_position_embedding
             )
-            assert torch.allclose(
-                tgt_embeddings[:, :-1, :], curr_step_embeddings[:, :-1, :]
-            )
+            assert torch.allclose(tgt_embeddings[:, :-1, :], curr_step_embeddings[:, :-1, :])
             tgt_embeddings = curr_step_embeddings
 
             # curr_embeddings[:, -1, :] = self._decoder_layernorm(curr_embeddings[:, -1, :])

@@ -2,7 +2,6 @@ import json
 import time
 
 import torch
-
 from models.rqvae import RqVaeModel
 from utils import DEVICE
 

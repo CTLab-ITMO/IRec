@@ -1,11 +1,11 @@
-import gzip
+import pandas as pd
 import json
+import gzip
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import torch
 import random
 
-import pandas as pd
-import torch
 from tqdm import tqdm
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 tqdm.pandas()
 
@@ -76,7 +76,7 @@ def get_data(cached=True):
             df["embeddings"] = df["combined_text"].progress_apply(encode_text)
     else:
         df = torch.load("../data/Beauty/data_full.pt", weights_only=False)
-
+        
     return df
 
 
@@ -91,3 +91,6 @@ def search_similar_items(items_with_tuples, clust2search, max_cnt=5):
         if cnt >= max_cnt:
             return similars
     return similars
+
+
+
