@@ -1,13 +1,11 @@
-import copy
+from dataset.samplers.base import TrainSampler, EvalSampler
 
+import copy
 import numpy as np
 
-from dataset.samplers.base import EvalSampler, TrainSampler
 
+class MaskedItemPredictionTrainSampler(TrainSampler, config_name='masked_item_prediction'):
 
-class MaskedItemPredictionTrainSampler(
-    TrainSampler, config_name="masked_item_prediction"
-):
     def __init__(self, dataset, num_users, num_items, mask_prob=0.0):
         super().__init__()
         self._dataset = dataset
@@ -19,16 +17,16 @@ class MaskedItemPredictionTrainSampler(
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
-            dataset=kwargs["dataset"],
-            num_users=kwargs["num_users"],
-            num_items=kwargs["num_items"],
-            mask_prob=config.get("mask_prob", 0.0),
+            dataset=kwargs['dataset'],
+            num_users=kwargs['num_users'],
+            num_items=kwargs['num_items'],
+            mask_prob=config.get('mask_prob', 0.0)
         )
 
     def __getitem__(self, index):
         sample = copy.deepcopy(self._dataset[index])
 
-        item_sequence = sample["item.ids"]
+        item_sequence = sample['item.ids']
 
         masked_sequence = []
         labels = []
@@ -56,18 +54,19 @@ class MaskedItemPredictionTrainSampler(
         labels[-1] = item_sequence[-1]
 
         return {
-            "user.ids": sample["user.ids"],
-            "user.length": sample["user.length"],
-            "item.ids": masked_sequence,
-            "item.length": len(masked_sequence),
-            "labels.ids": labels,
-            "labels.length": len(labels),
+            'user.ids': sample['user.ids'],
+            'user.length': sample['user.length'],
+
+            'item.ids': masked_sequence,
+            'item.length': len(masked_sequence),
+
+            'labels.ids': labels,
+            'labels.length': len(labels)
         }
 
 
-class MaskedItemPredictionEvalSampler(
-    EvalSampler, config_name="masked_item_prediction"
-):
+class MaskedItemPredictionEvalSampler(EvalSampler, config_name='masked_item_prediction'):
+
     def __init__(self, dataset, num_users, num_items):
         super().__init__(dataset, num_users, num_items)
         self._mask_item_idx = self._num_items + 1
@@ -75,22 +74,24 @@ class MaskedItemPredictionEvalSampler(
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
-            dataset=kwargs["dataset"],
-            num_users=kwargs["num_users"],
-            num_items=kwargs["num_items"],
+            dataset=kwargs['dataset'],
+            num_users=kwargs['num_users'],
+            num_items=kwargs['num_items']
         )
 
     def __getitem__(self, index):
         sample = copy.deepcopy(self._dataset[index])
-        item_sequence = sample["item.ids"]
+        item_sequence = sample['item.ids']
         labels = [item_sequence[-1]]
         sequence = item_sequence[:-1] + [self._mask_item_idx]
 
         return {
-            "user.ids": sample["user.ids"],
-            "user.length": sample["user.length"],
-            "item.ids": sequence,
-            "item.length": len(sequence),
-            "labels.ids": labels,
-            "labels.length": len(labels),
+            'user.ids': sample['user.ids'],
+            'user.length': sample['user.length'],
+
+            'item.ids': sequence,
+            'item.length': len(sequence),
+
+            'labels.ids': labels,
+            'labels.length': len(labels)
         }

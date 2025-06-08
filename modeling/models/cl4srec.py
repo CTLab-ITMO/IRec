@@ -1,27 +1,28 @@
-import torch
-
 from models.base import SequentialTorchModel
 
+import torch
 
-class Cl4SRecModel(SequentialTorchModel, config_name="cl4srec"):
+
+class Cl4SRecModel(SequentialTorchModel, config_name='cl4srec'):
+
     def __init__(
-        self,
-        sequence_prefix,
-        fst_augmented_sequence_prefix,
-        snd_augmented_sequence_prefix,
-        positive_prefix,
-        negative_prefix,
-        labels_prefix,
-        num_items,
-        max_sequence_length,
-        embedding_dim,
-        num_heads,
-        num_layers,
-        dim_feedforward,
-        dropout=0.0,
-        activation="relu",
-        layer_norm_eps=1e-5,
-        initializer_range=0.02,
+            self,
+            sequence_prefix,
+            fst_augmented_sequence_prefix,
+            snd_augmented_sequence_prefix,
+            positive_prefix,
+            negative_prefix,
+            labels_prefix,
+            num_items,
+            max_sequence_length,
+            embedding_dim,
+            num_heads,
+            num_layers,
+            dim_feedforward,
+            dropout=0.0,
+            activation='relu',
+            layer_norm_eps=1e-5,
+            initializer_range=0.02
     ):
         super().__init__(
             num_items=num_items,
@@ -33,7 +34,7 @@ class Cl4SRecModel(SequentialTorchModel, config_name="cl4srec"):
             dropout=dropout,
             activation=activation,
             layer_norm_eps=layer_norm_eps,
-            is_causal=True,
+            is_causal=True
         )
         self._sequence_prefix = sequence_prefix
         self._fst_augmented_sequence_prefix = fst_augmented_sequence_prefix
@@ -46,56 +47,51 @@ class Cl4SRecModel(SequentialTorchModel, config_name="cl4srec"):
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
-            sequence_prefix=config["sequence_prefix"],
-            fst_augmented_sequence_prefix=config["fst_augmented_sequence_prefix"],
-            snd_augmented_sequence_prefix=config["snd_augmented_sequence_prefix"],
-            positive_prefix=config["positive_prefix"],
-            negative_prefix=config["negative_prefix"],
-            labels_prefix=config["labels_prefix"],
-            num_items=kwargs["num_items"],
-            max_sequence_length=kwargs["max_sequence_length"],
-            num_layers=config["num_layers"],
-            num_heads=config["num_heads"],
-            embedding_dim=config["embedding_dim"],
-            dim_feedforward=config["dim_feedforward"],
-            dropout=config["dropout"],
-            activation=config["activation"],
-            layer_norm_eps=config["layer_norm_eps"],
-            initializer_range=config["initializer_range"],
+            sequence_prefix=config['sequence_prefix'],
+            fst_augmented_sequence_prefix=config['fst_augmented_sequence_prefix'],
+            snd_augmented_sequence_prefix=config['snd_augmented_sequence_prefix'],
+            positive_prefix=config['positive_prefix'],
+            negative_prefix=config['negative_prefix'],
+            labels_prefix=config['labels_prefix'],
+            num_items=kwargs['num_items'],
+            max_sequence_length=kwargs['max_sequence_length'],
+            num_layers=config['num_layers'],
+            num_heads=config['num_heads'],
+            embedding_dim=config['embedding_dim'],
+            dim_feedforward=config['dim_feedforward'],
+            dropout=config['dropout'],
+            activation=config['activation'],
+            layer_norm_eps=config['layer_norm_eps'],
+            initializer_range=config['initializer_range']
         )
 
     def forward(self, inputs):
-        all_sample_events = inputs[
-            "{}.ids".format(self._sequence_prefix)
-        ]  # (all_batch_events)
-        all_sample_lengths = inputs[
-            "{}.length".format(self._sequence_prefix)
-        ]  # (batch_size)
+        all_sample_events = inputs['{}.ids'.format(self._sequence_prefix)]  # (all_batch_events)
+        all_sample_lengths = inputs['{}.length'.format(self._sequence_prefix)]  # (batch_size)
 
         embeddings, mask = self._apply_sequential_encoder(
             all_sample_events, all_sample_lengths
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
-        last_embeddings = self._get_last_embedding(
-            embeddings, mask
-        )  # (batch_size, embedding_dim)
+        last_embeddings = self._get_last_embedding(embeddings, mask)  # (batch_size, embedding_dim)
 
         if self.training:  # training mode
             items_logits = torch.einsum(
-                "bd,nd->bn", last_embeddings, self._item_embeddings.weight
+                'bd,nd->bn',
+                last_embeddings,
+                self._item_embeddings.weight
             )  # (batch_size, num_items)
 
             # TODO remove this check
-            labels = inputs["{}.ids".format(self._labels_prefix)]  # (batch_size)
+            labels = inputs['{}.ids'.format(self._labels_prefix)]  # (batch_size)
             assert torch.allclose(
-                self._item_embeddings(labels), self._item_embeddings.weight[labels]
+                self._item_embeddings(labels),
+                self._item_embeddings.weight[labels]
             )
 
             all_fst_aug_sample_events = inputs[
-                "{}.ids".format(self._fst_augmented_sequence_prefix)
+                '{}.ids'.format(self._fst_augmented_sequence_prefix)
             ]  # (all_batch_events)
-            all_fst_aug_sample_lengths = inputs[
-                "{}.length".format(self._fst_augmented_sequence_prefix)
-            ]  # (batch_size)
+            all_fst_aug_sample_lengths = inputs['{}.length'.format(self._fst_augmented_sequence_prefix)]  # (batch_size)
             fst_aug_embeddings, fst_aug_mask = self._apply_sequential_encoder(
                 all_fst_aug_sample_events, all_fst_aug_sample_lengths
             )  # (batch_size, fst_aug_seq_len, embedding_dim), (batch_size, fst_aug_seq_len)
@@ -104,11 +100,9 @@ class Cl4SRecModel(SequentialTorchModel, config_name="cl4srec"):
             )  # (batch_size, embedding_dim)
 
             all_snd_aug_sample_events = inputs[
-                "{}.ids".format(self._snd_augmented_sequence_prefix)
+                '{}.ids'.format(self._snd_augmented_sequence_prefix)
             ]  # (all_batch_events)
-            all_snd_aug_sample_lengths = inputs[
-                "{}.length".format(self._snd_augmented_sequence_prefix)
-            ]  # (batch_size)
+            all_snd_aug_sample_lengths = inputs['{}.length'.format(self._snd_augmented_sequence_prefix)]  # (batch_size)
             snd_aug_embeddings, snd_aug_mask = self._apply_sequential_encoder(
                 all_snd_aug_sample_events, all_snd_aug_sample_lengths
             )  # (batch_size, snd_aug_seq_len, embedding_dim), (batch_size, snd_aug_seq_len)
@@ -117,23 +111,24 @@ class Cl4SRecModel(SequentialTorchModel, config_name="cl4srec"):
             )  # (batch_size, embedding_dim)
 
             return {
-                "logits": items_logits,
-                "sequence_representation": last_embeddings,
-                "fst_aug_sequence_representation": last_fst_aug_embeddings,
-                "snd_aug_sequence_representation": last_snd_aug_embeddings,
+                'logits': items_logits,
+                'sequence_representation': last_embeddings,
+                'fst_aug_sequence_representation': last_fst_aug_embeddings,
+                'snd_aug_sequence_representation': last_snd_aug_embeddings
             }
         else:  # eval mode
-            candidate_embeddings = (
-                self._item_embeddings.weight
-            )  # (num_items, embedding_dim)
+            candidate_embeddings = self._item_embeddings.weight  # (num_items, embedding_dim)
             candidate_scores = torch.einsum(
-                "bd,nd->bn", last_embeddings, candidate_embeddings
+                'bd,nd->bn',
+                last_embeddings,
+                candidate_embeddings
             )  # (batch_size, num_items)
             candidate_scores[:, 0] = -torch.inf
-            candidate_scores[:, self._num_items + 1 :] = -torch.inf
+            candidate_scores[:, self._num_items + 1:] = -torch.inf
 
             _, indices = torch.topk(
-                candidate_scores, k=20, dim=-1, largest=True
+                candidate_scores,
+                k=20, dim=-1, largest=True
             )  # (batch_size, 20)
 
             return indices

@@ -1,9 +1,8 @@
 from collections import defaultdict
 
 import numpy as np
-from tqdm import tqdm
-
 from dataset.negative_samplers.base import BaseNegativeSampler
+from tqdm import tqdm
 
 
 class RandomNegativeSampler(BaseNegativeSampler, config_name="random"):

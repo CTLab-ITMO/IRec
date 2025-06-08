@@ -6,20 +6,20 @@ import psutil
 import torch
 
 from models.rqvae import RqVaeModel
-from rqvae_utils import SimplifiedTree, Tree, Trie
+from rqvae_utils import Trie, SimplifiedTree, Tree
 from utils import DEVICE
 
 
 def memory_stats(k):
     process = psutil.Process(os.getpid())
-    memory_usage = process.memory_info().rss / 1024**2
+    memory_usage = process.memory_info().rss / 1024 ** 2
     print(f"{k}. Использование памяти: {memory_usage:.2f} MB")
 
 
 def calc_sid(sid, codebook_size):
     res = sid[-1]
     for i in range(1, sid.shape[0]):
-        res += sid[-i - 1] * (codebook_size**i)
+        res += sid[-i - 1] * (codebook_size ** i)
     return res
 
 
@@ -41,7 +41,9 @@ if __name__ == "__main__":
     )
     rqvae_model.eval()
 
-    emb_table = torch.stack([cb for cb in rqvae_model.codebooks]).to(DEVICE)
+    emb_table = torch.stack(
+        [cb for cb in rqvae_model.codebooks]
+    ).to(DEVICE)
 
     trie = Trie(rqvae_model)
     tree = Tree(rqvae_model, DEVICE)
@@ -71,18 +73,14 @@ if __name__ == "__main__":
 
     now = time.time()
     simplified_tree_wr.build_tree_structure(semantic_ids, residuals, item_ids, False)
-    print(
-        f"Time for simplified tree  without residuals init: {(time.time() - now) * 1000:.2f} ms"
-    )
+    print(f"Time for simplified tree  without residuals init: {(time.time() - now) * 1000:.2f} ms")
 
     full_embeddings = tree.calculate_full(semantic_ids, residuals).sum(1)
     print(torch.all((full_embeddings == simplified_tree.full_embeddings) == True))
 
     items_to_query = 20
     batch_size = 256
-    q_semantic_ids = torch.randint(
-        0, alphabet_size, (batch_size, K), dtype=torch.int64, device=DEVICE
-    )
+    q_semantic_ids = torch.randint(0, alphabet_size, (batch_size, K), dtype=torch.int64, device=DEVICE)
     q_residuals = torch.randn(batch_size, embedding_dim).to(DEVICE)
 
     total_time = 0
