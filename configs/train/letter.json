@@ -1,0 +1,186 @@
+{
+    "experiment_name": "letter_data",
+    "best_metric": "validation/ndcg@20",
+    "train_epochs_num": 100,
+    "dataset": {
+      "type": "letter_full",
+      "path_to_data_dir": "../data",
+      "name": "Beauty_letter",
+      "max_sequence_length": 50,
+      "samplers": {
+        "type": "last_item_prediction",
+        "negative_sampler_type": "random"
+      },
+      "beauty_inter_json": "../../LETTER/data/Beauty/Beauty.inter.json"
+    },
+    "dataloader": {
+      "train": {
+        "type": "torch",
+        "batch_size": 256,
+        "batch_processor": {
+          "type": "letter",
+          "beauty_index_json": "../../LETTER/data/Beauty/Beauty.index.json",
+          "semantic_length": 4
+        },
+        "drop_last": true,
+        "shuffle": true
+      },
+      "validation": {
+        "type": "torch",
+        "batch_size": 256,
+        "batch_processor": {
+          "type": "letter",
+          "beauty_index_json": "../../LETTER/data/Beauty/Beauty.index.json",
+          "semantic_length": 4
+        },
+        "drop_last": false,
+        "shuffle": false
+      }
+    },
+    "model": {
+      "type": "tiger",
+      "rqvae_train_config_path": "../configs/train/rqvae_train_config.json",
+      "rqvae_checkpoint_path": "../checkpoints/rqvae_beauty_final_state.pth",
+      "embs_extractor_path": "../data/Beauty/rqvae/data_full.pt",
+      "sequence_prefix": "item",
+      "predictions_prefix": "logits",
+      "positive_prefix": "labels",
+      "labels_prefix": "labels",
+      "embedding_dim": 64,
+      "num_heads": 2,
+      "num_encoder_layers": 2,
+      "num_decoder_layers": 2,
+      "dim_feedforward": 256,
+      "dropout": 0.3,
+      "activation": "gelu",
+      "layer_norm_eps": 1e-9,
+      "initializer_range": 0.02
+    },
+    "optimizer": {
+      "type": "basic",
+      "optimizer": {
+        "type": "adam",
+        "lr": 0.001
+      },
+      "clip_grad_threshold": 5.0
+    },
+    "loss": {
+      "type": "composite",
+      "losses": [
+        {
+          "type": "ce",
+          "predictions_prefix": "logits",
+          "labels_prefix": "semantic.labels",
+          "weight": 1.0,
+          "output_prefix": "semantic_loss"
+        },
+        {
+          "type": "ce",
+          "predictions_prefix": "dedup.logits",
+          "labels_prefix": "dedup.labels",
+          "weight": 1.0,
+          "output_prefix": "dedup_loss"
+        }
+      ],
+      "output_prefix": "loss"
+    },
+    "callback": {
+      "type": "composite",
+      "callbacks": [
+        {
+          "type": "metric",
+          "on_step": 1,
+          "loss_prefix": "loss"
+        },
+        {
+          "type": "validation",
+          "on_step": 1024,
+          "pred_prefix": "logits",
+          "labels_prefix": "labels",
+          "metrics": {
+            "ndcg@5": {
+              "type": "ndcg",
+              "k": 5
+            },
+            "ndcg@10": {
+              "type": "ndcg",
+              "k": 10
+            },
+            "ndcg@20": {
+              "type": "ndcg",
+              "k": 20
+            },
+            "recall@5": {
+              "type": "recall",
+              "k": 5
+            },
+            "recall@10": {
+              "type": "recall",
+              "k": 10
+            },
+            "recall@20": {
+              "type": "recall",
+              "k": 20
+            },
+            "coverage@5": {
+              "type": "coverage",
+              "k": 5
+            },
+            "coverage@10": {
+              "type": "coverage",
+              "k": 10
+            },
+            "coverage@20": {
+              "type": "coverage",
+              "k": 20
+            }
+          }
+        },
+        {
+          "type": "eval",
+          "on_step": 2048,
+          "pred_prefix": "logits",
+          "labels_prefix": "labels",
+          "metrics": {
+            "ndcg@5": {
+              "type": "ndcg",
+              "k": 5
+            },
+            "ndcg@10": {
+              "type": "ndcg",
+              "k": 10
+            },
+            "ndcg@20": {
+              "type": "ndcg",
+              "k": 20
+            },
+            "recall@5": {
+              "type": "recall",
+              "k": 5
+            },
+            "recall@10": {
+              "type": "recall",
+              "k": 10
+            },
+            "recall@20": {
+              "type": "recall",
+              "k": 20
+            },
+            "coverage@5": {
+              "type": "coverage",
+              "k": 5
+            },
+            "coverage@10": {
+              "type": "coverage",
+              "k": 10
+            },
+            "coverage@20": {
+              "type": "coverage",
+              "k": 20
+            }
+          }
+        }
+      ]
+    }
+  }
+  

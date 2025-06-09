@@ -272,8 +272,8 @@ class SequenceFullDataset(SequenceDataset, config_name='sequence_full'):
     def flatten_item_sequence(cls, item_ids):
         min_history_length = 3 # TODOPK make this configurable
         histories = []
-        for i in range(min_history_length-1, len(item_ids)):
-            histories.append(item_ids[:i+1])
+        for i in range(min_history_length, len(item_ids)):
+            histories.append(item_ids[:i])
         return histories
     
     @classmethod
@@ -791,11 +791,30 @@ class ScientificFullDataset(ScientificDataset, config_name="scientific_full"):
             max_item_id = max(max_item_id, max(item_ids))
 
             assert len(item_ids) >= 5
+            
+            # item_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
+            # prefix_length: 5, 6, 7, 8, 9, 10
             for prefix_length in range(5, len(item_ids) + 1):
+                # prefix = [1, 2, 3, 4, 5]
+                # prefix = [1, 2, 3, 4, 5, 6]
+                # prefix = [1, 2, 3, 4, 5, 6, 7]
+                # prefix = [1, 2, 3, 4, 5, 6, 7, 8]
+                # prefix = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+                # prefix = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+                
+                
+                
                 prefix = item_ids[
                     :prefix_length
                 ]  # TODOPK no sliding window, only incrmenting sequence from last 50 items
+
+                # prefix[:-2] = [1, 2, 3]
+                # prefix[:-2] = [1, 2, 3, 4]
+                # prefix[:-2] = [1, 2, 3, 4, 5]
+                # prefix[:-2] = [1, 2, 3, 4, 5, 6]
+                # prefix[:-2] = [1, 2, 3, 4, 5, 6, 7]
+                # prefix[:-2] = [1, 2, 3, 4, 5, 6, 7, 8]
 
                 train_dataset.append(
                     {
@@ -809,6 +828,7 @@ class ScientificFullDataset(ScientificDataset, config_name="scientific_full"):
                     set(prefix[:-2][-max_sequence_length:])
                 )
 
+            # item_ids[:-1] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
             validation_dataset.append(
                 {
                     "user.ids": [user_id],
@@ -820,6 +840,8 @@ class ScientificFullDataset(ScientificDataset, config_name="scientific_full"):
             assert len(item_ids[:-1][-max_sequence_length:]) == len(
                 set(item_ids[:-1][-max_sequence_length:])
             )
+            
+            # item_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
             test_dataset.append(
                 {
                     "user.ids": [user_id],
@@ -872,6 +894,55 @@ class ScientificFullDataset(ScientificDataset, config_name="scientific_full"):
             num_items=max_item_id,
             max_sequence_length=max_sequence_length,
         )
+
+
+class LetterFullDataset(ScientificFullDataset, config_name="letter_full"):
+    def __init__(
+        self,
+        train_sampler,
+        validation_sampler,
+        test_sampler,
+        num_users,
+        num_items,
+        max_sequence_length,
+    ):
+        self._train_sampler = train_sampler
+        self._validation_sampler = validation_sampler
+        self._test_sampler = test_sampler
+        self._num_users = num_users
+        self._num_items = num_items
+        self._max_sequence_length = max_sequence_length
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        user_interactions_path = os.path.join(config["beauty_inter_json"])
+        with open(user_interactions_path, "r") as f:
+            user_interactions = json.load(f)
+            
+        dir_path = os.path.join(config["path_to_data_dir"], config["name"])
+
+        os.makedirs(dir_path, exist_ok=True)
+        dataset_path = os.path.join(dir_path, "all_data.txt")
+        
+        logger.info(f"Saving data to {dataset_path}")
+        
+        # Map from LETTER format to Our format
+        with open(dataset_path, "w") as f:
+            for user_id, item_ids in user_interactions.items():
+                items_repr = map(str, item_ids)
+                f.write(f"{user_id} {' '.join(items_repr)}\n")
+
+        dataset = ScientificFullDataset.create_from_config(config, **kwargs)
+
+        return cls(
+            train_sampler=dataset._train_sampler,
+            validation_sampler=dataset._validation_sampler,
+            test_sampler=dataset._test_sampler,
+            num_users=dataset._num_users,
+            num_items=dataset._num_items,
+            max_sequence_length=dataset._max_sequence_length,
+        )
+            
 
 
 class RqVaeDataset(BaseDataset, config_name='rqvae'):
