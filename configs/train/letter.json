@@ -8,8 +8,8 @@
       "name": "Beauty_letter",
       "max_sequence_length": 50,
       "samplers": {
-        "type": "letter_last_item_prediction",
-        "beauty_index_json": "../../LETTER/data/Beauty/Beauty.index.json"
+        "type": "last_item_prediction",
+        "negative_sampler_type": "random"
       },
       "beauty_inter_json": "../../LETTER/data/Beauty/Beauty.inter.json"
     },
@@ -18,7 +18,9 @@
         "type": "torch",
         "batch_size": 256,
         "batch_processor": {
-          "type": "basic"
+          "type": "letter",
+          "beauty_index_json": "../../LETTER/data/Beauty/Beauty.index.json",
+          "semantic_length": 4
         },
         "drop_last": true,
         "shuffle": true
@@ -27,7 +29,9 @@
         "type": "torch",
         "batch_size": 256,
         "batch_processor": {
-          "type": "basic"
+          "type": "letter",
+          "beauty_index_json": "../../LETTER/data/Beauty/Beauty.index.json",
+          "semantic_length": 4
         },
         "drop_last": false,
         "shuffle": false
