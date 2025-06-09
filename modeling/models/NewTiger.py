@@ -40,7 +40,7 @@ class NewTiger(nn.Module):
 
         self.codebook_embeddings = nn.ModuleList([
             nn.Embedding(num_embeddings=256, embedding_dim=self._embedding_dim)
-            for _ in range(4)
+            for _ in range(self._sem_id_len)
         ])
 
         transformer_encoder_layer = nn.TransformerEncoderLayer(
@@ -164,8 +164,8 @@ class NewTiger(nn.Module):
             data=embeddings_flat, lengths=all_sample_lengths
         )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
 
-        (encoder_input_emb,  # (batch_size, seq_len - 4 + 1, embedding_dim)
-         encoder_input_mask,  # (batch_size, seq_len - 4 + 1)
+        (encoder_input_emb,  # (batch_size, seq_len - sem_id_len + 1, embedding_dim)
+         encoder_input_mask,  # (batch_size, seq_len - sem_id_len + 1)
          decoder_input_embs) = (  # (batch_size, sem_id_len + 1, embedding_dim)
             self.prepare_sem_id_batch(embeddings, all_sample_lengths)
         )
