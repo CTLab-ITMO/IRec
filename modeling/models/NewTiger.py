@@ -8,7 +8,6 @@ class NewTiger(nn.Module):
     def __init__(
             self,
             sequence_prefix,
-            positive_prefix,
             num_items,
             embedding_dim,
             num_heads,
@@ -23,7 +22,6 @@ class NewTiger(nn.Module):
         super().__init__()
 
         self._sequence_prefix = sequence_prefix
-        self._positive_prefix = positive_prefix
 
         self._num_items = num_items
         self._num_heads = num_heads
@@ -36,7 +34,7 @@ class NewTiger(nn.Module):
         self.sem_id_position_embeddings = nn.Embedding(num_embeddings=self._sem_id_len,
                                                        embedding_dim=self._embedding_dim)
 
-        self.bos_embedding = nn.Parameter(torch.randn(64))
+        self.bos_embedding = nn.Parameter(torch.randn(self._embedding_dim))
 
         self.codebook_embeddings = nn.ModuleList([
             nn.Embedding(num_embeddings=256, embedding_dim=self._embedding_dim)
