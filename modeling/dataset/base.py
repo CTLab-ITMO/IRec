@@ -896,6 +896,55 @@ class ScientificFullDataset(ScientificDataset, config_name="scientific_full"):
         )
 
 
+class LetterFullDataset(ScientificFullDataset, config_name="letter_full"):
+    def __init__(
+        self,
+        train_sampler,
+        validation_sampler,
+        test_sampler,
+        num_users,
+        num_items,
+        max_sequence_length,
+    ):
+        self._train_sampler = train_sampler
+        self._validation_sampler = validation_sampler
+        self._test_sampler = test_sampler
+        self._num_users = num_users
+        self._num_items = num_items
+        self._max_sequence_length = max_sequence_length
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        user_interactions_path = os.path.join(config["beauty_inter_json"])
+        with open(user_interactions_path, "r") as f:
+            user_interactions = json.load(f)
+            
+        dir_path = os.path.join(config["path_to_data_dir"], config["name"])
+
+        os.makedirs(dir_path, exist_ok=True)
+        dataset_path = os.path.join(dir_path, "all_data.txt")
+        
+        logger.info(f"Saving data to {dataset_path}")
+        
+        # Map from LETTER format to Our format
+        with open(dataset_path, "w") as f:
+            for user_id, item_ids in user_interactions.items():
+                items_repr = map(str, item_ids)
+                f.write(f"{user_id} {' '.join(items_repr)}\n")
+
+        dataset = ScientificFullDataset.create_from_config(config, **kwargs)
+
+        return cls(
+            train_sampler=dataset._train_sampler,
+            validation_sampler=dataset._validation_sampler,
+            test_sampler=dataset._test_sampler,
+            num_users=dataset._num_users,
+            num_items=dataset._num_items,
+            max_sequence_length=dataset._max_sequence_length,
+        )
+            
+
+
 class RqVaeDataset(BaseDataset, config_name='rqvae'):
 
     def __init__(

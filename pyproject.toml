@@ -12,6 +12,8 @@ dependencies = [
     "tensorboard>=2",
     "torch>=2.7",
     "transformers>=4.51",
+    "tqdm>=4",
+    "jupyter>=1",
 ]
 
 [tool.uv.sources]
