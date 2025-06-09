@@ -7,3 +7,4 @@ saved_logs/*
 papers
 checkpoints/*
 *.prof
+uv.lock
