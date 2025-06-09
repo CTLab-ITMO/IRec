@@ -4,7 +4,7 @@ import torch.nn as nn
 from utils import get_activation_function, create_masked_tensor, DEVICE
 
 
-class TestTiger(nn.Module):
+class NewTiger(nn.Module):
     def __init__(
             self,
             sequence_prefix,
