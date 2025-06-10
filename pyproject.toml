@@ -18,6 +18,9 @@ dependencies = [
     "matplotlib==3.9.*",
     "tensorboard==2.19.*",
     "wandb==0.19.*",
+    "jupyterlab==4.4.*",
+    "ipykernel==6.29.*",
+    "notebook==7.4.*",
 ]
 
 [project.optional-dependencies]
