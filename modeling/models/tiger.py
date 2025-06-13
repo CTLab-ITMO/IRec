@@ -5,7 +5,7 @@ from models import TorchModel
 from utils import get_activation_function, create_masked_tensor, DEVICE
 
 
-class NewTiger(TorchModel, config_name="NewTiger"):
+class NewTiger(TorchModel, config_name="newTiger"):
     def __init__(
             self,
             sequence_prefix,
@@ -233,7 +233,8 @@ class NewTiger(TorchModel, config_name="NewTiger"):
                 argmaxes.append(pred_tokens)
 
                 loss = nn.functional.cross_entropy(
-                    logits, target_tokens[:, i]
+                    logits, target_tokens[:, i],
+                    reduction="mean"
                 )
                 losses.append(loss)
 

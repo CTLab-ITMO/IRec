@@ -1,7 +1,7 @@
 import unittest
 
 import torch
-from models.NewTiger import NewTiger
+from models.tiger import NewTiger
 from utils import DEVICE
 
 
