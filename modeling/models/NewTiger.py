@@ -1,15 +1,17 @@
 import torch
 import torch.nn as nn
 
+from models import TorchModel
 from utils import get_activation_function, create_masked_tensor, DEVICE
 
 
-class NewTiger(nn.Module):
+class NewTiger(TorchModel, config_name="NewTiger"):
     def __init__(
             self,
             sequence_prefix,
-            num_items,
             embedding_dim,
+            num_sids,
+            num_positions,
             num_heads,
             num_encoder_layers,
             num_decoder_layers,
@@ -22,43 +24,50 @@ class NewTiger(nn.Module):
         super().__init__()
 
         self._sequence_prefix = sequence_prefix
-
-        self._num_items = num_items
-        self._num_heads = num_heads
-
         self._embedding_dim = embedding_dim
+        self._num_sids = num_sids
+        self._num_positions = num_positions
+        self._num_heads = num_heads
+        self._num_encoder_layers = num_encoder_layers
+        self._num_decoder_layers = num_decoder_layers
+        self._dim_feedforward = dim_feedforward
+        self._dropout = nn.Dropout(dropout)
+        self._layer_norm_eps = layer_norm_eps
+
         self._sem_id_len = 4
 
-        self.position_embeddings = nn.Embedding(num_embeddings=200, embedding_dim=self._embedding_dim)
+        self.position_embeddings = nn.Embedding(num_embeddings=self._num_positions, embedding_dim=self._embedding_dim, device=DEVICE)
 
         self.sem_id_position_embeddings = nn.Embedding(num_embeddings=self._sem_id_len,
-                                                       embedding_dim=self._embedding_dim)
+                                                       embedding_dim=self._embedding_dim, device=DEVICE)
 
-        self.bos_embedding = nn.Parameter(torch.randn(self._embedding_dim))
+        self.bos_embedding = nn.Parameter(torch.randn(self._embedding_dim, device=DEVICE))
 
         self.codebook_embeddings = nn.ModuleList([
-            nn.Embedding(num_embeddings=256, embedding_dim=self._embedding_dim)
+            nn.Embedding(num_embeddings=self._num_sids, embedding_dim=self._embedding_dim, device=DEVICE)
             for _ in range(self._sem_id_len)
         ])
 
         transformer_encoder_layer = nn.TransformerEncoderLayer(
             d_model=self._embedding_dim,
-            nhead=num_heads,
-            dim_feedforward=dim_feedforward,
+            nhead=self._num_heads,
+            dim_feedforward=self._dim_feedforward,
             dropout=dropout,
             activation=get_activation_function(activation),
-            layer_norm_eps=layer_norm_eps,
+            layer_norm_eps=self._layer_norm_eps,
             batch_first=True,
+            device=DEVICE
         )
 
         transformer_decoder_layer = nn.TransformerDecoderLayer(
             d_model=self._embedding_dim,
-            nhead=num_heads,
+            nhead=self._num_heads,
             dim_feedforward=dim_feedforward,
             dropout=dropout,
             activation=get_activation_function(activation),
-            layer_norm_eps=layer_norm_eps,
+            layer_norm_eps=self._layer_norm_eps,
             batch_first=True,
+            device=DEVICE
         )
 
         self._decoder = nn.TransformerDecoder(
@@ -66,8 +75,7 @@ class NewTiger(nn.Module):
         )
         self._encoder = nn.TransformerEncoder(transformer_encoder_layer, num_encoder_layers)
 
-        self._layernorm = nn.LayerNorm(self._embedding_dim, eps=layer_norm_eps)
-        self._dropout = nn.Dropout(dropout)
+        # self._layernorm = nn.LayerNorm(self._embedding_dim, eps=layer_norm_eps)
 
         self._init_weights(initializer_range)
 
@@ -99,52 +107,78 @@ class NewTiger(nn.Module):
         sem_pos_emb[~mask] = 0.0
         return sem_pos_emb  # (batch_size, max_seq_len, embedding_dim)
 
-    def prepare_sem_id_batch(
+    def _get_last_sem_ids_mask(self, all_sample_lengths: torch.Tensor) -> torch.Tensor:
+        """Создает маску для последних sem_id_len токенов каждой последовательности"""
+        total_tokens = all_sample_lengths.sum().item()
+        tgt_end_idx = torch.cumsum(all_sample_lengths, dim=0)
+        tgt_start_idx = tgt_end_idx - self._sem_id_len
+
+        mask_flat_extended = torch.zeros(total_tokens + 1, dtype=torch.int, device=DEVICE)
+        mask_flat_extended[tgt_start_idx] += 1
+        mask_flat_extended[tgt_end_idx] -= 1
+
+        mask_flat = torch.cumsum(mask_flat_extended, dim=0)[:total_tokens]
+        return mask_flat.bool()
+
+    def _prepare_sem_id_batch(
             self,
-            sem_embs: torch.Tensor,  # (batch_size, max_seq_len, embedding_dim)
-            lengths: torch.LongTensor  # (batch_size,) длины в токенах sem id
+            embeddings_flat: torch.Tensor,  # (total_tokens, embedding_dim)
+            lengths: torch.LongTensor  # (batch_size,)
     ):
-        batch_size, max_seq_len, emb_dimm = sem_embs.shape
+        batch_size = lengths.size(0)
+        sem_id_len = self._sem_id_len
 
-        total_lens = lengths
-        item_starts = total_lens - self._sem_id_len
 
-        # Декодер
-        idx = (item_starts.unsqueeze(1) +
-               torch.arange(self._sem_id_len, device=DEVICE).unsqueeze(0))  # (batch_size, sem_id_len)
-        decoder_target_embs = sem_embs.gather(1, idx.unsqueeze(-1)
-                                              .expand(-1, -1, emb_dimm))  # (batch_size, sem_id_len, embedding_dim)
+        # маска последних sem_id_len каждого батча
+        decoder_mask_flat = self._get_last_sem_ids_mask(lengths)
 
-        bos = self.bos_embedding.unsqueeze(0).unsqueeze(1).expand(batch_size, 1, emb_dimm)  # (B, 1, D)
-        decoder_embs = torch.cat([bos, decoder_target_embs], dim=1)  # (batch_size, sem_id_len + 1, D)
+        # разделение плоского тензора
+        encoder_emb_flat = embeddings_flat[~decoder_mask_flat]
+        decoder_emb_flat = embeddings_flat[decoder_mask_flat]
 
-        sem_pos_ids = (torch.arange(self._sem_id_len, device=DEVICE)
-                       .unsqueeze(0)
-                       .expand(batch_size, -1))  # (batch_size, sem_id_len)
-        sem_pos_emb = self.sem_id_position_embeddings(sem_pos_ids)  # (batch_size, sem_id_len, D)
-        decoder_embs[:, 1:] += sem_pos_emb  # только к токенам после BOS
+        # эмбеддинги уже с добавленной размерностью max_seq_len и позиционными
+        encoder_embeddings, encoder_mask = self._create_encoder_tensors(encoder_emb_flat, lengths, sem_id_len)
+        decoder_embeddings = self._create_decoder_tensors(decoder_emb_flat, batch_size, sem_id_len)
 
-        # Энкодер
-        enc_lens = lengths - self._sem_id_len  # (batch_size,)
-        max_enc_len = enc_lens.max().item()  # без BOS пока
+        # BOS
+        encoder_embeddings, encoder_mask = self._add_bos_to_encoder(encoder_embeddings, encoder_mask, batch_size)
+        decoder_embeddings = self._add_bos_to_decoder(decoder_embeddings, batch_size)
 
-        range_row = torch.arange(max_enc_len, device=DEVICE).unsqueeze(0)  # (1, max_enc_len)
-        mask = range_row < enc_lens.unsqueeze(1)  # (batch_size, max_enc_len)
+        return encoder_embeddings, encoder_mask, decoder_embeddings
 
-        encoder_body = torch.zeros(batch_size, max_enc_len, emb_dimm, device=DEVICE)
-        encoder_body[mask] = sem_embs[:, :max_enc_len][mask]
+    def _create_encoder_tensors(self, encoder_emb_flat, lengths, sem_id_len):
+        encoder_lengths = lengths - sem_id_len
+        encoder_embeddings, encoder_mask = create_masked_tensor(encoder_emb_flat, encoder_lengths)
 
-        pos_emb = self._get_position_embeddings(mask)
-        sem_pos_emb = self._get_sem_ids_position_embeddings(mask)
-        encoder_body += pos_emb + sem_pos_emb  # (batch_size, max_enc_len, embedding_dim)
+        # позиционные эмбеддинги
+        pos_emb = self._get_position_embeddings(encoder_mask)
+        sem_pos_emb = self._get_sem_ids_position_embeddings(encoder_mask)
+        encoder_embeddings += pos_emb + sem_pos_emb
 
-        bos = self.bos_embedding.view(1, 1, -1).expand(batch_size, 1, emb_dimm)
-        encoder_embs = torch.cat([bos, encoder_body], dim=1)  # (batch_size, max_enc_len+1, embedding_dim)
+        return encoder_embeddings, encoder_mask
 
-        bos_mask = torch.ones(batch_size, 1, dtype=torch.bool, device=DEVICE)
-        encoder_mask = torch.cat([bos_mask, mask], dim=1)  # (batch_size, max_enc_len+1)
+    def _create_decoder_tensors(self, decoder_emb_flat, batch_size, sem_id_len):
+        decoder_embeddings = decoder_emb_flat.view(batch_size, sem_id_len, -1)
 
-        return encoder_embs, encoder_mask, decoder_embs
+        # позиционные эмбеддинги (только семантические)
+        sem_pos_ids = torch.arange(sem_id_len, device=DEVICE).expand(batch_size, -1)
+        sem_pos_emb = self.sem_id_position_embeddings(sem_pos_ids)
+        decoder_embeddings += sem_pos_emb
+
+        return decoder_embeddings
+
+    def _add_bos_to_encoder(self, encoder_embeddings, encoder_mask, batch_size):
+        bos = self.bos_embedding.view(1, 1, -1).expand(batch_size, 1, -1)
+        new_encoder_embeddings = torch.cat([bos, encoder_embeddings], dim=1)
+        new_mask = torch.cat([
+            torch.ones(batch_size, 1, dtype=torch.bool, device=DEVICE),
+            encoder_mask
+        ], dim=1)
+        return new_encoder_embeddings, new_mask
+
+    def _add_bos_to_decoder(self, decoder_embeddings, batch_size):
+        bos = self.bos_embedding.view(1, 1, -1).expand(batch_size, 1, -1)
+        return torch.cat([bos, decoder_embeddings], dim=1)
 
     def forward(self, inputs):
         all_sample_events = inputs[
@@ -158,24 +192,18 @@ class NewTiger(nn.Module):
 
         assert embeddings_flat.shape[0] == sum(all_sample_lengths)
 
-        embeddings, mask = create_masked_tensor(
-            data=embeddings_flat, lengths=all_sample_lengths
-        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
-
         (encoder_input_emb,  # (batch_size, seq_len - sem_id_len + 1, embedding_dim)
          encoder_input_mask,  # (batch_size, seq_len - sem_id_len + 1)
          decoder_input_embs) = (  # (batch_size, sem_id_len + 1, embedding_dim)
-            self.prepare_sem_id_batch(embeddings, all_sample_lengths)
+            self._prepare_sem_id_batch(embeddings_flat, all_sample_lengths)
         )
 
-        if self.training:
-            after_encoder_emb, after_encoder_mask = self._apply_encoder(encoder_input_emb, encoder_input_mask)
+        after_encoder_emb, after_encoder_mask = self._apply_encoder(encoder_input_emb, encoder_input_mask)
 
+        if self.training:
             # последние sem ids
-            # TODO ПРОВЕРИТЬ РАБОТОСПОСОБНОСТЬ, ЭТО ДОЛЖНО ВОЗВРАЩАТЬ ЧЕТЫРЕ ПОСЛЕДНИХ ВАЛИДНЫХ ТОКЕНА ВНУТРИ КАЖДОГО БАТЧА
-            events_2d = torch.zeros_like(mask, dtype=torch.long, device=DEVICE)
-            events_2d[mask] = all_sample_events
-            target_tokens = events_2d[:, -self._sem_id_len:]  # (batch_size, sem_id_len)
+            target_tokens_mask = self._get_last_sem_ids_mask(all_sample_lengths)
+            target_tokens = all_sample_events[target_tokens_mask].view(-1, self._sem_id_len)  # (batch_size, sem_id_len)
 
             # Подготовка входа декодера (BOS + первые 3 токена)
             tgt = decoder_input_embs[:, :-1, :]  # (batch_size, sem_id_len, embedding_dim)
@@ -210,11 +238,66 @@ class NewTiger(nn.Module):
                 losses.append(loss)
 
             return {
-                "decoder_loss_1": losses[0],
-                "decoder_loss_2": losses[1],
-                "decoder_loss_3": losses[2],
-                "decoder_loss_4": losses[3],
+                "decoder_loss_1": losses[0],  # (1, )
+                "decoder_loss_2": losses[1],  # (1, )
+                "decoder_loss_3": losses[2],  # (1, )
+                "decoder_loss_4": losses[3],  # (1, )
 
+                "decoder_scores_1": scores[0],  # (batch_size, codebook_size)
+                "decoder_scores_2": scores[1],  # (batch_size, codebook_size)
+                "decoder_scores_3": scores[2],  # (batch_size, codebook_size)
+                "decoder_scores_4": scores[3],  # (batch_size, codebook_size)
+
+                "decoder_argmax_1": argmaxes[0],  # (batch_size, )
+                "decoder_argmax_2": argmaxes[1],  # (batch_size, )
+                "decoder_argmax_3": argmaxes[2],  # (batch_size, )
+                "decoder_argmax_4": argmaxes[3],  # (batch_size, )
+            }
+        else:
+            batch_size = encoder_input_emb.size(0)
+
+            tgt = self.bos_embedding.view(1, 1, -1).expand(batch_size, 1, -1)  # (batch_size, 1, embedding_dim)
+
+            memory_key_padding_mask = ~after_encoder_mask
+
+            argmaxes = []
+            scores = []
+
+            for step in range(self._sem_id_len):
+                tgt_mask = nn.Transformer.generate_square_subsequent_mask(
+                    tgt.size(1), device=DEVICE
+                )  # (L, L)
+
+                decoder_output = self._decoder(
+                    tgt=tgt,
+                    memory=after_encoder_emb,
+                    tgt_mask=tgt_mask,
+                    memory_key_padding_mask=memory_key_padding_mask
+                )  # (batch_size, L, embedding_dim)
+
+                last_output = decoder_output[:, -1:, :]  # (batch_size, 1, embedding_dim)
+
+                logits = torch.matmul(
+                    last_output,
+                    self.codebook_embeddings[step].weight.t()
+                ).squeeze(1)  # (batch_size, codebook_size)
+
+                scores.append(logits)
+                pred_token = torch.argmax(logits, dim=-1)  # (batch_size,)
+                argmaxes.append(pred_token)
+
+                if step < self._sem_id_len - 1:
+                    next_embed = self.codebook_embeddings[step](pred_token)  # (batch_size, embedding_dim)
+
+                    pos_emb = self.sem_id_position_embeddings(
+                        torch.tensor([step], device=DEVICE)
+                    ).expand(batch_size, -1)
+                    next_embed += pos_emb
+
+                    next_embed = next_embed.unsqueeze(1)  # (batch_size, 1, embedding_dim)
+                    tgt = torch.cat([tgt, next_embed], dim=1)
+
+            return {
                 "decoder_scores_1": scores[0],
                 "decoder_scores_2": scores[1],
                 "decoder_scores_3": scores[2],
@@ -225,8 +308,6 @@ class NewTiger(nn.Module):
                 "decoder_argmax_3": argmaxes[2],
                 "decoder_argmax_4": argmaxes[3],
             }
-        else:
-            pass
 
     def _apply_encoder(
             self,
