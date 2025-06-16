@@ -1,6 +1,6 @@
 import json
 import re
-
+from itertools import chain
 import torch
 from utils import MetaParent
 
@@ -91,12 +91,13 @@ class LetterBatchProcessor(BaseBatchProcessor, config_name='letter'):
                 ids = processed_batch[f"{prefix}.ids"]
                 lengths = processed_batch[f"{prefix}.length"]
                 
-                flattened_ids = []
+                mapped_ids = []
                 
                 for _id in ids:
-                    flattened_ids.extend(self._mapping[_id])
+                    mapped_ids.append(self._mapping[_id])
                     
-                processed_batch[f"semantic_{prefix}.ids"] = flattened_ids
+                processed_batch[f"semantic_{prefix}.ids"] = list(chain.from_iterable(mapped_ids))
+                processed_batch[f"semantic_{prefix}_tensor.ids"] = mapped_ids
                 processed_batch[f"semantic_{prefix}.length"] = [length * self._semantic_length for length in lengths]
 
         for part, values in processed_batch.items():
