@@ -1,6 +1,6 @@
 {
   "experiment_name": "mclsr_beauty_test",
-  "train_epochs_num": 50,
+  "train_epochs_num": 1,
   "use_wandb": true,
   "dataset": {
     "type": "graph",
@@ -64,9 +64,10 @@
     "type": "composite",
     "losses": [
       {
-        "type": "fps",
-        "fst_embeddings_prefix": "combined_representation",
-        "snd_embeddings_prefix": "label_representation",
+        "type": "sampled_softmax",          
+        "queries_prefix": "combined_representation",
+        "positive_prefix": "label_representation",
+        "negative_prefix": "negative_representation", 
         "output_prefix": "downstream_loss",
         "weight": 1.0
       },

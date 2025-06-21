@@ -61,3 +61,4 @@ class MCLSRPredictionEvalSampler(EvalSampler, config_name='mclsr'):
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
         )
+
