@@ -1,9 +1,10 @@
+import json
+
 import torch
-from .tiger import TigerModel
-from models import SequentialTorchModel
 from torch import nn
+
+from models import SequentialTorchModel, RqVaeModel
 from utils import DEVICE, create_masked_tensor
-from torch import nn
 
 
 class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
@@ -68,8 +69,38 @@ class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):
         )  # len(self._codebook_sizes), codebook_size, embedding_dim
 
     @classmethod
+    def init_rqvae(self, config):
+        rqvae_config = json.load(open(config["rqvae_train_config_path"]))
+        rqvae_config["model"]["should_init_codebooks"] = False
+
+        rqvae_model = RqVaeModel.create_from_config(rqvae_config["model"]).to(DEVICE)
+        rqvae_model.load_state_dict(
+            torch.load(config["rqvae_checkpoint_path"], weights_only=True)
+        )
+        rqvae_model.eval()
+        for param in rqvae_model.parameters():
+            param.requires_grad = False
+
+        codebook_sizes = rqvae_model.codebook_sizes
+        assert all([book_size == codebook_sizes[0] for book_size in codebook_sizes])
+
+        embs_extractor = torch.load(config["embs_extractor_path"], weights_only=False)
+
+        embs_extractor = embs_extractor.sort_index()
+
+        item_ids = embs_extractor.index.tolist()
+        assert item_ids == list(range(1, len(item_ids) + 1))
+
+        text_embeddings = torch.stack(embs_extractor["embeddings"].tolist()).to(DEVICE)
+
+        semantic_ids, residuals = rqvae_model({"embeddings": text_embeddings})
+
+        return rqvae_model, semantic_ids, residuals, item_ids
+
+
+    @classmethod
     def create_from_config(cls, config, **kwargs):
-        rqvae_model, semantic_ids, residuals, _ = TigerModel.init_rqvae(config)
+        rqvae_model, semantic_ids, residuals, _ = cls.init_rqvae(config)
 
         return cls(
             rqvae_model=rqvae_model,
