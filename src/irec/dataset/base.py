@@ -770,3 +770,86 @@ class ScientificDataset(BaseDataset, config_name='scientific'):
             'num_items': self.num_items,
             'max_sequence_length': self.max_sequence_length,
         }
+
+
+class MCLSRDataset(BaseDataset, config_name='mclsr'):
+    def __init__(self, train_sampler, validation_sampler, test_sampler, num_users, num_items, max_sequence_length):
+        self._train_sampler = train_sampler
+        self._validation_sampler = validation_sampler
+        self._test_sampler = test_sampler
+        self._num_users = num_users
+        self._num_items = num_items
+        self._max_sequence_length = max_sequence_length
+
+    @classmethod
+    def _create_sequences_from_file(cls, filepath, max_len=None):
+        sequences = {}
+        max_user, max_item, max_seq = 0, 0, 0
+        with open(filepath, 'r') as f:
+            for line in f:
+                parts = line.strip().split(' ')
+                user_id = int(parts[0])
+                item_ids = [int(i) for i in parts[1:]]
+                if max_len:
+                    item_ids = item_ids[-max_len:]
+                sequences[user_id] = item_ids
+                max_user = max(max_user, user_id)
+                if item_ids:
+                    max_item = max(max_item, max(item_ids))
+                max_seq = max(max_seq, len(item_ids))
+        return sequences, max_user, max_item, max_seq
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        data_dir = os.path.join(config['path_to_data_dir'], config['name'])
+        max_seq_len = config.get('max_sequence_length')
+
+        train_sequences, u1, i1, s1 = cls._create_sequences_from_file(os.path.join(data_dir, 'train.txt'), max_seq_len)
+        train_dataset = [{'user.ids': [uid], 'user.length': 1, 'item.ids': seq, 'item.length': len(seq)} for uid, seq in train_sequences.items()]
+
+        valid_hist, u2, i2, s2 = cls._create_sequences_from_file(os.path.join(data_dir, 'valid_history.txt'), max_seq_len)
+        valid_trg, u3, i3, _ = cls._create_sequences_from_file(os.path.join(data_dir, 'valid_target.txt'))
+
+        valid_user_ids = set(valid_hist.keys()).intersection(set(valid_trg.keys()))
+        
+        validation_dataset = []
+        for uid in valid_user_ids:
+            if valid_trg.get(uid):
+                validation_dataset.append({'user.ids': [uid], 'history': valid_hist[uid], 'target': valid_trg[uid]})
+        
+
+        test_hist, u4, i4, s3 = cls._create_sequences_from_file(os.path.join(data_dir, 'test_history.txt'), max_seq_len)
+        test_trg, u5, i5, _ = cls._create_sequences_from_file(os.path.join(data_dir, 'test_target.txt'))
+
+        test_user_ids = set(test_hist.keys()).intersection(set(test_trg.keys()))
+        
+        test_dataset = []
+        for uid in test_user_ids:
+            if test_trg.get(uid):
+                test_dataset.append({'user.ids': [uid], 'history': test_hist[uid], 'target': test_trg[uid]})
+
+
+        num_users = max(u1, u2, u3, u4, u5)
+        num_items = max(i1, i2, i3, i4, i5)
+        max_len = max(s1, s2, s3)
+
+        train_sampler = TrainSampler.create_from_config(config['samplers'], dataset=train_dataset, num_users=num_users, num_items=num_items)
+        validation_sampler = EvalSampler.create_from_config(config['samplers'], dataset=validation_dataset, num_users=num_users, num_items=num_items)
+        test_sampler = EvalSampler.create_from_config(config['samplers'], dataset=test_dataset, num_users=num_users, num_items=num_items)
+
+        return cls(train_sampler, validation_sampler, test_sampler, num_users, num_items, max_len)
+
+    def get_samplers(self):
+        return (self._train_sampler, self._validation_sampler, self._test_sampler)
+    
+    @property
+    def num_users(self):
+        return self._num_users
+
+    @property
+    def num_items(self):
+        return self._num_items
+
+    @property
+    def meta(self):
+        return {'num_users': self.num_users, 'num_items': self.num_items, 'max_sequence_length': self._max_sequence_length}
