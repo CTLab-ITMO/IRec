@@ -1,3 +1,5 @@
+import json
+import re
 import torch
 from utils import MetaParent
 
@@ -16,7 +18,7 @@ class IdentityBatchProcessor(BaseBatchProcessor, config_name='identity'):
 
 class BasicBatchProcessor(BaseBatchProcessor, config_name='basic'):
 
-    def __call__(self, batch):
+    def __call__(self, batch, convert_to_tensor=True):
         processed_batch = {}
 
         for key in batch[0].keys():
@@ -31,7 +33,60 @@ class BasicBatchProcessor(BaseBatchProcessor, config_name='basic'):
                     processed_batch[f'{prefix}.ids'].extend(sample[f'{prefix}.ids'])
                     processed_batch[f'{prefix}.length'].append(sample[f'{prefix}.length'])
 
+        if convert_to_tensor:
+            for part, values in processed_batch.items():
+                processed_batch[part] = torch.tensor(values, dtype=torch.long)
+
+        return processed_batch
+
+
+class LetterBatchProcessor(BasicBatchProcessor, config_name='letter'):
+    def __init__(self, mapping: dict[int, list[int]], semantic_length: int):
+        self._prefixes = ['item', 'labels', 'positive', 'negative']
+        self._semantic_length = semantic_length
+        self._mapping = mapping
+        
+        assert sorted(mapping.keys()) == list(range(len(mapping))), "Item ids must be consecutive"
+        self._mapping_tensor = torch.zeros((len(mapping), semantic_length), dtype=torch.long)
+        for item_id, semantic_ids in mapping.items():
+            self._mapping_tensor[item_id] = torch.tensor(semantic_ids, dtype=torch.long)
+    
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        mapping_path = config["beauty_index_json"]
+        with open(mapping_path, "r") as f:
+            mapping = json.load(f)
+            
+        semantic_length = config["semantic_length"]
+
+        parsed = {}
+            
+        for key, semantic_ids in mapping.items():
+            numbers = [int(re.search(r'\d+', item).group()) for item in semantic_ids]
+            assert len(numbers) == semantic_length, "All semantic ids must have the same length"
+            parsed[int(key)] = numbers
+            
+        return cls(mapping=parsed, semantic_length=semantic_length)
+    
+    def __call__(self, batch):
+        processed_batch = super().__call__(batch, convert_to_tensor=False)
+                    
+        for prefix in self._prefixes:
+            if f"{prefix}.ids" in processed_batch:
+                ids = processed_batch[f"{prefix}.ids"]
+                lengths = processed_batch[f"{prefix}.length"]
+                
+                flattened_semantic_ids = []
+                
+                for _id in ids:
+                    flattened_semantic_ids.extend(self._mapping[_id])
+                    
+                processed_batch[f"semantic_{prefix}.ids"] = flattened_semantic_ids
+                processed_batch[f"semantic_{prefix}.length"] = [length * self._semantic_length for length in lengths]
+
         for part, values in processed_batch.items():
             processed_batch[part] = torch.tensor(values, dtype=torch.long)
+            
+        processed_batch["all_semantic_ids"] = self._mapping_tensor
 
         return processed_batch
