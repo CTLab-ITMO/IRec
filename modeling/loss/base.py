@@ -141,7 +141,21 @@ class CrossEntropyLoss(TorchLoss, config_name='ce'):
             inputs[self._output_prefix] = loss.cpu().item()
 
         return loss
-    
+
+class IdentityLoss(TorchLoss, config_name='identity'):
+
+    def __init__(self, input_loss_key, output_prefix=None):
+        super().__init__()
+        self._input_loss_key = input_loss_key
+        self._output_prefix = output_prefix
+
+    def forward(self, inputs):
+        loss = inputs[self._input_loss_key]
+        assert loss.dim() == 0, "Loss must be a scalar tensor"
+        if self._output_prefix is not None:
+            inputs[self._output_prefix] = loss.cpu().item()
+        return loss
+
 class RqVaeLoss(TorchLoss, config_name='rqvae_loss'):
 
     def __init__(self, beta, output_prefix=None):

@@ -1,10 +1,10 @@
 import json
 
 import torch
+from torch import nn
+
 from models import SequentialTorchModel, RqVaeModel
-from torch import nn
 from utils import DEVICE, create_masked_tensor
-from torch import nn
 
 
 class SasRecSemanticModel(SequentialTorchModel, config_name="sasrec_semantic"):

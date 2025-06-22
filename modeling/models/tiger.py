@@ -182,7 +182,7 @@ class TigerModel(TorchModel, config_name="tiger"):
         ]  # (all_batch_events)
         all_sample_lengths = inputs[
             "{}.length".format(self._sequence_prefix)
-        ]  # (batch_size)
+        ]  * len(self._codebook_sizes) # (batch_size)
 
         embeddings_flat = self._embed_semantic_tokens(all_sample_events)
 
