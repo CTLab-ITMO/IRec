@@ -1,6 +1,6 @@
 {
     "experiment_name": "letter_tiger",
-    "best_metric": "validation/loss",
+    "best_metric": "loss",
     "train_epochs_num": 100,
     "dataset": {
       "type": "letter_full",
@@ -42,7 +42,7 @@
       "sequence_prefix": "item",
       "embedding_dim": 64,
       "codebook_size": 256,
-      "max_sequence_length": 300,
+      "num_positions": 200,
       "num_heads": 2,
       "num_encoder_layers": 2,
       "num_decoder_layers": 2,
