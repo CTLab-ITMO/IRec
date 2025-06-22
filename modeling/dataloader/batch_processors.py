@@ -18,7 +18,7 @@ class IdentityBatchProcessor(BaseBatchProcessor, config_name='identity'):
 
 class BasicBatchProcessor(BaseBatchProcessor, config_name='basic'):
 
-    def __call__(self, batch):
+    def __call__(self, batch, convert_to_tensor=True):
         processed_batch = {}
 
         for key in batch[0].keys():
@@ -33,13 +33,14 @@ class BasicBatchProcessor(BaseBatchProcessor, config_name='basic'):
                     processed_batch[f'{prefix}.ids'].extend(sample[f'{prefix}.ids'])
                     processed_batch[f'{prefix}.length'].append(sample[f'{prefix}.length'])
 
-        for part, values in processed_batch.items():
-            processed_batch[part] = torch.tensor(values, dtype=torch.long)
+        if convert_to_tensor:
+            for part, values in processed_batch.items():
+                processed_batch[part] = torch.tensor(values, dtype=torch.long)
 
         return processed_batch
 
 
-class LetterBatchProcessor(BaseBatchProcessor, config_name='letter'):
+class LetterBatchProcessor(BasicBatchProcessor, config_name='letter'):
     def __init__(self, mapping: dict[int, list[int]], semantic_length: int):
         self._prefixes = ['item', 'labels', 'positive', 'negative']
         self._semantic_length = semantic_length
@@ -68,19 +69,7 @@ class LetterBatchProcessor(BaseBatchProcessor, config_name='letter'):
         return cls(mapping=parsed, semantic_length=semantic_length)
     
     def __call__(self, batch):
-        processed_batch = {}
-
-        for key in batch[0].keys():
-            if key.endswith('.ids'):
-                prefix = key.split('.')[0]
-                assert '{}.length'.format(prefix) in batch[0]
-
-                processed_batch[f'{prefix}.ids'] = []
-                processed_batch[f'{prefix}.length'] = []
-
-                for sample in batch:
-                    processed_batch[f'{prefix}.ids'].extend(sample[f'{prefix}.ids'])
-                    processed_batch[f'{prefix}.length'].append(sample[f'{prefix}.length'])
+        processed_batch = super().__call__(batch, convert_to_tensor=False)
                     
         for prefix in self._prefixes:
             if f"{prefix}.ids" in processed_batch:
