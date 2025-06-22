@@ -1,5 +1,14 @@
+# IDE
 .idea
+
+# Python
 __pycache__
-data/*
+.venv
+
+# Data
 tensorboard_logs/*
+data/*
 checkpoints/*
+
+# Dev
+uv.lock

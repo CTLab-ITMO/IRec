@@ -1,0 +1,38 @@
+[project]
+name = "irec"
+version = "0.1.0"
+description = "IRec framework"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "faiss-cpu>=1",
+    "pandas>=2",
+    "scipy>=1",
+    "seaborn>=0.13.2",
+    "tensorboard>=2",
+    "torch>=2.7",
+    "transformers>=4.51",
+    "tqdm>=4",
+    "jupyter>=1",
+]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu128", marker = "sys_platform != 'darwin'" },
+  { index = "pytorch-cpu", marker = "sys_platform == 'darwin'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.4",
+]
