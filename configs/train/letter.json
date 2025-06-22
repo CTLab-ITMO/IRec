@@ -1,5 +1,5 @@
 {
-    "experiment_name": "letter_data",
+    "experiment_name": "letter_tiger",
     "best_metric": "validation/loss",
     "train_epochs_num": 100,
     "dataset": {
@@ -41,7 +41,7 @@
       "type": "tiger",
       "sequence_prefix": "item",
       "embedding_dim": 64,
-      "codebook_size": 0,
+      "codebook_size": 256,
       "max_sequence_length": 300,
       "num_heads": 2,
       "num_encoder_layers": 2,
@@ -62,25 +62,25 @@
       "type": "composite",
       "losses": [
         {
-          "type": "identity",
+          "type": "identity_map",
           "predictions_prefix": "decoder_loss_1",
           "weight": 1.0,
           "output_prefix": "decoder_loss_1"
         },
         {
-          "type": "identity",
+          "type": "identity_map",
           "predictions_prefix": "decoder_loss_2",
           "weight": 1.0,
           "output_prefix": "decoder_loss_2"
         },
         {
-          "type": "identity",
+          "type": "identity_map",
           "predictions_prefix": "decoder_loss_3",
           "weight": 1.0,
           "output_prefix": "decoder_loss_3"
         },
         {
-          "type": "identity",
+          "type": "identity_map",
           "predictions_prefix": "decoder_loss_4",
           "weight": 1.0,
           "output_prefix": "decoder_loss_4"

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from sympy import print_rcode
 
 from models import TorchModel
 from utils import get_activation_function, create_masked_tensor, DEVICE
@@ -87,6 +88,9 @@ class TigerModel(TorchModel, config_name="tiger"):
         positions = torch.arange(sem_ids.size(0), device=DEVICE) % self._sem_id_len  # (N,)
         offsets = positions * self._codebook_size
         assert offsets.shape == sem_ids.shape
+        print("sem ids max", torch.max(sem_ids))
+        print(offsets)
+        print(torch.max(offsets+sem_ids))
         return self.codebook_embeddings(offsets + sem_ids)  # (N , embedding_dim)
 
     def _get_position_embeddings(self, mask: torch.BoolTensor) -> torch.Tensor:
@@ -182,8 +186,11 @@ class TigerModel(TorchModel, config_name="tiger"):
         ]  # (all_batch_events)
         all_sample_lengths = inputs[
             "{}.length".format(self._sequence_prefix)
-        ]  * len(self._codebook_sizes) # (batch_size)
-
+        ] * self._sem_id_len # (batch_size)
+        print(all_sample_lengths[:4])
+        print(all_sample_lengths[0])
+        print(all_sample_events.shape, sum(all_sample_lengths))
+        assert all_sample_events.shape[0] * self._sem_id_len == sum(all_sample_lengths)
         embeddings_flat = self._embed_semantic_tokens(all_sample_events)
 
         assert embeddings_flat.shape[0] == sum(all_sample_lengths)

@@ -142,11 +142,11 @@ class CrossEntropyLoss(TorchLoss, config_name='ce'):
 
         return loss
 
-class IdentityLoss(TorchLoss, config_name='identity'):
+class IdentityMapLoss(TorchLoss, config_name='identity_map'):
 
-    def __init__(self, input_loss_key, output_prefix=None):
+    def __init__(self, predictions_prefix, output_prefix=None):
         super().__init__()
-        self._input_loss_key = input_loss_key
+        self._input_loss_key = predictions_prefix
         self._output_prefix = output_prefix
 
     def forward(self, inputs):
