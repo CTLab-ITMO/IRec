@@ -66,36 +66,40 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
 
             all_sample_embeddings = embeddings[mask]  # (all_batch_events, embedding_dim)
 
-            all_embeddings = self._item_embeddings.weight  # (num_items + 2, embedding_dim)
+            all_embeddings = self._item_embeddings.weight  # (num_items, embedding_dim)
 
-            # a -- all_batch_events, n -- num_items + 2, d -- embedding_dim
+            # a -- all_batch_events, n -- num_items, d -- embedding_dim
             all_scores = torch.einsum(
                 'ad,nd->an',
                 all_sample_embeddings,
                 all_embeddings
-            )  # (all_batch_events, num_items + 2)
+            )  # (all_batch_events, num_items)
 
             positive_scores = torch.gather(
                 input=all_scores,
                 dim=1,
                 index=all_positive_sample_events[..., None]
-            )  # (all_batch_items, 1)
+            )[:, 0]  # (all_batch_items)
 
-            sample_ids, _ = create_masked_tensor(
-                data=all_sample_events,
-                lengths=all_sample_lengths
-            )  # (batch_size, seq_len)
-
-            sample_ids = torch.repeat_interleave(sample_ids, all_sample_lengths, dim=0)  # (all_batch_events, seq_len)
-
-            negative_scores = torch.scatter(
+            negative_scores = torch.gather(
                 input=all_scores,
                 dim=1,
-                index=sample_ids,
-                src=torch.ones_like(sample_ids) * (-torch.inf)
-            )  # (all_batch_events, num_items + 2)
-            negative_scores[:, 0] = -torch.inf  # Padding idx
-            negative_scores[:, self._num_items + 1:] = -torch.inf  # Mask idx
+                index=torch.randint(low=0, high=all_scores.shape[1], size=all_positive_sample_events.shape, device=all_positive_sample_events.device)[..., None]
+            )[:, 0]  # (all_batch_items)
+
+            # sample_ids, _ = create_masked_tensor(
+            #     data=all_sample_events,
+            #     lengths=all_sample_lengths
+            # )  # (batch_size, seq_len)
+
+            # sample_ids = torch.repeat_interleave(sample_ids, all_sample_lengths, dim=0)  # (all_batch_events, seq_len)
+
+            # negative_scores = torch.scatter(
+            #     input=all_scores,
+            #     dim=1,
+            #     index=sample_ids,
+            #     src=torch.ones_like(sample_ids) * (-torch.inf)
+            # )  # (all_batch_events, num_items)
 
             return {
                 'positive_scores': positive_scores,
@@ -109,15 +113,15 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
                 last_embeddings,
                 self._item_embeddings.weight
             )  # (batch_size, num_items + 2)
-            candidate_scores[:, 0] = -torch.inf  # Padding id
-            candidate_scores[:, self._num_items + 1:] = -torch.inf  # Mask id
 
             _, indices = torch.topk(
                 candidate_scores,
                 k=20, dim=-1, largest=True
             )  # (batch_size, 20)
 
-            return indices
+            return {
+                'predictions': indices
+            }
 
 
 class SasRecInBatchModel(SasRecModel, config_name='sasrec_in_batch'):

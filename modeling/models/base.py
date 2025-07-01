@@ -1,9 +1,7 @@
-from utils import MetaParent
-
-from utils import DEVICE, create_masked_tensor, get_activation_function
-
 import torch
 import torch.nn as nn
+
+from utils import DEVICE, MetaParent, create_masked_tensor, get_activation_function
 
 
 class BaseModel(metaclass=MetaParent):
@@ -27,6 +25,20 @@ class TorchModel(nn.Module, BaseModel):
                     )
             elif 'bias' in key:
                 nn.init.zeros_(value.data)
+            elif 'codebook' in key:
+                nn.init.trunc_normal_(
+                    value.data,
+                    std=initializer_range,
+                    a=-2 * initializer_range,
+                    b=2 * initializer_range
+                )
+            elif "bos_embedding" in key:
+                nn.init.trunc_normal_(
+                    value.data,
+                    std=initializer_range,
+                    a=-2 * initializer_range,
+                    b=2 * initializer_range,
+                )
             else:
                 raise ValueError(f'Unknown transformer weight: {key}')
 
@@ -69,11 +81,11 @@ class SequentialTorchModel(TorchModel):
         self._embedding_dim = embedding_dim
 
         self._item_embeddings = nn.Embedding(
-            num_embeddings=num_items + 2,  # add zero embedding + mask embedding
+            num_embeddings=num_items + 1,
             embedding_dim=embedding_dim
         )
         self._position_embeddings = nn.Embedding(
-            num_embeddings=max_sequence_length + 1,  # in order to include `max_sequence_length` value
+            num_embeddings=max_sequence_length,
             embedding_dim=embedding_dim
         )
 

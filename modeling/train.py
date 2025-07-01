@@ -36,7 +36,7 @@ def train(dataloader, model, optimizer, loss_function, callback, epoch_cnt=None,
 
         logger.debug(f'Start epoch {epoch_num}')
         for step, batch in enumerate(dataloader):
-            batch_ = copy.deepcopy(batch)
+            batch_ = batch
 
             model.train()
 
@@ -104,6 +104,9 @@ def main():
         checkpoint = torch.load(checkpoint_path)
         print(checkpoint.keys())
         model.load_state_dict(checkpoint)
+    
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Total model parameters: {total_params}")
 
     loss_function = BaseLoss.create_from_config(config['loss'])
 

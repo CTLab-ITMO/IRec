@@ -207,10 +207,10 @@ class InferenceCallback(BaseCallback):
                     for key, value in batch.items():
                         batch[key] = value.to(utils.DEVICE)
 
-                    batch[self._pred_prefix] = self._model(batch)
+                    batch.update(self._model(batch))
 
-                    for key, values in batch.items():
-                        batch[key] = values.cpu()
+                    # for key, values in batch.items():
+                    #     batch[key] = values.cpu()
 
                     for metric_name, metric_function in self._metrics.items():
                         running_params[metric_name].extend(metric_function(

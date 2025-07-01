@@ -1,15 +1,14 @@
 {
-  "experiment_name": "sasrec_beauty_letter_all_negatives",
+  "experiment_name": "tiger_beauty_letter_probability_with_scale_big",
   "best_metric": "validation/ndcg@20",
   "dataset": {
-    "type": "letter",
+    "type": "letter_full",
     "path_to_data_dir": "../data",
     "name": "Beauty_letter",
     "max_sequence_length": 50,
     "samplers": {
-      "type": "next_item_prediction",
-      "negative_sampler_type": "random",
-      "num_negatives_train": 0
+      "type": "last_item_prediction",
+      "negative_sampler_type": "random"
     },
     "letter_inter_json": "../data/Beauty_letter/inter.json"
   },
@@ -18,7 +17,9 @@
       "type": "torch",
       "batch_size": 256,
       "batch_processor": {
-        "type": "basic"
+        "type": "letter",
+        "letter_index_json": "../data/Beauty_letter/index.json",
+        "semantic_length": 4
       },
       "drop_last": true,
       "shuffle": true
@@ -27,23 +28,27 @@
       "type": "torch",
       "batch_size": 256,
       "batch_processor": {
-        "type": "basic"
+        "type": "letter",
+        "letter_index_json": "../data/Beauty_letter/index.json",
+        "semantic_length": 4
       },
       "drop_last": false,
       "shuffle": false
     }
   },
   "model": {
-    "type": "sasrec",
+    "type": "tiger",
     "sequence_prefix": "item",
-    "positive_prefix": "positive",
-    "candidate_prefix": "candidates",
-    "embedding_dim": 64,
-    "num_heads": 2,
-    "num_layers": 2,
-    "dim_feedforward": 256,
-    "dropout": 0.3,
-    "activation": "gelu",
+    "positive_prefix": "labels",
+    "embedding_dim": 384,
+    "codebook_size": 256,
+    "num_positions": 50,
+    "num_heads": 6,
+    "num_encoder_layers": 4,
+    "num_decoder_layers": 4,
+    "dim_feedforward": 1536,
+    "dropout": 0.1,
+    "activation": "relu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },
@@ -59,10 +64,24 @@
     "type": "composite",
     "losses": [
       {
-        "type": "sasrec",
-        "positive_prefix": "positive_scores",
-        "negative_prefix": "negative_scores",
-        "output_prefix": "downstream_loss"
+        "type": "identity_map",
+        "predictions_prefix": "decoder_loss_1",
+        "output_prefix": "ce_1"
+      },
+      {
+        "type": "identity_map",
+        "predictions_prefix": "decoder_loss_2",
+        "output_prefix": "ce_2"
+      },
+      {
+        "type": "identity_map",
+        "predictions_prefix": "decoder_loss_3",
+        "output_prefix": "ce_3"
+      },
+      {
+        "type": "identity_map",
+        "predictions_prefix": "decoder_loss_4",
+        "output_prefix": "ce_4"
       }
     ],
     "output_prefix": "loss"
@@ -73,7 +92,32 @@
       {
         "type": "metric",
         "on_step": 1,
+        "loss_prefix": "scale"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
         "loss_prefix": "loss"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "ce_1"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "ce_2"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "ce_3"
+      },
+      {
+        "type": "metric",
+        "on_step": 1,
+        "loss_prefix": "ce_4"
       },
       {
         "type": "validation",
@@ -81,18 +125,6 @@
         "pred_prefix": "predictions",
         "labels_prefix": "labels",
         "metrics": {
-          "ndcg@5": {
-            "type": "ndcg",
-            "k": 5
-          },
-          "ndcg@10": {
-            "type": "ndcg",
-            "k": 10
-          },
-          "ndcg@20": {
-            "type": "ndcg",
-            "k": 20
-          },
           "recall@5": {
             "type": "recall",
             "k": 5
@@ -103,6 +135,18 @@
           },
           "recall@20": {
             "type": "recall",
+            "k": 20
+          },
+          "ndcg@5": {
+            "type": "ndcg",
+            "k": 5
+          },
+          "ndcg@10": {
+            "type": "ndcg",
+            "k": 10
+          },
+          "ndcg@20": {
+            "type": "ndcg",
             "k": 20
           },
           "coverage@5": {
