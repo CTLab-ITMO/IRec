@@ -27,26 +27,24 @@ class MCLSRTrainSampler(TrainSampler, config_name='mclsr'):
         sample = copy.deepcopy(self._dataset[index])
 
         item_sequence = sample['item.ids'][:-1]
-        next_item = sample['item.ids'][-1]
+        positive_item = sample['item.ids'][-1]
 
-        seen_items = set(item_sequence + [next_item])
+        seen_items = set(item_sequence)
+        seen_items.add(positive_item)
         
         negatives = []
         while len(negatives) < self._num_negatives:
-            candidates = np.random.choice(self._all_items, size=self._num_negatives * 2) 
+            random_item_id = np.random.choice(self._all_items) 
             
-            for item_id in candidates:
-                if item_id not in seen_items:
-                    negatives.append(item_id)
-                    if len(negatives) == self._num_negatives:
-                        break
+            if random_item_id not in seen_items:
+                negatives.append(random_item_id)
 
         return {
             'user.ids': sample['user.ids'],
             'user.length': sample['user.length'],
             'item.ids': item_sequence,
             'item.length': len(item_sequence),
-            'labels.ids': [next_item],
+            'labels.ids': [positive_item],
             'labels.length': 1,
             'negatives.ids': negatives,
             'negatives.length': len(negatives),
