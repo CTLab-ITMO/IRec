@@ -27,26 +27,24 @@ class MCLSRTrainSampler(TrainSampler, config_name='mclsr'):
         sample = copy.deepcopy(self._dataset[index])
 
         item_sequence = sample['item.ids'][:-1]
-        next_item = sample['item.ids'][-1]
+        positive_item = sample['item.ids'][-1]
 
-        seen_items = set(item_sequence + [next_item])
+        seen_items = set(item_sequence)
+        seen_items.add(positive_item)
         
         negatives = []
         while len(negatives) < self._num_negatives:
-            candidates = np.random.choice(self._all_items, size=self._num_negatives * 2) 
+            random_item_id = np.random.choice(self._all_items) 
             
-            for item_id in candidates:
-                if item_id not in seen_items:
-                    negatives.append(item_id)
-                    if len(negatives) == self._num_negatives:
-                        break
+            if random_item_id not in seen_items:
+                negatives.append(random_item_id)
 
         return {
             'user.ids': sample['user.ids'],
             'user.length': sample['user.length'],
             'item.ids': item_sequence,
             'item.length': len(item_sequence),
-            'labels.ids': [next_item],
+            'labels.ids': [positive_item],
             'labels.length': 1,
             'negatives.ids': negatives,
             'negatives.length': len(negatives),
@@ -54,6 +52,9 @@ class MCLSRTrainSampler(TrainSampler, config_name='mclsr'):
 
 
 class MCLSRPredictionEvalSampler(EvalSampler, config_name='mclsr'):
+    def __init__(self, dataset, num_users, num_items):
+        super().__init__(dataset, num_users, num_items)
+
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
@@ -61,4 +62,17 @@ class MCLSRPredictionEvalSampler(EvalSampler, config_name='mclsr'):
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
         )
+    
+    def __getitem__(self, index):
+        sample = self._dataset[index]
+        history_sequence = sample['history']
+        target_items = sample['target']
 
+        return {
+            'user.ids': sample['user.ids'],
+            'user.length': 1,
+            'item.ids': history_sequence,
+            'item.length': len(history_sequence),
+            'labels.ids': target_items,
+            'labels.length': len(target_items),
+        }
