@@ -124,8 +124,6 @@ class MCLSRNDCGMetric(BaseMetric, config_name='mclsr-ndcg'):
         dcg_scores = []
         offset = 0
         for i in range(predictions.shape[0]):
-            k = min(self._k, labels_lengths[i])
-
             user_predictions = predictions[i]
             num_user_labels = labels_lengths[i]
             user_labels = labels_flat[offset : offset + num_user_labels]
@@ -137,7 +135,8 @@ class MCLSRNDCGMetric(BaseMetric, config_name='mclsr-ndcg'):
             weights = 1 / torch.log2(positions.float())
             dcg = (hits_mask.float() * weights).sum()
             
-            idcg_weights = weights[:k]
+            num_ideal_hits = min(self._k, num_user_labels)
+            idcg_weights = weights[:num_ideal_hits]
             idcg = idcg_weights.sum()
             
             ndcg = dcg / idcg if idcg > 0 else torch.tensor(0.0)
