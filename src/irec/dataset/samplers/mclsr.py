@@ -2,6 +2,7 @@ from irec.dataset.samplers.base import TrainSampler, EvalSampler
 
 import copy
 import numpy as np
+from collections import defaultdict
 
 
 class MCLSRTrainSampler(TrainSampler, config_name='mclsr'):
@@ -11,7 +12,11 @@ class MCLSRTrainSampler(TrainSampler, config_name='mclsr'):
         self._num_users = num_users
         self._num_items = num_items
         self._num_negatives = num_negatives
-        self._all_items = np.arange(1, num_items + 1)
+        self._all_items = list(range(1, num_items + 1))
+        self._user_to_all_seen_items = defaultdict(set)
+        for sample in self._dataset:
+            user_id = sample['user.ids'][0]
+            self._user_to_all_seen_items[user_id].update(sample['item.ids'])
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -26,21 +31,23 @@ class MCLSRTrainSampler(TrainSampler, config_name='mclsr'):
     def __getitem__(self, index):
         sample = copy.deepcopy(self._dataset[index])
 
+        user_id = sample['user.ids'][0]
         item_sequence = sample['item.ids'][:-1]
         positive_item = sample['item.ids'][-1]
 
-        seen_items = set(item_sequence)
-        seen_items.add(positive_item)
+        seen_items = self._user_to_all_seen_items[user_id]
         
         negatives = []
         while len(negatives) < self._num_negatives:
-            random_item_id = np.random.choice(self._all_items) 
+            candidates = np.random.choice(self._all_items, size=self._num_negatives * 2, replace=False) 
             
-            if random_item_id not in seen_items:
-                negatives.append(random_item_id)
+            unseen_candidates = [item for item in candidates if item not in seen_items]
+            negatives.extend(unseen_candidates)
+            
+        negatives = negatives[:self._num_negatives]
 
         return {
-            'user.ids': sample['user.ids'],
+            'user.ids': [user_id],
             'user.length': sample['user.length'],
             'item.ids': item_sequence,
             'item.length': len(item_sequence),
