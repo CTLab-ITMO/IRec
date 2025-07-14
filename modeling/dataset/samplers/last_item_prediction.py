@@ -20,7 +20,7 @@ class LastItemPredictionTrainSampler(TrainSampler, config_name='last_item_predic
         )
 
     def __getitem__(self, index):
-        sample = copy.deepcopy(self._dataset[index])
+        sample = self._dataset[index]
 
         item_sequence = sample['item.ids'][:-1]
         last_item = sample['item.ids'][-1]

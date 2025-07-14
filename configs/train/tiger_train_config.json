@@ -5,7 +5,7 @@
     "type": "letter_full",
     "path_to_data_dir": "../data",
     "name": "Beauty_letter",
-    "max_sequence_length": 50,
+    "max_sequence_length": 20,
     "samplers": {
       "type": "last_item_prediction",
       "negative_sampler_type": "random"
@@ -26,7 +26,7 @@
     },
     "validation": {
       "type": "torch",
-      "batch_size": 256,
+      "batch_size": 512,
       "batch_processor": {
         "type": "letter",
         "letter_index_json": "../data/Beauty_letter/index.json",
@@ -37,16 +37,16 @@
     }
   },
   "model": {
-    "type": "tiger",
+    "type": "tiger_t5",
     "sequence_prefix": "item",
     "positive_prefix": "labels",
     "embedding_dim": 384,
     "codebook_size": 256,
-    "num_positions": 50,
+    "num_positions": 20,
     "num_heads": 6,
     "num_encoder_layers": 4,
     "num_decoder_layers": 4,
-    "dim_feedforward": 1536,
+    "dim_feedforward": 1024,
     "dropout": 0.1,
     "activation": "relu",
     "layer_norm_eps": 1e-9,
@@ -56,32 +56,16 @@
     "type": "basic",
     "optimizer": {
       "type": "adam",
-      "lr": 0.001
-    },
-    "clip_grad_threshold": 1.0
+      "lr": 3e-4
+    }
   },
   "loss": {
     "type": "composite",
     "losses": [
       {
         "type": "identity_map",
-        "predictions_prefix": "decoder_loss_1",
-        "output_prefix": "ce_1"
-      },
-      {
-        "type": "identity_map",
-        "predictions_prefix": "decoder_loss_2",
-        "output_prefix": "ce_2"
-      },
-      {
-        "type": "identity_map",
-        "predictions_prefix": "decoder_loss_3",
-        "output_prefix": "ce_3"
-      },
-      {
-        "type": "identity_map",
-        "predictions_prefix": "decoder_loss_4",
-        "output_prefix": "ce_4"
+        "predictions_prefix": "loss",
+        "output_prefix": "loss"
       }
     ],
     "output_prefix": "loss"
@@ -92,32 +76,7 @@
       {
         "type": "metric",
         "on_step": 1,
-        "loss_prefix": "scale"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
         "loss_prefix": "loss"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "ce_1"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "ce_2"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "ce_3"
-      },
-      {
-        "type": "metric",
-        "on_step": 1,
-        "loss_prefix": "ce_4"
       },
       {
         "type": "validation",
@@ -126,39 +85,39 @@
         "labels_prefix": "labels",
         "metrics": {
           "recall@5": {
-            "type": "recall",
+            "type": "recall_semantic",
             "k": 5
           },
           "recall@10": {
-            "type": "recall",
+            "type": "recall_semantic",
             "k": 10
           },
           "recall@20": {
-            "type": "recall",
+            "type": "recall_semantic",
             "k": 20
           },
           "ndcg@5": {
-            "type": "ndcg",
+            "type": "ndcg_semantic",
             "k": 5
           },
           "ndcg@10": {
-            "type": "ndcg",
+            "type": "ndcg_semantic",
             "k": 10
           },
           "ndcg@20": {
-            "type": "ndcg",
+            "type": "ndcg_semantic",
             "k": 20
           },
           "coverage@5": {
-            "type": "coverage",
+            "type": "coverage_semantic",
             "k": 5
           },
           "coverage@10": {
-            "type": "coverage",
+            "type": "coverage_semantic",
             "k": 10
           },
           "coverage@20": {
-            "type": "coverage",
+            "type": "coverage_semantic",
             "k": 20
           }
         }
@@ -170,39 +129,39 @@
         "labels_prefix": "labels",
         "metrics": {
           "ndcg@5": {
-            "type": "ndcg",
+            "type": "ndcg_semantic",
             "k": 5
           },
           "ndcg@10": {
-            "type": "ndcg",
+            "type": "ndcg_semantic",
             "k": 10
           },
           "ndcg@20": {
-            "type": "ndcg",
+            "type": "ndcg_semantic",
             "k": 20
           },
           "recall@5": {
-            "type": "recall",
+            "type": "recall_semantic",
             "k": 5
           },
           "recall@10": {
-            "type": "recall",
+            "type": "recall_semantic",
             "k": 10
           },
           "recall@20": {
-            "type": "recall",
+            "type": "recall_semantic",
             "k": 20
           },
           "coverage@5": {
-            "type": "coverage",
+            "type": "coverage_semantic",
             "k": 5
           },
           "coverage@10": {
-            "type": "coverage",
+            "type": "coverage_semantic",
             "k": 10
           },
           "coverage@20": {
-            "type": "coverage",
+            "type": "coverage_semantic",
             "k": 20
           }
         }

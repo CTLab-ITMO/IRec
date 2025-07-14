@@ -66,12 +66,16 @@ class NDCGSemanticMetric(BaseMetric, config_name='ndcg_semantic'):
         self._k = k
 
     def __call__(self, inputs, pred_prefix, labels_prefix):
-        predictions = inputs[pred_prefix][:, :self._k].float()  # (batch_size, top_k_indices)
-        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (batch_size)
+        predictions = inputs[pred_prefix].long()
 
-        assert labels.shape[0] == predictions.shape[0]
+        batch_size, _, sid_length = predictions.shape
 
-        hits = torch.eq(predictions, labels[..., None]).float()  # (batch_size, top_k_indices)
+        labels = inputs['semantic_{}.ids'.format(labels_prefix)].long()  # (batch_size)
+        labels = labels.reshape(batch_size, 1, sid_length)
+        offsetted_labels = labels + 256 * torch.arange(4, device=labels.device)[None, None, :]
+
+        hits = (torch.eq(predictions[:, :self._k, :], offsetted_labels).sum(dim=-1) == sid_length).float() # (batch_size, top_k_indices)
+
         discount_factor = 1 / torch.log2(torch.arange(1, self._k + 1, 1).float() + 1.).to(hits.device)  # (k)
         dcg = torch.einsum('bk,k->b', hits, discount_factor)  # (batch_size)
 
@@ -101,39 +105,15 @@ class RecallSemanticMetric(BaseMetric, config_name='recall_semantic'):
         self._k = k
 
     def __call__(self, inputs, pred_prefix, labels_prefix):
-        import code; code.interact(local=locals())
-        labels = inputs['{}.ids'.format(labels_prefix)].float()  # (batch_size)
+        predictions = inputs[pred_prefix].long()
 
-        all_items_semantic_ids = inputs['all_semantic_ids']  # (num_items, sid_length)
-        all_items_semantic_ids = all_items_semantic_ids + 256 * torch.arange(4)
+        batch_size, _, sid_length = predictions.shape
 
-        decoder_scores = torch.stack([inputs[f'decoder_scores_{i}'] for i in range(0 + 1, 4 + 1)], dim=1)
-        decoder_scores = decoder_scores.reshape(decoder_scores.shape[0], decoder_scores.shape[1] * decoder_scores.shape[2])
+        labels = inputs['semantic_{}.ids'.format(labels_prefix)].long()  # (batch_size)
+        labels = labels.reshape(batch_size, 1, sid_length)
+        offsetted_labels = labels + 256 * torch.arange(4, device=labels.device)[None, None, :]
 
-        batch_size = labels.shape[0]
-        all_items, id_dim = all_items_semantic_ids.shape
-        batch_indices = torch.arange(batch_size).unsqueeze(1).unsqueeze(2)
-        ids_expanded = all_items_semantic_ids.unsqueeze(0).expand(batch_size, -1, -1)
-
-        all_item_scores = decoder_scores[batch_indices.expand(-1, all_items, id_dim), ids_expanded]  # (batch_size, num_items, sid_length)
-
-        batch_size, num_items, sid_length = all_item_scores.shape
-    
-        indices = torch.arange(num_items).unsqueeze(0).unsqueeze(-1).expand(batch_size, -1, 4)
-        
-        for i in range(sid_length - 1, -1, -1):  # sid_length-1, sid_length-2, ..., 1, 0
-            key_values = torch.gather(all_item_scores, dim=1, index=indices)[:, :, i]
-            sort_indices = torch.argsort(key_values, dim=1, descending=True, stable=True).unsqueeze(-1).expand(batch_size, -1, 4)
-            indices = torch.gather(indices, dim=1, index=sort_indices)
-        
-        print(indices[:2, :2])
-        indices = indices[:, :, 0]
-
-        predictions = indices[:, :self._k].float()  # (batch_size, top_k_indices)
-
-        assert labels.shape[0] == predictions.shape[0]
-
-        hits = torch.eq(predictions, labels[..., None]).float()  # (batch_size, top_k_indices)
+        hits = (torch.eq(predictions[:, :self._k, :], offsetted_labels).sum(dim=-1) == sid_length).float() # (batch_size, top_k_indices)
         recall = hits.sum(dim=-1)  # (batch_size)
 
         return recall.cpu().tolist()
@@ -154,6 +134,28 @@ class CoverageMetric(StatefullMetric, config_name='coverage'):
 
     def __call__(self, inputs, pred_prefix, labels_prefix):
         predictions = inputs[pred_prefix][:, :self._k].float()  # (batch_size, top_k_indices)
+        return predictions.view(-1).long().cpu().detach().tolist()  # (batch_size * k)
+    
+    def reduce(self, values):
+        return len(set(values)) / self._num_items
+    
+
+class CoverageSemanticMetric(StatefullMetric, config_name='coverage_semantic'):
+
+    def __init__(self, k, num_items):
+        self._k = k
+        self._num_items = num_items
+    
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        return cls(
+            k=config['k'],
+            num_items=kwargs['num_items']
+        )
+
+    def __call__(self, inputs, pred_prefix, labels_prefix):
+        predictions = inputs[pred_prefix].long()
+        predictions = predictions[:, :self._k, :].sum(dim=-1).long()
         return predictions.view(-1).long().cpu().detach().tolist()  # (batch_size * k)
     
     def reduce(self, values):

@@ -16,3 +16,4 @@ from .sasrec import SasRecModel, SasRecInBatchModel
 from .sasrec_ce import SasRecCeModel
 from .s3rec import S3RecModel
 from .tiger import TigerModel
+from .tiger_t5 import TigerModelT5
