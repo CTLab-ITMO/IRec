@@ -804,7 +804,7 @@ class MCLSRDataset(BaseDataset, config_name='mclsr'):
         data_dir = os.path.join(config['path_to_data_dir'], config['name'])
         max_seq_len = config.get('max_sequence_length')
 
-        train_sequences, u1, i1, s1 = cls._create_sequences_from_file(os.path.join(data_dir, 'train.txt'), max_seq_len)
+        train_sequences, u1, i1, s1 = cls._create_sequences_from_file(os.path.join(data_dir, 'train_mclsr.txt'), max_seq_len)
         train_dataset = [{'user.ids': [uid], 'user.length': 1, 'item.ids': seq, 'item.length': len(seq)} for uid, seq in train_sequences.items()]
 
         valid_hist, u2, i2, s2 = cls._create_sequences_from_file(os.path.join(data_dir, 'valid_history.txt'), max_seq_len)
