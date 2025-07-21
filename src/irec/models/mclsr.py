@@ -198,100 +198,150 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
             return all_embeddings[-1]
 
     def forward(self, inputs):
-        all_sample_events = inputs['{}.ids'.format(self._sequence_prefix)]
-        all_sample_lengths = inputs['{}.length'.format(self._sequence_prefix)]
-        user_ids = inputs['{}.ids'.format(self._user_prefix)]
+        all_sample_events = inputs[
+            '{}.ids'.format(self._sequence_prefix)
+        ]  # (all_batch_events)
+        all_sample_lengths = inputs[
+            '{}.length'.format(self._sequence_prefix)
+        ]  # (batch_size)
+        user_ids = inputs['{}.ids'.format(self._user_prefix)]  # (batch_size)
 
+        embeddings = self._item_embeddings(
+            all_sample_events,
+        )  # (all_batch_events, embedding_dim)
         embeddings, mask = create_masked_tensor(
-            data=self._item_embeddings(all_sample_events),
+            data=embeddings,
             lengths=all_sample_lengths,
-        )
+        )  # (batch_size, seq_len, embedding_dim)
 
         batch_size = mask.shape[0]
         seq_len = mask.shape[1]
+
+        # Current interest learning
+        # 1) get embeddings with positions
+        positions = (
+            torch.arange(
+                start=seq_len - 1,
+                end=-1,
+                step=-1,
+                device=mask.device,
+            )[None]
+            .tile([batch_size, 1])
+            .long()
+        )  # (batch_size, seq_len)
+        positions_mask = (
+            positions < all_sample_lengths[:, None]
+        )  # (batch_size, max_seq_len)
+
+        positions = positions[positions_mask]  # (all_batch_events)
+        position_embeddings = self._position_embeddings(
+            positions,
+        )  # (all_batch_events, embedding_dim)
+        position_embeddings, _ = create_masked_tensor(
+            data=position_embeddings,
+            lengths=all_sample_lengths,
+        )  # (batch_size, seq_len, embedding_dim)
+        assert torch.allclose(position_embeddings[~mask], embeddings[~mask])
         
-        # position embeddings for E_u,p
-        positions = torch.arange(start=seq_len - 1, end=-1, step=-1, 
-                                 device=mask.device)[None].tile([batch_size, 1]).long()
-        positions_mask = positions < all_sample_lengths[:, None]
-        positions = positions[positions_mask]
-        position_embeddings, _ = create_masked_tensor(data=self._position_embeddings(positions), 
-                                                      lengths=all_sample_lengths)
+        positioned_embeddings = (
+            embeddings + position_embeddings
+        )  # (batch_size, seq_len, embedding_dim)
         
-        positioned_embeddings = self._layernorm(embeddings + position_embeddings)
-        positioned_embeddings = self._dropout(positioned_embeddings)
+        positioned_embeddings = self._layernorm(
+            positioned_embeddings,
+        )  # (batch_size, seq_len, embedding_dim)
+        positioned_embeddings = self._dropout(
+            positioned_embeddings,
+        )  # (batch_size, seq_len, embedding_dim)
         positioned_embeddings[~mask] = 0
 
-        # formula 2: A_s = softmax(...)
-        sequential_attention_matrix = self._current_interest_learning_encoder(positioned_embeddings).squeeze()
+        # formula 2
+        sequential_attention_matrix = self._current_interest_learning_encoder(
+            positioned_embeddings, # E_u,p
+        ).squeeze()  # (batch_size, seq_len)
+
         sequential_attention_matrix[~mask] = -torch.inf
-        sequential_attention_matrix = torch.softmax(sequential_attention_matrix, dim=1)
-        
-        # formula 3: I_s = A_s * E_u
-        sequential_representation = torch.einsum('bs,bsd->bd', 
-                                                 sequential_attention_matrix, 
-                                                 embeddings)
+        sequential_attention_matrix = torch.softmax(
+            sequential_attention_matrix,
+            dim=1,
+        )  # (batch_size, seq_len)
+
+        # formula 3
+        sequential_representation = torch.einsum(
+            'bs,bsd->bd',
+            sequential_attention_matrix, # A^s
+            embeddings,
+        )  # (batch_size, embedding_dim)
 
         if self.training:
-            # General Interest Learning
-            common_graph_user_embs_batch = self._user_embeddings(user_ids)
+            # general interest
+            # formula 4
+            all_init_embeddings = torch.cat([self._user_embeddings.weight, 
+                                             self._item_embeddings.weight], 
+                                             dim=0)
+            all_graph_embeddings = self._apply_graph_encoder(embeddings=all_init_embeddings, 
+                                                             graph=self._graph)
+
+            common_graph_user_embs_all, common_graph_item_embs_all = torch.split(
+                all_graph_embeddings, [self._num_users + 2, self._num_items + 2]
+            )
+            common_graph_user_embs_batch = common_graph_user_embs_all[user_ids]
             common_graph_item_embs_batch, _ = create_masked_tensor(
-                data=self._item_embeddings(all_sample_events),
+                data=common_graph_item_embs_all[all_sample_events], 
                 lengths=all_sample_lengths
             )
-            
-            # formula 5: A_c = softmax(...)
+
+            # formula 5: A_c = softmax(tanh(W_3 * h_u,uv) * (E_u,uv)^T)
             graph_attention_matrix = torch.einsum('bd,bsd->bs', 
-                                                  self._general_interest_learning_encoder(common_graph_user_embs_batch), 
+                                                  self._general_interest_learning_encoder
+                                                  (common_graph_user_embs_batch), 
                                                   common_graph_item_embs_batch)
             graph_attention_matrix[~mask] = -torch.inf
             graph_attention_matrix = torch.softmax(graph_attention_matrix, dim=1)
-            
+
             # formula 6: I_c = A_c * E_u,uv
-            original_graph_representation = torch.einsum('bs,bsd->bd', graph_attention_matrix, 
+            original_graph_representation = torch.einsum('bs,bsd->bd', 
+                                                         graph_attention_matrix, 
                                                          common_graph_item_embs_batch)
-            
             original_sequential_representation = sequential_representation
 
-            # Prepare for L_P (downstream loss)
-            # formula 13: I_comb = ...
+            # formula 13: I_comb = alpha * I_s + (1 - alpha) * I_c
+            # L_P (Downstream Loss)
             combined_representation = (self._alpha * original_sequential_representation + 
                                        (1 - self._alpha) * original_graph_representation)
-            
-            # Prepare h_o and h_k for L_P (formula 14)
             labels = inputs['{}.ids'.format(self._labels_prefix)]
             labels_embeddings = self._item_embeddings(labels)
-            negative_ids = inputs['{}.ids'.format(self._negatives_prefix)]
-            negative_embeddings = self._item_embeddings(negative_ids)
             
-            # Prepare for L_IL (Interest-level CL)
-            # formula 7: MLP projection for I_s and I_c
+            # formula 7
+            # L_IL (Interest-level CL)
             sequential_representation_proj = self._sequential_projector(original_sequential_representation)
             graph_representation_proj = self._graph_projector(original_graph_representation)
 
-            # Prepare for L_UC (User-level CL)
-            # formula 9: H_u,uu = GraphEncoder(...)
+            # formula 9: H_u,uu = GraphEncoder(H_u, G_uu)
+            # L_UC (User-level CL)
             user_graph_user_embs_all = self._apply_graph_encoder(embeddings=self._user_embeddings.weight, 
                                                                  graph=self._user_graph)
             user_graph_user_embs_batch = user_graph_user_embs_all[user_ids]
-            
-            # formula 10: MLP projection for H_u,uu and H_u,uv
+
+            # formula 10
+            # T_f,uu = MLP(H_u,uu) и T_f,uv = MLP(H_u,uv)
             user_graph_user_embeddings_proj = self._user_projection(user_graph_user_embs_batch)
             common_graph_user_embeddings_proj = self._user_projection(common_graph_user_embs_batch)
 
-            # Prepare for L_IC (Item-level CL) - fixed version
+            # item level CL
             common_graph_items_flat = common_graph_item_embs_batch[mask]
             
-            # formula 9 (similar for items): H_v,vv = GraphEncoder(...)
             item_graph_items_all = self._apply_graph_encoder(embeddings=self._item_embeddings.weight, 
                                                              graph=self._item_graph)
             item_graph_items_flat = item_graph_items_all[all_sample_events]
 
-            # Aggregate by unique items to prevent false negatives
-            unique_item_ids, inverse_indices = torch.unique(all_sample_events, return_inverse=True)
+            unique_item_ids, inverse_indices = torch.unique(all_sample_events, 
+                                                            return_inverse=True)
+
             try:
                 from torch_scatter import scatter_mean
             except ImportError:
+                # print("Warning: torch_scatter not found. Using a slower fallback function.")
                 def scatter_mean(src, index, dim=0, dim_size=None):
                     out_size = dim_size if dim_size is not None else index.max() + 1
                     out = torch.zeros((out_size, src.size(1)), dtype=src.dtype, device=src.device)
@@ -300,31 +350,40 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
             
             num_unique_items = unique_item_ids.shape[0]
 
-            unique_common_graph_items = scatter_mean(common_graph_items_flat, inverse_indices, dim=0, 
+            unique_common_graph_items = scatter_mean(common_graph_items_flat,
+                                                     inverse_indices, dim=0,
                                                      dim_size=num_unique_items)
 
-            unique_item_graph_items = scatter_mean(item_graph_items_flat, inverse_indices, dim=0, 
+            unique_item_graph_items = scatter_mean(item_graph_items_flat,
+                                                   inverse_indices, dim=0,
                                                    dim_size=num_unique_items)
-            
-            # formula 10
+
+            # projection for Item-level Feature CL
             unique_common_graph_items_proj = self._item_projection(unique_common_graph_items)
             unique_item_graph_items_proj = self._item_projection(unique_item_graph_items)
-            
+
+            negative_ids = inputs['{}.ids'.format(self._negatives_prefix)] # (batch_size, num_negatives)
+            negative_embeddings = self._item_embeddings(negative_ids) # (batch_size, num_negatives, embedding_dim)
+
+            # import code; code.interact(local=locals())
+
             return {
-                # For L_P (formula 14)
+                # L_P (formula 14)
                 'combined_representation': combined_representation,
                 'label_representation': labels_embeddings,
+
                 'negative_representation': negative_embeddings,
 
-                # For L_IL (formula 8)
+                # for L_IL (formula 8)
+
                 'sequential_representation': sequential_representation_proj,
                 'graph_representation': graph_representation_proj,
 
-                # For L_UC (formula 11)
+                # for L_UC (formula 11)
                 'user_graph_user_embeddings': user_graph_user_embeddings_proj,
                 'common_graph_user_embeddings': common_graph_user_embeddings_proj,
                 
-                # For L_IC (formula 11 - similar for items)
+                # for L_IC
                 'item_graph_item_embeddings': unique_item_graph_items_proj,
                 'common_graph_item_embeddings': unique_common_graph_items_proj,
             }
