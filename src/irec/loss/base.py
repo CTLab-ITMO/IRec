@@ -268,25 +268,28 @@ class FpsLoss(TorchLoss, config_name='fps'):
 
 
 class SASRecLoss(TorchLoss, config_name='sasrec'):
-    def __init__(self, positive_prefix, negative_prefix, output_prefix=None):
+
+    def __init__(
+            self,
+            positive_prefix,
+            negative_prefix,
+            output_prefix=None
+    ):
         super().__init__()
         self._positive_prefix = positive_prefix
         self._negative_prefix = negative_prefix
         self._output_prefix = output_prefix
 
     def forward(self, inputs):
-        positive_scores = inputs[self._positive_prefix]  # (x, embedding_dim)
-        negative_scores = inputs[self._negative_prefix]  # (x, embedding_dim)
+        positive_scores = inputs[self._positive_prefix]  # (x)
+        negative_scores = inputs[self._negative_prefix]  # (x)
         assert positive_scores.shape[0] == negative_scores.shape[0]
 
-        positive_loss = torch.log(nn.functional.sigmoid(positive_scores)).sum(
-            dim=-1,
-        )  # (x)
-        negative_loss = torch.log(
-            1.0 - nn.functional.sigmoid(negative_scores),
-        ).sum(dim=-1)  # (x)
-        loss = positive_loss + negative_loss  # (x)
-        loss = -loss.sum()  # (1)
+        loss = torch.nn.functional.binary_cross_entropy_with_logits(
+            positive_scores, torch.ones_like(positive_scores)
+        ) + torch.nn.functional.binary_cross_entropy_with_logits(
+            negative_scores, torch.zeros_like(negative_scores)
+        )
 
         if self._output_prefix is not None:
             inputs[self._output_prefix] = loss.cpu().item()
