@@ -1,8 +1,7 @@
 {
-  "experiment_name": "sasrec_clothing",
+  "experiment_name": "sasrec",
   "use_wandb": true,
-  "train_epochs_num": 50,
-  "best_metric": "validation/ndcg@20",
+  "train_epochs_num": 100,
   "dataset": {
     "type": "sasrec_comparison",
     "path_to_data_dir": "./data",
@@ -74,6 +73,38 @@
       {
         "type": "validation",
         "on_step": 64,
+        "pred_prefix": "predictions",
+        "labels_prefix": "labels",
+        "metrics": {
+          "ndcg@5": {
+            "type": "mclsr-ndcg",
+            "k": 5
+          },
+          "ndcg@10": {
+            "type": "mclsr-ndcg",
+            "k": 10
+          },
+          "ndcg@20": {
+            "type": "mclsr-ndcg",
+            "k": 20
+          },
+          "recall@5": {
+            "type": "mclsr-recall",
+            "k": 5
+          },
+          "recall@10": {
+            "type": "mclsr-recall",
+            "k": 10
+          },
+          "recall@20": {
+            "type": "mclsr-recall",
+            "k": 20
+          }
+        }
+      }, 
+      {
+        "type": "eval",
+        "on_step": 256,
         "pred_prefix": "predictions",
         "labels_prefix": "labels",
         "metrics": {

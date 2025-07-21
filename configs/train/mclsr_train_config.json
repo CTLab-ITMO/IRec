@@ -1,6 +1,6 @@
 {
-  "experiment_name": "mclsr_clothing_test",
-  "train_epochs_num": 1,
+  "experiment_name": "mclsr",
+  "train_epochs_num": 50,
   "use_wandb": true,
   "dataset": {
     "type": "graph",
@@ -127,7 +127,7 @@
       {
         "type": "validation",
         "on_step": 64,
-        "pred_prefix": "logits",
+        "pred_prefix": "predictions",
         "labels_prefix": "labels",
         "metrics": {
           "ndcg@5": {
@@ -159,7 +159,7 @@
       {
         "type": "eval",
         "on_step": 256,
-        "pred_prefix": "logits",
+        "pred_prefix": "predictions",
         "labels_prefix": "labels",
         "metrics": {
           "ndcg@5": {
