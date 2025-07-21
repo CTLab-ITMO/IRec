@@ -853,3 +853,64 @@ class MCLSRDataset(BaseDataset, config_name='mclsr'):
     @property
     def meta(self):
         return {'num_users': self.num_users, 'num_items': self.num_items, 'max_sequence_length': self._max_sequence_length}
+    
+class SASRecDataset(BaseDataset, config_name='sasrec_comparison'):
+    def __init__(self, train_sampler, validation_sampler, test_sampler, num_users, num_items, max_sequence_length):
+        self._train_sampler = train_sampler
+        self._validation_sampler = validation_sampler
+        self._test_sampler = test_sampler
+        self._num_users = num_users
+        self._num_items = num_items
+        self._max_sequence_length = max_sequence_length
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        data_dir = os.path.join(config['path_to_data_dir'], config['name'])
+        max_seq_len = config.get('max_sequence_length')
+
+        train_dataset, u1, i1, s1 = SequenceDataset._create_dataset(
+            dir_path=data_dir,
+            part='train_sasrec',
+            max_sequence_length=max_seq_len
+        )
+
+        valid_hist, u2, i2, s2 = MCLSRDataset._create_sequences_from_file(os.path.join(data_dir, 'valid_history.txt'), max_seq_len)
+        valid_trg, u3, i3, _ = MCLSRDataset._create_sequences_from_file(os.path.join(data_dir, 'valid_target.txt'))
+        valid_user_ids = set(valid_hist.keys())
+        validation_dataset = [{'user.ids': [uid], 'history': valid_hist[uid], 'target': valid_trg[uid]} for uid in valid_user_ids if uid in valid_trg]
+
+        test_hist, u4, i4, s3 = MCLSRDataset._create_sequences_from_file(os.path.join(data_dir, 'test_history.txt'), max_seq_len)
+        test_trg, u5, i5, _ = MCLSRDataset._create_sequences_from_file(os.path.join(data_dir, 'test_target.txt'))
+        test_user_ids = set(test_hist.keys())
+        test_dataset = [{'user.ids': [uid], 'history': test_hist[uid], 'target': test_trg[uid]} for uid in test_user_ids if uid in test_trg]
+
+        num_users = max(u1, u2, u3, u4, u5)
+        num_items = max(i1, i2, i3, i4, i5)
+        max_len = max(s1, s2, s3)
+
+        train_sampler = TrainSampler.create_from_config(
+            {'type': 'next_item_prediction', 'negative_sampler_type': 'random'}, 
+            dataset=train_dataset, num_users=num_users, num_items=num_items
+        )
+
+        validation_sampler = EvalSampler.create_from_config(
+            {'type': 'mclsr'},
+            dataset=validation_dataset, num_users=num_users, num_items=num_items
+        )
+        test_sampler = EvalSampler.create_from_config(
+            {'type': 'mclsr'},
+            dataset=test_dataset, num_users=num_users, num_items=num_items
+        )
+
+        return cls(train_sampler, validation_sampler, test_sampler, num_users, num_items, max_len)
+
+    def get_samplers(self):
+        return (self._train_sampler, self._validation_sampler, self._test_sampler)
+    
+    @property
+    def num_users(self): return self._num_users
+    @property
+    def num_items(self): return self._num_items
+    @property
+    def meta(self):
+        return {'num_users': self.num_users, 'num_items': self.num_items, 'max_sequence_length': self._max_sequence_length}
