@@ -6,7 +6,15 @@
     "type": "sasrec_comparison",
     "path_to_data_dir": "./data",
     "name": "Clothing",
-    "max_sequence_length": 50
+    "max_sequence_length": 50,
+    "train_sampler": {
+      "type": "next_item_prediction",
+      "negative_sampler_type": "random",
+      "num_negatives_train": 0
+    },
+    "eval_sampler": {
+      "type": "mclsr"
+    }
   },
   "dataloader": {
     "train": {
