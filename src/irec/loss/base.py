@@ -617,31 +617,3 @@ class MCLSRLoss(TorchLoss, config_name='mclsr'):
             inputs[self._output_prefix] = loss.cpu().item()
 
         return loss
-
-class SASRecRealLoss(TorchLoss, config_name='sasrec_real'):
-
-    def __init__(
-            self,
-            positive_prefix,
-            negative_prefix,
-            output_prefix=None
-    ):
-        super().__init__()
-        self._positive_prefix = positive_prefix
-        self._negative_prefix = negative_prefix
-        self._output_prefix = output_prefix
-
-    def forward(self, inputs):
-        positive_scores = inputs[self._positive_prefix]  # (x)
-        negative_scores = inputs[self._negative_prefix]  # (x)
-        assert positive_scores.shape[0] == negative_scores.shape[0]
-
-        loss = torch.nn.functional.binary_cross_entropy_with_logits(
-            torch.cat([positive_scores, negative_scores], dim=0),
-            torch.cat([torch.ones_like(positive_scores), torch.zeros_like(negative_scores)])
-        ) # (1)
-
-        if self._output_prefix is not None:
-            inputs[self._output_prefix] = loss.cpu().item()
-
-        return loss
