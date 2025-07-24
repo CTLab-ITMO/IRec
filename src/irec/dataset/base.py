@@ -782,35 +782,34 @@ class MCLSRDataset(BaseDataset, config_name='mclsr'):
         self._max_sequence_length = max_sequence_length
 
     @staticmethod
-    def _create_sequences_from_file(filepath):
+    def _create_sequences_from_file(filepath, max_len=None):
         sequences = {}
-        max_user, max_item = 0, 0
-        if not os.path.exists(filepath):
-            return sequences, max_user, max_item
+        max_user, max_item, max_seq = 0, 0, 0
         
         with open(filepath, 'r') as f:
             for line in f:
                 parts = line.strip().split(' ')
                 user_id = int(parts[0])
                 item_ids = [int(i) for i in parts[1:]]
+                if max_len:
+                    item_ids = item_ids[-max_len:]
                 sequences[user_id] = item_ids
                 max_user = max(max_user, user_id)
                 if item_ids:
                     max_item = max(max_item, max(item_ids))
+                max_seq = max(max_seq, len(item_ids))
         return sequences, max_user, max_item
     
     @classmethod
     def _create_evaluation_sets(cls, data_dir, max_seq_len):
-        valid_hist, u2, i2 = cls._create_sequences_from_file(os.path.join(data_dir, 'valid_history.txt'))
+        valid_hist, u2, i2 = cls._create_sequences_from_file(os.path.join(data_dir, 'valid_history.txt'), max_seq_len)
         valid_trg, u3, i3 = cls._create_sequences_from_file(os.path.join(data_dir, 'valid_target.txt'))
-        if max_seq_len:
-            for uid in valid_hist: valid_hist[uid] = valid_hist[uid][-max_seq_len:]
+
         validation_dataset = [{'user.ids': [uid], 'history': valid_hist[uid], 'target': valid_trg[uid]} for uid in valid_hist if uid in valid_trg]
         
-        test_hist, u4, i4 = cls._create_sequences_from_file(os.path.join(data_dir, 'test_history.txt'))
+        test_hist, u4, i4 = cls._create_sequences_from_file(os.path.join(data_dir, 'test_history.txt'), max_seq_len)
         test_trg, u5, i5 = cls._create_sequences_from_file(os.path.join(data_dir, 'test_target.txt'))
-        if max_seq_len:
-            for uid in test_hist: test_hist[uid] = test_hist[uid][-max_seq_len:]
+
         test_dataset = [{'user.ids': [uid], 'history': test_hist[uid], 'target': test_trg[uid]} for uid in test_hist if uid in test_trg]
 
         return validation_dataset, test_dataset, max(u2, u3, u4, u5), max(i2, i3, i4, i5)
@@ -820,7 +819,8 @@ class MCLSRDataset(BaseDataset, config_name='mclsr'):
         data_dir = os.path.join(config['path_to_data_dir'], config['name'])
         max_seq_len = config.get('max_sequence_length')
 
-        train_dataset, u1, i1, _ = SequenceDataset._create_dataset(data_dir, 'train_mclsr', max_seq_len)
+        train_sequences, u1, i1 = cls._create_sequences_from_file(os.path.join(data_dir, 'train_mclsr.txt'), max_seq_len)
+        train_dataset = [{'user.ids': [uid], 'user.length': 1, 'item.ids': seq, 'item.length': len(seq)} for uid, seq in train_sequences.items()]
 
         validation_dataset, test_dataset, u_eval, i_eval = cls._create_evaluation_sets(data_dir, max_seq_len)
         num_users = max(u1, u_eval)
@@ -861,7 +861,7 @@ class SASRecDataset(BaseDataset, config_name='sasrec_comparison'):
         data_dir = os.path.join(config['path_to_data_dir'], config['name'])
         max_seq_len = config.get('max_sequence_length')
 
-        train_dataset, u1, i1, s1 = SequenceDataset._create_dataset(
+        train_dataset, u1, i1, _ = SequenceDataset._create_dataset(
             dir_path=data_dir,
             part='train_sasrec',
             max_sequence_length=max_seq_len
