@@ -66,7 +66,7 @@
     "losses": [
       {
         "type": "sampled_softmax",          
-        "queries_prefix": "combined_representation",0
+        "queries_prefix": "combined_representation",
         "positive_prefix": "label_representation",
         "negative_prefix": "negative_representation", 
         "output_prefix": "downstream_loss",
@@ -77,7 +77,7 @@
         "fst_embeddings_prefix": "sequential_representation",
         "snd_embeddings_prefix": "graph_representation",
         "output_prefix": "contrastive_interest_loss",
-        "weight": 0.5
+        "weight": 1.0
       },
       {
         "type": "fps",
