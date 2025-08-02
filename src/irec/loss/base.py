@@ -182,7 +182,7 @@ class FpsLoss(TorchLoss, config_name='fps'):
         self,
         fst_embeddings_prefix,
         snd_embeddings_prefix,
-        tau=1.0,
+        tau=0.5,
         normalize_embeddings=False,
         use_mean=True,
         output_prefix=None,
