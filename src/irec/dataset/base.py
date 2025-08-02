@@ -797,7 +797,6 @@ class MCLSRDataset(BaseDataset, config_name='mclsr'):
                 max_user = max(max_user, user_id)
                 if item_ids:
                     max_item = max(max_item, max(item_ids))
-                max_seq = max(max_seq, len(item_ids))
         return sequences, max_user, max_item
     
     @classmethod
@@ -822,13 +821,17 @@ class MCLSRDataset(BaseDataset, config_name='mclsr'):
         train_sequences, u1, i1 = cls._create_sequences_from_file(os.path.join(data_dir, 'train_mclsr.txt'), max_seq_len)
         train_dataset = [{'user.ids': [uid], 'user.length': 1, 'item.ids': seq, 'item.length': len(seq)} for uid, seq in train_sequences.items()]
 
+        user_to_all_seen_items = defaultdict(set)
+        for sample in train_dataset: user_to_all_seen_items[sample['user.ids'][0]].update(sample['item.ids'])
+        kwargs['user_to_all_seen_items'] = user_to_all_seen_items
+
         validation_dataset, test_dataset, u_eval, i_eval = cls._create_evaluation_sets(data_dir, max_seq_len)
         num_users = max(u1, u_eval)
         num_items = max(i1, i_eval)
         
-        train_sampler = TrainSampler.create_from_config(config['samplers'], dataset=train_dataset, num_users=num_users, num_items=num_items)
-        validation_sampler = EvalSampler.create_from_config(config['samplers'], dataset=validation_dataset, num_users=num_users, num_items=num_items)
-        test_sampler = EvalSampler.create_from_config(config['samplers'], dataset=test_dataset, num_users=num_users, num_items=num_items)
+        train_sampler = TrainSampler.create_from_config(config['samplers'], dataset=train_dataset, num_users=num_users, num_items=num_items, **kwargs)
+        validation_sampler = EvalSampler.create_from_config(config['samplers'], dataset=validation_dataset, num_users=num_users, num_items=num_items, **kwargs)
+        test_sampler = EvalSampler.create_from_config(config['samplers'], dataset=test_dataset, num_users=num_users, num_items=num_items, **kwargs)
 
         return cls(train_sampler, validation_sampler, test_sampler, num_users, num_items, max_seq_len)
 

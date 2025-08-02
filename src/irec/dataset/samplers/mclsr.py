@@ -1,22 +1,18 @@
 from irec.dataset.samplers.base import TrainSampler, EvalSampler
 
-import copy
-import numpy as np
 from collections import defaultdict
+import random
 
 
 class MCLSRTrainSampler(TrainSampler, config_name='mclsr'):
-    def __init__(self, dataset, num_users, num_items, num_negatives=100):
+    def __init__(self, dataset, num_users, num_items, user_to_all_seen_items, num_negatives=100, **kwargs):
         super().__init__()
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
         self._num_negatives = num_negatives
-        self._all_items = list(range(1, num_items + 1))
-        self._user_to_all_seen_items = defaultdict(set)
-        for sample in self._dataset:
-            user_id = sample['user.ids'][0]
-            self._user_to_all_seen_items[user_id].update(sample['item.ids'])
+        self._all_items_set = set(range(1, num_items + 1))
+        self._user_to_all_seen_items = user_to_all_seen_items
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -26,25 +22,26 @@ class MCLSRTrainSampler(TrainSampler, config_name='mclsr'):
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
             num_negatives=num_negatives,
+            user_to_all_seen_items=kwargs['user_to_all_seen_items'],
         )
 
+
     def __getitem__(self, index):
-        sample = copy.deepcopy(self._dataset[index])
+        sample = self._dataset[index]
 
         user_id = sample['user.ids'][0]
         item_sequence = sample['item.ids'][:-1]
         positive_item = sample['item.ids'][-1]
 
-        seen_items = self._user_to_all_seen_items[user_id]
+        user_seen = self._user_to_all_seen_items[user_id]
+
+        unseen_items = list(self._all_items_set - user_seen)
         
-        negatives = []
-        while len(negatives) < self._num_negatives:
-            candidates = np.random.choice(self._all_items, size=self._num_negatives * 2, replace=False) 
-            
-            unseen_candidates = [item for item in candidates if item not in seen_items]
-            negatives.extend(unseen_candidates)
-            
-        negatives = negatives[:self._num_negatives]
+        if len(unseen_items) >= self._num_negatives:
+            negatives = random.sample(unseen_items, self._num_negatives)
+        else:
+            negatives = random.choices(unseen_items, k=self._num_negatives)
+        
 
         return {
             'user.ids': [user_id],
