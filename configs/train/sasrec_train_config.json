@@ -1,12 +1,12 @@
 {
-  "experiment_name": "sasrec",
+  "experiment_name": "sasrec_clothing",
   "use_wandb": true,
-  "train_epochs_num": 100,
+  "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "sasrec_comparison",
     "path_to_data_dir": "./data",
     "name": "Clothing",
-    "max_sequence_length": 50,
+    "max_sequence_length": 20,
     "train_sampler": {
       "type": "next_item_prediction",
       "negative_sampler_type": "random",
@@ -19,7 +19,7 @@
   "dataloader": {
     "train": {
       "type": "torch",
-      "batch_size": 256,
+      "batch_size": 128,
       "batch_processor": {
         "type": "basic"
       },
@@ -28,7 +28,7 @@
     },
     "validation": {
       "type": "torch",
-      "batch_size": 256,
+      "batch_size": 128,
       "batch_processor": {
         "type": "basic"
       },
