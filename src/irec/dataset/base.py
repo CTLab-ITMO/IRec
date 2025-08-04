@@ -281,12 +281,14 @@ class GraphDataset(BaseDataset, config_name='graph'):
         use_train_data_only=True,
         use_user_graph=False,
         use_item_graph=False,
+        neighborhood_size=None
     ):
         self._dataset = dataset
         self._graph_dir_path = graph_dir_path
         self._use_train_data_only = use_train_data_only
         self._use_user_graph = use_user_graph
         self._use_item_graph = use_item_graph
+        self._neighborhood_size = neighborhood_size
 
         self._num_users = dataset.num_users
         self._num_items = dataset.num_items
@@ -427,6 +429,9 @@ class GraphDataset(BaseDataset, config_name='graph'):
                     ),
                     shape=(self._num_users + 2, self._num_users + 2),
                 )
+                print(self._neighborhood_size)
+                if self._neighborhood_size is not None:
+                    user2user_connections = self._filter_matrix_by_top_k(user2user_connections, self._neighborhood_size)
 
                 self._user_graph = self.get_sparse_graph_layer(
                     user2user_connections,
@@ -489,6 +494,10 @@ class GraphDataset(BaseDataset, config_name='graph'):
                     ),
                     shape=(self._num_items + 2, self._num_items + 2),
                 )
+
+                if self._neighborhood_size is not None:
+                    item2item_connections = self._filter_matrix_by_top_k(item2item_connections, self._neighborhood_size)
+
                 self._item_graph = self.get_sparse_graph_layer(
                     item2item_connections,
                     self._num_items + 2,
@@ -513,6 +522,7 @@ class GraphDataset(BaseDataset, config_name='graph'):
             graph_dir_path=config['graph_dir_path'],
             use_user_graph=config.get('use_user_graph', False),
             use_item_graph=config.get('use_item_graph', False),
+            neighborhood_size=config.get('neighborhood_size', None),
         )
 
     @staticmethod
@@ -564,6 +574,22 @@ class GraphDataset(BaseDataset, config_name='graph'):
         index = torch.stack([row, col])
         data = torch.FloatTensor(coo.data)
         return torch.sparse.FloatTensor(index, data, torch.Size(coo.shape))
+
+    @staticmethod
+    def _filter_matrix_by_top_k(matrix, k):
+        mat = matrix.tolil()
+
+        for i in tqdm(range(mat.shape[0]), desc=f"Filtering graph neighbors={k}"):
+            if len(mat.rows[i]) <= k:
+                continue
+            data = np.array(mat.data[i])
+            
+            top_k_indices = np.argpartition(data, -k)[-k:]
+            mat.data[i] = [mat.data[i][j] for j in top_k_indices]
+            mat.rows[i] = [mat.rows[i][j] for j in top_k_indices]
+
+        return mat.tocsr()
+                
 
     @property
     def num_users(self):
