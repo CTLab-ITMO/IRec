@@ -5,7 +5,7 @@ import random
 
 
 class MCLSRTrainSampler(TrainSampler, config_name='mclsr'):
-    def __init__(self, dataset, num_users, num_items, user_to_all_seen_items, num_negatives=100, **kwargs):
+    def __init__(self, dataset, num_users, num_items, user_to_all_seen_items, num_negatives, **kwargs):
         super().__init__()
         self._dataset = dataset
         self._num_users = num_users
@@ -16,7 +16,8 @@ class MCLSRTrainSampler(TrainSampler, config_name='mclsr'):
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        num_negatives = config.get('num_negatives_train', 100)
+        num_negatives = config['num_negatives_train']
+        print(num_negatives)
         return cls(
             dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
@@ -37,10 +38,7 @@ class MCLSRTrainSampler(TrainSampler, config_name='mclsr'):
 
         unseen_items = list(self._all_items_set - user_seen)
         
-        if len(unseen_items) >= self._num_negatives:
-            negatives = random.sample(unseen_items, self._num_negatives)
-        else:
-            negatives = random.choices(unseen_items, k=self._num_negatives)
+        negatives = random.sample(unseen_items, self._num_negatives)
         
 
         return {
