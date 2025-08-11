@@ -532,38 +532,31 @@ class GraphDataset(BaseDataset, config_name='graph'):
         snd_dim,
         biparite=False,
     ):
-        mat_dim_size = fst_dim + snd_dim if biparite else fst_dim
-
-        adj_mat = sp.dok_matrix((mat_dim_size, mat_dim_size), dtype=np.float32)
-        adj_mat = adj_mat.tolil()
-
-        R = sparse_matrix.tolil()  # list of lists (fst_dim, snd_dim)
-
-        if biparite:
-            adj_mat[:fst_dim, fst_dim:] = R  # (num_users, num_items)
-            adj_mat[fst_dim:, :fst_dim] = R.T  # (num_items, num_users)
+        if not biparite:
+            adj_mat = sparse_matrix.tocsr()
         else:
-            adj_mat = R
-
-        adj_mat = adj_mat.todok()
-        # adj_mat += sp.eye(adj_mat.shape[0])  # remove division by zero issue
-
-        edges_degree = np.array(adj_mat.sum(axis=1))  # D
-
+            R = sparse_matrix.tocsr()
+            
+            upper_right = R
+            lower_left = R.T
+            
+            upper_left = sp.csr_matrix((fst_dim, fst_dim))
+            lower_right = sp.csr_matrix((snd_dim, snd_dim))
+            
+            adj_mat = sp.bmat([
+                [upper_left, upper_right],
+                [lower_left, lower_right]
+            ])
+            assert adj_mat.shape == (fst_dim + snd_dim, fst_dim + snd_dim), (
+            f"Got shape {adj_mat.shape}, expected {(fst_dim+snd_dim, fst_dim+snd_dim)}"
+            )
+        
         rowsum = np.array(adj_mat.sum(1))
-        d_inv = np.power(rowsum, -1).flatten()
-        d_inv[np.isinf(d_inv)] = 0.0
+        d_inv = np.power(rowsum, -0.5).flatten()
+        d_inv[np.isinf(d_inv)] = 0.
         d_mat_inv = sp.diags(d_inv)
-
-        d_inv = np.power(edges_degree, -0.5).flatten()  # D^(-0.5)
-        d_inv[np.isinf(d_inv)] = (
-            0.0  # fix NaNs in case if row with zero connections
-        )
-        d_mat = sp.diags(d_inv)  # make it square matrix
-
-        # D^(-0.5) @ A @ D^(-0.5)
-        norm_adj = d_mat.dot(adj_mat).dot(d_mat)
-
+        
+        norm_adj = d_mat_inv.dot(adj_mat).dot(d_mat_inv)
         return norm_adj.tocsr()
 
     @staticmethod
@@ -579,7 +572,7 @@ class GraphDataset(BaseDataset, config_name='graph'):
     def _filter_matrix_by_top_k(matrix, k):
         mat = matrix.tolil()
 
-        for i in tqdm(range(mat.shape[0]), desc=f"Filtering graph neighbors={k}"):
+        for i in range(mat.shape[0]):
             if len(mat.rows[i]) <= k:
                 continue
             data = np.array(mat.data[i])
@@ -810,7 +803,7 @@ class MCLSRDataset(BaseDataset, config_name='mclsr'):
     @staticmethod
     def _create_sequences_from_file(filepath, max_len=None):
         sequences = {}
-        max_user, max_item, max_seq = 0, 0, 0
+        max_user, max_item = 0, 0
         
         with open(filepath, 'r') as f:
             for line in f:
