@@ -1,4 +1,6 @@
 from collections import defaultdict
+from dataclasses import dataclass
+from typing import List, Dict
 
 from tqdm import tqdm
 
@@ -16,6 +18,20 @@ import os
 import logging
 
 logger = logging.getLogger(__name__)
+
+@dataclass
+class DatasetPart:
+    samples: List[Dict]
+    max_user_id: int
+    max_item_id: int
+    max_sequence_len: int
+
+@dataclass
+class EvaluationSet:
+    validation: List[Dict]
+    test: List[Dict]
+    max_user_id: int
+    max_item_id: int
 
 
 class BaseDataset(metaclass=MetaParent):
@@ -47,57 +63,60 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
             config['name'],
         )
 
-        train_dataset, train_max_user_id, train_max_item_id, train_seq_len = (
-            cls._create_dataset(
-                dir_path=data_dir_path,
-                part='train',
-                max_sequence_length=config['max_sequence_length'],
-                use_cached=config.get('use_cached', False),
-            )
+        train_result = cls._create_dataset(
+            dir_path=data_dir_path,
+            part='train',
+            max_sequence_length=config['max_sequence_length'],
+            use_cached=config.get('use_cached', False),
         )
-        (
-            validation_dataset,
-            valid_max_user_id,
-            valid_max_item_id,
-            valid_seq_len,
-        ) = cls._create_dataset(
+
+        validation_result = cls._create_dataset(
             dir_path=data_dir_path,
             part='valid',
             max_sequence_length=config['max_sequence_length'],
             use_cached=config.get('use_cached', False),
         )
-        test_dataset, test_max_user_id, test_max_item_id, test_seq_len = (
-            cls._create_dataset(
-                dir_path=data_dir_path,
-                part='test',
-                max_sequence_length=config['max_sequence_length'],
-                use_cached=config.get('use_cached', False),
-            )
+
+        test_result = cls._create_dataset(
+            dir_path=data_dir_path,
+            part='test',
+            max_sequence_length=config['max_sequence_length'],
+            use_cached=config.get('use_cached', False),
         )
 
         max_user_id = max(
-            [train_max_user_id, valid_max_user_id, test_max_user_id],
+            train_result.max_user_id, 
+            validation_result.max_user_id, 
+            test_result.max_user_id
         )
         max_item_id = max(
-            [train_max_item_id, valid_max_item_id, test_max_item_id],
+            train_result.max_item_id, 
+            validation_result.max_item_id, 
+            test_result.max_item_id
         )
-        max_seq_len = max([train_seq_len, valid_seq_len, test_seq_len])
+        max_seq_len = max(
+            train_result.max_sequence_len, 
+            validation_result.max_sequence_len, 
+            test_result.max_sequence_len
+        )
 
-        logger.info('Train dataset size: {}'.format(len(train_dataset)))
-        logger.info('Test dataset size: {}'.format(len(test_dataset)))
+        logger.info('Train dataset size: {}'.format(len(train_result.samples)))
+        logger.info('Test dataset size: {}'.format(len(test_result.samples)))
         logger.info('Max user id: {}'.format(max_user_id))
         logger.info('Max item id: {}'.format(max_item_id))
         logger.info('Max sequence length: {}'.format(max_seq_len))
 
         train_interactions = sum(
-            list(map(lambda x: len(x), train_dataset)),
+            map(lambda x: len(x['item.ids']), 
+                train_result.samples)
         )  # whole user history as a sample
         valid_interactions = len(
-            validation_dataset,
+            validation_result.samples
         )  # each new interaction as a sample
         test_interactions = len(
-            test_dataset,
+            test_result.samples
         )  # each new interaction as a sample
+
         logger.info(
             '{} dataset sparsity: {}'.format(
                 config['name'],
@@ -108,20 +127,20 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
         )
 
         train_sampler = TrainSampler.create_from_config(
-            config['samplers'],
-            dataset=train_dataset,
-            num_users=max_user_id,
-            num_items=max_item_id,
+        config['samplers'],
+        dataset=train_result.samples,
+        num_users=max_user_id,
+        num_items=max_item_id,
         )
         validation_sampler = EvalSampler.create_from_config(
             config['samplers'],
-            dataset=validation_dataset,
+            dataset=validation_result.samples,
             num_users=max_user_id,
             num_items=max_item_id,
         )
         test_sampler = EvalSampler.create_from_config(
             config['samplers'],
-            dataset=test_dataset,
+            dataset=test_result.samples,
             num_users=max_user_id,
             num_items=max_item_id,
         )
@@ -212,7 +231,13 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
                     dataset_file,
                 )
 
-        return dataset, max_user_id, max_item_id, max_sequence_len
+        return DatasetPart(
+            samples=dataset,
+            max_user_id=max_user_id,
+            max_item_id=max_item_id,
+            max_sequence_len=max_sequence_len
+        )
+        
 
     @staticmethod
     def _create_sequences(data, max_sample_len):
@@ -281,12 +306,14 @@ class GraphDataset(BaseDataset, config_name='graph'):
         use_train_data_only=True,
         use_user_graph=False,
         use_item_graph=False,
+        neighborhood_size=None
     ):
         self._dataset = dataset
         self._graph_dir_path = graph_dir_path
         self._use_train_data_only = use_train_data_only
         self._use_user_graph = use_user_graph
         self._use_item_graph = use_item_graph
+        self._neighborhood_size = neighborhood_size
 
         self._num_users = dataset.num_users
         self._num_items = dataset.num_items
@@ -427,6 +454,9 @@ class GraphDataset(BaseDataset, config_name='graph'):
                     ),
                     shape=(self._num_users + 2, self._num_users + 2),
                 )
+                print(self._neighborhood_size)
+                if self._neighborhood_size is not None:
+                    user2user_connections = self._filter_matrix_by_top_k(user2user_connections, self._neighborhood_size)
 
                 self._user_graph = self.get_sparse_graph_layer(
                     user2user_connections,
@@ -489,6 +519,10 @@ class GraphDataset(BaseDataset, config_name='graph'):
                     ),
                     shape=(self._num_items + 2, self._num_items + 2),
                 )
+
+                if self._neighborhood_size is not None:
+                    item2item_connections = self._filter_matrix_by_top_k(item2item_connections, self._neighborhood_size)
+
                 self._item_graph = self.get_sparse_graph_layer(
                     item2item_connections,
                     self._num_items + 2,
@@ -513,6 +547,7 @@ class GraphDataset(BaseDataset, config_name='graph'):
             graph_dir_path=config['graph_dir_path'],
             use_user_graph=config.get('use_user_graph', False),
             use_item_graph=config.get('use_item_graph', False),
+            neighborhood_size=config.get('neighborhood_size', None),
         )
 
     @staticmethod
@@ -522,38 +557,31 @@ class GraphDataset(BaseDataset, config_name='graph'):
         snd_dim,
         biparite=False,
     ):
-        mat_dim_size = fst_dim + snd_dim if biparite else fst_dim
-
-        adj_mat = sp.dok_matrix((mat_dim_size, mat_dim_size), dtype=np.float32)
-        adj_mat = adj_mat.tolil()
-
-        R = sparse_matrix.tolil()  # list of lists (fst_dim, snd_dim)
-
-        if biparite:
-            adj_mat[:fst_dim, fst_dim:] = R  # (num_users, num_items)
-            adj_mat[fst_dim:, :fst_dim] = R.T  # (num_items, num_users)
+        if not biparite:
+            adj_mat = sparse_matrix.tocsr()
         else:
-            adj_mat = R
-
-        adj_mat = adj_mat.todok()
-        # adj_mat += sp.eye(adj_mat.shape[0])  # remove division by zero issue
-
-        edges_degree = np.array(adj_mat.sum(axis=1))  # D
-
+            R = sparse_matrix.tocsr()
+            
+            upper_right = R
+            lower_left = R.T
+            
+            upper_left = sp.csr_matrix((fst_dim, fst_dim))
+            lower_right = sp.csr_matrix((snd_dim, snd_dim))
+            
+            adj_mat = sp.bmat([
+                [upper_left, upper_right],
+                [lower_left, lower_right]
+            ])
+            assert adj_mat.shape == (fst_dim + snd_dim, fst_dim + snd_dim), (
+            f"Got shape {adj_mat.shape}, expected {(fst_dim+snd_dim, fst_dim+snd_dim)}"
+            )
+        
         rowsum = np.array(adj_mat.sum(1))
-        d_inv = np.power(rowsum, -1).flatten()
-        d_inv[np.isinf(d_inv)] = 0.0
+        d_inv = np.power(rowsum, -0.5).flatten()
+        d_inv[np.isinf(d_inv)] = 0.
         d_mat_inv = sp.diags(d_inv)
-
-        d_inv = np.power(edges_degree, -0.5).flatten()  # D^(-0.5)
-        d_inv[np.isinf(d_inv)] = (
-            0.0  # fix NaNs in case if row with zero connections
-        )
-        d_mat = sp.diags(d_inv)  # make it square matrix
-
-        # D^(-0.5) @ A @ D^(-0.5)
-        norm_adj = d_mat.dot(adj_mat).dot(d_mat)
-
+        
+        norm_adj = d_mat_inv.dot(adj_mat).dot(d_mat_inv)
         return norm_adj.tocsr()
 
     @staticmethod
@@ -564,6 +592,22 @@ class GraphDataset(BaseDataset, config_name='graph'):
         index = torch.stack([row, col])
         data = torch.FloatTensor(coo.data)
         return torch.sparse.FloatTensor(index, data, torch.Size(coo.shape))
+
+    @staticmethod
+    def _filter_matrix_by_top_k(matrix, k):
+        mat = matrix.tolil()
+
+        for i in range(mat.shape[0]):
+            if len(mat.rows[i]) <= k:
+                continue
+            data = np.array(mat.data[i])
+            
+            top_k_indices = np.argpartition(data, -k)[-k:]
+            mat.data[i] = [mat.data[i][j] for j in top_k_indices]
+            mat.rows[i] = [mat.rows[i][j] for j in top_k_indices]
+
+        return mat.tocsr()
+                
 
     @property
     def num_users(self):
@@ -769,4 +813,231 @@ class ScientificDataset(BaseDataset, config_name='scientific'):
             'num_users': self.num_users,
             'num_items': self.num_items,
             'max_sequence_length': self.max_sequence_length,
+        }
+
+class PreSplitDataReader:
+    def __init__(self, data_dir: str, max_seq_len: int = None):
+        self.data_dir = data_dir
+        self.max_seq_len = max_seq_len
+
+    def read_train_data(self, part_name) -> DatasetPart:
+        filepath = os.path.join(self.data_dir, part_name)
+        sequences, max_user, max_item = self._read_sequences_file(
+            filepath, self.max_seq_len
+        )
+        
+        samples = [
+            {
+                'user.ids': [uid],
+                'user.length': 1,
+                'item.ids': seq,
+                'item.length': len(seq)
+            }
+            for uid, seq in sequences.items()
+        ]
+        
+        max_len = self.max_seq_len if self.max_seq_len is not None else -1
+        
+        return DatasetPart(
+            samples=samples,
+            max_user_id=max_user,
+            max_item_id=max_item,
+            max_sequence_len=max_len
+        )
+
+    def read_evaluation_data(self) -> EvaluationSet:
+        valid_hist, u2, i2 = self._read_sequences_file(
+            os.path.join(self.data_dir, 'valid_history.txt'), self.max_seq_len
+        )
+        valid_trg, u3, i3 = self._read_sequences_file(
+            os.path.join(self.data_dir, 'valid_target.txt'), self.max_seq_len
+        )
+        validation_dataset = [
+            {'user.ids': [uid], 'history': valid_hist.get(uid, []), 'target': valid_trg.get(uid, [])}
+            for uid in valid_hist
+        ]
+        
+        test_hist, u4, i4 = self._read_sequences_file(
+            os.path.join(self.data_dir, 'test_history.txt'), self.max_seq_len
+        )
+        test_trg, u5, i5 = self._read_sequences_file(
+            os.path.join(self.data_dir, 'test_target.txt'), self.max_seq_len
+        )
+        test_dataset = [
+            {'user.ids': [uid], 'history': test_hist.get(uid, []), 'target': test_trg.get(uid, [])}
+            for uid in test_hist
+        ]
+
+        max_user = max(u2, u3, u4, u5)
+        max_item = max(i2, i3, i4, i5)
+        
+        return EvaluationSet(validation_dataset, test_dataset, max_user, max_item)
+
+    @staticmethod
+    def _read_sequences_file(filepath, max_len=None):
+        sequences = {}
+        max_user, max_item = 0, 0
+        with open(filepath, 'r') as f:
+            for line in f:
+                parts = line.strip().split(' ')
+                user_id = int(parts[0])
+                item_ids = [int(i) for i in parts[1:]]
+                if max_len:
+                    item_ids = item_ids[-max_len:]
+                sequences[user_id] = item_ids
+                max_user = max(max_user, user_id)
+                if item_ids:
+                    max_item = max(max_item, max(item_ids))
+        return sequences, max_user, max_item
+
+class MCLSRDataset(BaseDataset, config_name='mclsr'):
+    def __init__(self, train_sampler, validation_sampler, test_sampler, num_users, num_items, max_sequence_length):
+        self._train_sampler = train_sampler
+        self._validation_sampler = validation_sampler
+        self._test_sampler = test_sampler
+        self._num_users = num_users
+        self._num_items = num_items
+        self._max_sequence_length = max_sequence_length
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        reader = PreSplitDataReader(
+            data_dir=os.path.join(config['path_to_data_dir'], config['name']),
+            max_seq_len=config.get('max_sequence_length')
+        )
+        train_data = reader.read_train_data('train_mclsr.txt')
+        eval_data = reader.read_evaluation_data()
+        
+
+        num_users = max(train_data.max_user_id, eval_data.max_user_id)
+        num_items = max(train_data.max_item_id, eval_data.max_item_id)
+        
+
+        user_to_all_seen_items = defaultdict(set)
+        for sample in train_data.samples:
+            user_to_all_seen_items[sample['user.ids'][0]].update(sample['item.ids'])
+        kwargs['user_to_all_seen_items'] = user_to_all_seen_items
+
+
+        train_sampler = TrainSampler.create_from_config(
+            config['samplers'],
+            dataset=train_data.samples,
+            num_users=num_users,
+            num_items=num_items,
+            **kwargs
+        )
+        validation_sampler = EvalSampler.create_from_config(
+            config['samplers'],
+            dataset=eval_data.validation,
+            num_users=num_users,
+            num_items=num_items,
+            **kwargs
+        )
+        test_sampler = EvalSampler.create_from_config(
+            config['samplers'],
+            dataset=eval_data.test,
+            num_users=num_users,
+            num_items=num_items,
+            **kwargs
+        )
+
+        return cls(
+            train_sampler,
+            validation_sampler,
+            test_sampler,
+            num_users,
+            num_items,
+            config.get('max_sequence_length')
+        )
+
+    def get_samplers(self):
+        return (self._train_sampler, self._validation_sampler, self._test_sampler)
+    
+    @property
+    def num_users(self):
+        return self._num_users
+
+    @property
+    def num_items(self):
+        return self._num_items
+
+    @property
+    def meta(self):
+        return {'num_users': self.num_users, 'num_items': self.num_items, 'max_sequence_length': self._max_sequence_length}
+    
+class SASRecDataset(BaseDataset, config_name='sasrec_comparison'):
+    def __init__(self, train_sampler, validation_sampler, test_sampler, num_users, num_items, max_sequence_length):
+        self._train_sampler = train_sampler
+        self._validation_sampler = validation_sampler
+        self._test_sampler = test_sampler
+        self._num_users = num_users
+        self._num_items = num_items
+        self._max_sequence_length = max_sequence_length
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        data_dir = os.path.join(config['path_to_data_dir'], config['name'])
+        max_seq_len = config.get('max_sequence_length')
+
+        sequence_reader = PreSplitDataReader(
+            dir_path=data_dir,
+            max_sequence_length=max_seq_len
+        )
+        eval_reader = PreSplitDataReader(
+            data_dir=data_dir,
+            max_seq_len=max_seq_len
+        )
+
+        train_data = sequence_reader.read_train_data('train_sasrec.txt')
+        eval_data = eval_reader.read_evaluation_data()
+
+
+        num_users = max(train_data.max_user_id, eval_data.max_user_id)
+        num_items = max(train_data.max_item_id, eval_data.max_item_id)
+
+
+        train_sampler = TrainSampler.create_from_config(
+            config['train_sampler'],
+            dataset=train_data.samples, 
+            num_users=num_users, 
+            num_items=num_items
+        )
+        validation_sampler = EvalSampler.create_from_config(
+            config['eval_sampler'],
+            dataset=eval_data.validation, 
+            num_users=num_users, 
+            num_items=num_items
+        )
+        test_sampler = EvalSampler.create_from_config(
+            config['eval_sampler'],
+            dataset=eval_data.test, 
+            num_users=num_users, 
+            num_items=num_items
+        )
+
+        return cls(train_sampler,
+                   validation_sampler,
+                   test_sampler,
+                   num_users,
+                   num_items,
+                   max_seq_len
+        )
+
+    def get_samplers(self):
+        return (self._train_sampler,
+                self._validation_sampler, 
+                self._test_sampler
+        )
+    
+    @property
+    def num_users(self): return self._num_users
+
+    @property
+    def num_items(self): return self._num_items
+
+    @property
+    def meta(self):
+        return {'num_users': self.num_users,
+                'num_items': self.num_items,
+                'max_sequence_length': self._max_sequence_length
         }
