@@ -1,6 +1,4 @@
 from collections import defaultdict
-from dataclasses import dataclass
-from typing import List, Dict
 
 from tqdm import tqdm
 
@@ -18,20 +16,6 @@ import os
 import logging
 
 logger = logging.getLogger(__name__)
-
-@dataclass
-class DatasetPart:
-    samples: List[Dict]
-    max_user_id: int
-    max_item_id: int
-    max_sequence_len: int
-
-@dataclass
-class EvaluationSet:
-    validation: List[Dict]
-    test: List[Dict]
-    max_user_id: int
-    max_item_id: int
 
 
 class BaseDataset(metaclass=MetaParent):
@@ -63,60 +47,57 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
             config['name'],
         )
 
-        train_result = cls._create_dataset(
-            dir_path=data_dir_path,
-            part='train',
-            max_sequence_length=config['max_sequence_length'],
-            use_cached=config.get('use_cached', False),
+        train_dataset, train_max_user_id, train_max_item_id, train_seq_len = (
+            cls._create_dataset(
+                dir_path=data_dir_path,
+                part='train',
+                max_sequence_length=config['max_sequence_length'],
+                use_cached=config.get('use_cached', False),
+            )
         )
-
-        validation_result = cls._create_dataset(
+        (
+            validation_dataset,
+            valid_max_user_id,
+            valid_max_item_id,
+            valid_seq_len,
+        ) = cls._create_dataset(
             dir_path=data_dir_path,
             part='valid',
             max_sequence_length=config['max_sequence_length'],
             use_cached=config.get('use_cached', False),
         )
-
-        test_result = cls._create_dataset(
-            dir_path=data_dir_path,
-            part='test',
-            max_sequence_length=config['max_sequence_length'],
-            use_cached=config.get('use_cached', False),
+        test_dataset, test_max_user_id, test_max_item_id, test_seq_len = (
+            cls._create_dataset(
+                dir_path=data_dir_path,
+                part='test',
+                max_sequence_length=config['max_sequence_length'],
+                use_cached=config.get('use_cached', False),
+            )
         )
 
         max_user_id = max(
-            train_result.max_user_id, 
-            validation_result.max_user_id, 
-            test_result.max_user_id
+            [train_max_user_id, valid_max_user_id, test_max_user_id],
         )
         max_item_id = max(
-            train_result.max_item_id, 
-            validation_result.max_item_id, 
-            test_result.max_item_id
+            [train_max_item_id, valid_max_item_id, test_max_item_id],
         )
-        max_seq_len = max(
-            train_result.max_sequence_len, 
-            validation_result.max_sequence_len, 
-            test_result.max_sequence_len
-        )
+        max_seq_len = max([train_seq_len, valid_seq_len, test_seq_len])
 
-        logger.info('Train dataset size: {}'.format(len(train_result.samples)))
-        logger.info('Test dataset size: {}'.format(len(test_result.samples)))
+        logger.info('Train dataset size: {}'.format(len(train_dataset)))
+        logger.info('Test dataset size: {}'.format(len(test_dataset)))
         logger.info('Max user id: {}'.format(max_user_id))
         logger.info('Max item id: {}'.format(max_item_id))
         logger.info('Max sequence length: {}'.format(max_seq_len))
 
         train_interactions = sum(
-            map(lambda x: len(x['item.ids']), 
-                train_result.samples)
+            list(map(lambda x: len(x), train_dataset)),
         )  # whole user history as a sample
         valid_interactions = len(
-            validation_result.samples
+            validation_dataset,
         )  # each new interaction as a sample
         test_interactions = len(
-            test_result.samples
+            test_dataset,
         )  # each new interaction as a sample
-
         logger.info(
             '{} dataset sparsity: {}'.format(
                 config['name'],
@@ -127,20 +108,20 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
         )
 
         train_sampler = TrainSampler.create_from_config(
-        config['samplers'],
-        dataset=train_result.samples,
-        num_users=max_user_id,
-        num_items=max_item_id,
+            config['samplers'],
+            dataset=train_dataset,
+            num_users=max_user_id,
+            num_items=max_item_id,
         )
         validation_sampler = EvalSampler.create_from_config(
             config['samplers'],
-            dataset=validation_result.samples,
+            dataset=validation_dataset,
             num_users=max_user_id,
             num_items=max_item_id,
         )
         test_sampler = EvalSampler.create_from_config(
             config['samplers'],
-            dataset=test_result.samples,
+            dataset=test_dataset,
             num_users=max_user_id,
             num_items=max_item_id,
         )
@@ -231,13 +212,7 @@ class SequenceDataset(BaseDataset, config_name='sequence'):
                     dataset_file,
                 )
 
-        return DatasetPart(
-            samples=dataset,
-            max_user_id=max_user_id,
-            max_item_id=max_item_id,
-            max_sequence_len=max_sequence_len
-        )
-        
+        return dataset, max_user_id, max_item_id, max_sequence_len
 
     @staticmethod
     def _create_sequences(data, max_sample_len):
@@ -815,68 +790,21 @@ class ScientificDataset(BaseDataset, config_name='scientific'):
             'max_sequence_length': self.max_sequence_length,
         }
 
-class PreSplitDataReader:
-    def __init__(self, data_dir: str, max_seq_len: int = None):
-        self.data_dir = data_dir
-        self.max_seq_len = max_seq_len
 
-    def read_train_data(self, part_name) -> DatasetPart:
-        filepath = os.path.join(self.data_dir, part_name)
-        sequences, max_user, max_item = self._read_sequences_file(
-            filepath, self.max_seq_len
-        )
-        
-        samples = [
-            {
-                'user.ids': [uid],
-                'user.length': 1,
-                'item.ids': seq,
-                'item.length': len(seq)
-            }
-            for uid, seq in sequences.items()
-        ]
-        
-        max_len = self.max_seq_len if self.max_seq_len is not None else -1
-        
-        return DatasetPart(
-            samples=samples,
-            max_user_id=max_user,
-            max_item_id=max_item,
-            max_sequence_len=max_len
-        )
-
-    def read_evaluation_data(self) -> EvaluationSet:
-        valid_hist, u2, i2 = self._read_sequences_file(
-            os.path.join(self.data_dir, 'valid_history.txt'), self.max_seq_len
-        )
-        valid_trg, u3, i3 = self._read_sequences_file(
-            os.path.join(self.data_dir, 'valid_target.txt'), self.max_seq_len
-        )
-        validation_dataset = [
-            {'user.ids': [uid], 'history': valid_hist.get(uid, []), 'target': valid_trg.get(uid, [])}
-            for uid in valid_hist
-        ]
-        
-        test_hist, u4, i4 = self._read_sequences_file(
-            os.path.join(self.data_dir, 'test_history.txt'), self.max_seq_len
-        )
-        test_trg, u5, i5 = self._read_sequences_file(
-            os.path.join(self.data_dir, 'test_target.txt'), self.max_seq_len
-        )
-        test_dataset = [
-            {'user.ids': [uid], 'history': test_hist.get(uid, []), 'target': test_trg.get(uid, [])}
-            for uid in test_hist
-        ]
-
-        max_user = max(u2, u3, u4, u5)
-        max_item = max(i2, i3, i4, i5)
-        
-        return EvaluationSet(validation_dataset, test_dataset, max_user, max_item)
+class MCLSRDataset(BaseDataset, config_name='mclsr'):
+    def __init__(self, train_sampler, validation_sampler, test_sampler, num_users, num_items, max_sequence_length):
+        self._train_sampler = train_sampler
+        self._validation_sampler = validation_sampler
+        self._test_sampler = test_sampler
+        self._num_users = num_users
+        self._num_items = num_items
+        self._max_sequence_length = max_sequence_length
 
     @staticmethod
-    def _read_sequences_file(filepath, max_len=None):
+    def _create_sequences_from_file(filepath, max_len=None):
         sequences = {}
         max_user, max_item = 0, 0
+        
         with open(filepath, 'r') as f:
             for line in f:
                 parts = line.strip().split(' ')
@@ -889,66 +817,42 @@ class PreSplitDataReader:
                 if item_ids:
                     max_item = max(max_item, max(item_ids))
         return sequences, max_user, max_item
+    
+    @classmethod
+    def _create_evaluation_sets(cls, data_dir, max_seq_len):
+        valid_hist, u2, i2 = cls._create_sequences_from_file(os.path.join(data_dir, 'valid_history.txt'), max_seq_len)
+        valid_trg, u3, i3 = cls._create_sequences_from_file(os.path.join(data_dir, 'valid_target.txt'))
 
-class MCLSRDataset(BaseDataset, config_name='mclsr'):
-    def __init__(self, train_sampler, validation_sampler, test_sampler, num_users, num_items, max_sequence_length):
-        self._train_sampler = train_sampler
-        self._validation_sampler = validation_sampler
-        self._test_sampler = test_sampler
-        self._num_users = num_users
-        self._num_items = num_items
-        self._max_sequence_length = max_sequence_length
+        validation_dataset = [{'user.ids': [uid], 'history': valid_hist[uid], 'target': valid_trg[uid]} for uid in valid_hist if uid in valid_trg]
+        
+        test_hist, u4, i4 = cls._create_sequences_from_file(os.path.join(data_dir, 'test_history.txt'), max_seq_len)
+        test_trg, u5, i5 = cls._create_sequences_from_file(os.path.join(data_dir, 'test_target.txt'))
+
+        test_dataset = [{'user.ids': [uid], 'history': test_hist[uid], 'target': test_trg[uid]} for uid in test_hist if uid in test_trg]
+
+        return validation_dataset, test_dataset, max(u2, u3, u4, u5), max(i2, i3, i4, i5)
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        reader = PreSplitDataReader(
-            data_dir=os.path.join(config['path_to_data_dir'], config['name']),
-            max_seq_len=config.get('max_sequence_length')
-        )
-        train_data = reader.read_train_data('train_mclsr.txt')
-        eval_data = reader.read_evaluation_data()
-        
+        data_dir = os.path.join(config['path_to_data_dir'], config['name'])
+        max_seq_len = config.get('max_sequence_length')
 
-        num_users = max(train_data.max_user_id, eval_data.max_user_id)
-        num_items = max(train_data.max_item_id, eval_data.max_item_id)
-        
+        train_sequences, u1, i1 = cls._create_sequences_from_file(os.path.join(data_dir, 'train_mclsr.txt'), max_seq_len)
+        train_dataset = [{'user.ids': [uid], 'user.length': 1, 'item.ids': seq, 'item.length': len(seq)} for uid, seq in train_sequences.items()]
 
         user_to_all_seen_items = defaultdict(set)
-        for sample in train_data.samples:
-            user_to_all_seen_items[sample['user.ids'][0]].update(sample['item.ids'])
+        for sample in train_dataset: user_to_all_seen_items[sample['user.ids'][0]].update(sample['item.ids'])
         kwargs['user_to_all_seen_items'] = user_to_all_seen_items
 
+        validation_dataset, test_dataset, u_eval, i_eval = cls._create_evaluation_sets(data_dir, max_seq_len)
+        num_users = max(u1, u_eval)
+        num_items = max(i1, i_eval)
+        
+        train_sampler = TrainSampler.create_from_config(config['samplers'], dataset=train_dataset, num_users=num_users, num_items=num_items, **kwargs)
+        validation_sampler = EvalSampler.create_from_config(config['samplers'], dataset=validation_dataset, num_users=num_users, num_items=num_items, **kwargs)
+        test_sampler = EvalSampler.create_from_config(config['samplers'], dataset=test_dataset, num_users=num_users, num_items=num_items, **kwargs)
 
-        train_sampler = TrainSampler.create_from_config(
-            config['samplers'],
-            dataset=train_data.samples,
-            num_users=num_users,
-            num_items=num_items,
-            **kwargs
-        )
-        validation_sampler = EvalSampler.create_from_config(
-            config['samplers'],
-            dataset=eval_data.validation,
-            num_users=num_users,
-            num_items=num_items,
-            **kwargs
-        )
-        test_sampler = EvalSampler.create_from_config(
-            config['samplers'],
-            dataset=eval_data.test,
-            num_users=num_users,
-            num_items=num_items,
-            **kwargs
-        )
-
-        return cls(
-            train_sampler,
-            validation_sampler,
-            test_sampler,
-            num_users,
-            num_items,
-            config.get('max_sequence_length')
-        )
+        return cls(train_sampler, validation_sampler, test_sampler, num_users, num_items, max_seq_len)
 
     def get_samplers(self):
         return (self._train_sampler, self._validation_sampler, self._test_sampler)
@@ -979,65 +883,39 @@ class SASRecDataset(BaseDataset, config_name='sasrec_comparison'):
         data_dir = os.path.join(config['path_to_data_dir'], config['name'])
         max_seq_len = config.get('max_sequence_length')
 
-        sequence_reader = PreSplitDataReader(
+        train_dataset, u1, i1, _ = SequenceDataset._create_dataset(
             dir_path=data_dir,
+            part='train_sasrec',
             max_sequence_length=max_seq_len
         )
-        eval_reader = PreSplitDataReader(
-            data_dir=data_dir,
-            max_seq_len=max_seq_len
-        )
 
-        train_data = sequence_reader.read_train_data('train_sasrec.txt')
-        eval_data = eval_reader.read_evaluation_data()
+        validation_dataset, test_dataset, u_eval, i_eval = MCLSRDataset._create_evaluation_sets(data_dir, max_seq_len)
 
-
-        num_users = max(train_data.max_user_id, eval_data.max_user_id)
-        num_items = max(train_data.max_item_id, eval_data.max_item_id)
-
-
+        num_users = max(u1, u_eval)
+        num_items = max(i1, i_eval)
         train_sampler = TrainSampler.create_from_config(
             config['train_sampler'],
-            dataset=train_data.samples, 
-            num_users=num_users, 
-            num_items=num_items
+            dataset=train_dataset, num_users=num_users, num_items=num_items
         )
+
         validation_sampler = EvalSampler.create_from_config(
             config['eval_sampler'],
-            dataset=eval_data.validation, 
-            num_users=num_users, 
-            num_items=num_items
+            dataset=validation_dataset, num_users=num_users, num_items=num_items
         )
         test_sampler = EvalSampler.create_from_config(
             config['eval_sampler'],
-            dataset=eval_data.test, 
-            num_users=num_users, 
-            num_items=num_items
+            dataset=test_dataset, num_users=num_users, num_items=num_items
         )
 
-        return cls(train_sampler,
-                   validation_sampler,
-                   test_sampler,
-                   num_users,
-                   num_items,
-                   max_seq_len
-        )
+        return cls(train_sampler, validation_sampler, test_sampler, num_users, num_items, max_seq_len)
 
     def get_samplers(self):
-        return (self._train_sampler,
-                self._validation_sampler, 
-                self._test_sampler
-        )
+        return (self._train_sampler, self._validation_sampler, self._test_sampler)
     
     @property
     def num_users(self): return self._num_users
-
     @property
     def num_items(self): return self._num_items
-
     @property
     def meta(self):
-        return {'num_users': self.num_users,
-                'num_items': self.num_items,
-                'max_sequence_length': self._max_sequence_length
-        }
+        return {'num_users': self.num_users, 'num_items': self.num_items, 'max_sequence_length': self._max_sequence_length}

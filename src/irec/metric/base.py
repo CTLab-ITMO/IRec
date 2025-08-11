@@ -52,6 +52,7 @@ class NDCGMetric(BaseMetric, config_name='ndcg'):
         ].float()  # (batch_size, top_k_indices)
         labels = inputs['{}.ids'.format(labels_prefix)].float()  # (batch_size)
 
+        
         assert labels.shape[0] == predictions.shape[0]
 
         hits = torch.eq(
@@ -108,3 +109,64 @@ class CoverageMetric(StatefullMetric, config_name='coverage'):
 
     def reduce(self, values):
         return len(set(values)) / self._num_items
+
+class MCLSRNDCGMetric(BaseMetric, config_name='mclsr-ndcg'):
+    def __init__(self, k):
+        self._k = k
+
+    def __call__(self, inputs, pred_prefix, labels_prefix):
+        predictions = inputs[pred_prefix][:, :self._k] # (batch_size, k)
+        labels_flat = inputs[f'{labels_prefix}.ids']      # (total_labels,)
+        labels_lengths = inputs[f'{labels_prefix}.length'] # (batch_size,)
+
+        assert predictions.shape[0] == labels_lengths.shape[0]
+
+        dcg_scores = []
+        offset = 0
+        for i in range(predictions.shape[0]):
+            user_predictions = predictions[i]
+            num_user_labels = labels_lengths[i]
+            user_labels = labels_flat[offset : offset + num_user_labels]
+            offset += num_user_labels
+
+            hits_mask = torch.isin(user_predictions, user_labels) # (k,) -> True/False
+            
+            positions = torch.arange(2, self._k + 2, device=predictions.device)
+            weights = 1 / torch.log2(positions.float())
+            dcg = (hits_mask.float() * weights).sum()
+            
+            num_ideal_hits = min(self._k, num_user_labels)
+            idcg_weights = weights[:num_ideal_hits]
+            idcg = idcg_weights.sum()
+            
+            ndcg = dcg / idcg if idcg > 0 else torch.tensor(0.0)
+            dcg_scores.append(ndcg.cpu().item())
+            
+        return dcg_scores
+
+
+class MCLSRRecallMetric(BaseMetric, config_name='mclsr-recall'):
+    def __init__(self, k):
+        self._k = k
+
+    def __call__(self, inputs, pred_prefix, labels_prefix):
+        predictions = inputs[pred_prefix][:, :self._k] # (batch_size, k)
+        labels_flat = inputs[f'{labels_prefix}.ids']      # (total_labels,)
+        labels_lengths = inputs[f'{labels_prefix}.length'] # (batch_size,)
+
+        assert predictions.shape[0] == labels_lengths.shape[0]
+
+        recall_scores = []
+        offset = 0
+        for i in range(predictions.shape[0]):
+            user_predictions = predictions[i]
+            num_user_labels = labels_lengths[i]
+            user_labels = labels_flat[offset : offset + num_user_labels]
+            offset += num_user_labels
+            
+            hits = torch.isin(user_predictions, user_labels).sum().float()
+            
+            recall = hits / num_user_labels if num_user_labels > 0 else torch.tensor(0.0)
+            recall_scores.append(recall.cpu().item())
+        
+        return recall_scores

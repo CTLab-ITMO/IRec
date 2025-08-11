@@ -341,7 +341,7 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
             try:
                 from torch_scatter import scatter_mean
             except ImportError:
-                print("Warning: torch_scatter not found. Using a slower fallback function.")
+                # print("Warning: torch_scatter not found. Using a slower fallback function.")
                 def scatter_mean(src, index, dim=0, dim_size=None):
                     out_size = dim_size if dim_size is not None else index.max() + 1
                     out = torch.zeros((out_size, src.size(1)), dtype=src.dtype, device=src.device)
@@ -365,7 +365,7 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
             negative_ids = inputs['{}.ids'.format(self._negatives_prefix)] # (batch_size, num_negatives)
             negative_embeddings = self._item_embeddings(negative_ids) # (batch_size, num_negatives, embedding_dim)
 
-            import code; code.interact(local=locals())
+            # import code; code.interact(local=locals())
 
             return {
                 # L_P (formula 14)

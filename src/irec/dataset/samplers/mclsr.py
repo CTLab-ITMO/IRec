@@ -1,46 +1,48 @@
 from irec.dataset.samplers.base import TrainSampler, EvalSampler
 
-import copy
-import numpy as np
+from collections import defaultdict
+import random
 
 
 class MCLSRTrainSampler(TrainSampler, config_name='mclsr'):
-    def __init__(self, dataset, num_users, num_items, num_negatives=100):
+    def __init__(self, dataset, num_users, num_items, user_to_all_seen_items, num_negatives, **kwargs):
         super().__init__()
         self._dataset = dataset
         self._num_users = num_users
         self._num_items = num_items
         self._num_negatives = num_negatives
-        self._all_items = np.arange(1, num_items + 1)
+        self._all_items_set = set(range(1, num_items + 1))
+        self._user_to_all_seen_items = user_to_all_seen_items
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
-        num_negatives = config.get('num_negatives_train', 100)
+        num_negatives = config['num_negatives_train']
+        print(num_negatives)
         return cls(
             dataset=kwargs['dataset'],
             num_users=kwargs['num_users'],
             num_items=kwargs['num_items'],
             num_negatives=num_negatives,
+            user_to_all_seen_items=kwargs['user_to_all_seen_items'],
         )
 
-    def __getitem__(self, index):
-        sample = copy.deepcopy(self._dataset[index])
 
+    def __getitem__(self, index):
+        sample = self._dataset[index]
+
+        user_id = sample['user.ids'][0]
         item_sequence = sample['item.ids'][:-1]
         positive_item = sample['item.ids'][-1]
 
-        seen_items = set(item_sequence)
-        seen_items.add(positive_item)
+        user_seen = self._user_to_all_seen_items[user_id]
+
+        unseen_items = list(self._all_items_set - user_seen)
         
-        negatives = []
-        while len(negatives) < self._num_negatives:
-            random_item_id = np.random.choice(self._all_items) 
-            
-            if random_item_id not in seen_items:
-                negatives.append(random_item_id)
+        negatives = random.sample(unseen_items, self._num_negatives)
+        
 
         return {
-            'user.ids': sample['user.ids'],
+            'user.ids': [user_id],
             'user.length': sample['user.length'],
             'item.ids': item_sequence,
             'item.length': len(item_sequence),

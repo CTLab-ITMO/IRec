@@ -15,7 +15,6 @@ from .random import RandomModel
 from .sasrec import SasRecModel, SasRecInBatchModel
 from .sasrec_ce import SasRecCeModel
 from .s3rec import S3RecModel
-from .sasrec_real import SasRecRealModel
 
 __all__ = [
     'BaseModel',
