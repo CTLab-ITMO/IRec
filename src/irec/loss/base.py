@@ -182,7 +182,7 @@ class FpsLoss(TorchLoss, config_name='fps'):
         self,
         fst_embeddings_prefix,
         snd_embeddings_prefix,
-        tau=0.5,
+        tau,
         normalize_embeddings=False,
         use_mean=True,
         output_prefix=None,
@@ -196,6 +196,18 @@ class FpsLoss(TorchLoss, config_name='fps'):
         )
         self._normalize_embeddings = normalize_embeddings
         self._output_prefix = output_prefix
+        print(self._tau)
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        return cls(
+            fst_embeddings_prefix=config['fst_embeddings_prefix'],
+            snd_embeddings_prefix=config['snd_embeddings_prefix'],
+            tau=config.get('temperature', 1.0), 
+            normalize_embeddings=config.get('normalize_embeddings', False),
+            use_mean=config.get('use_mean', True),
+            output_prefix=config.get('output_prefix')
+        )
 
     def forward(self, inputs):
         fst_embeddings = inputs[
