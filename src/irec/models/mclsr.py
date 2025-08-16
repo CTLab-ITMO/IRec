@@ -188,6 +188,7 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
 
         all_embeddings = [embeddings]
         for _ in range(self._num_graph_layers):
+            # import code; code.interact(local=locals())
             new_embeddings = torch.sparse.mm(graph_dropped, all_embeddings[-1])
             all_embeddings.append(new_embeddings)
 
@@ -427,7 +428,7 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
 
             values, indices = torch.topk(
                 candidate_scores,
-                k=20,
+                k=50,
                 dim=-1,
                 largest=True,
             )  # (batch_size, 100), (batch_size, 100)

@@ -170,3 +170,33 @@ class MCLSRRecallMetric(BaseMetric, config_name='mclsr-recall'):
             recall_scores.append(recall.cpu().item())
         
         return recall_scores
+
+class MCLSRHitRateMetric(BaseMetric, config_name='mclsr-hit'):
+    def __init__(self, k):
+        self._k = k
+
+    def __call__(self, inputs, pred_prefix, labels_prefix):
+        predictions = inputs[pred_prefix][:, :self._k] # (batch_size, k)
+        labels_flat = inputs[f'{labels_prefix}.ids']      # (total_labels,)
+        labels_lengths = inputs[f'{labels_prefix}.length'] # (batch_size,)
+
+        assert predictions.shape[0] == labels_lengths.shape[0]
+
+        hit_scores = []
+        offset = 0
+        for i in range(predictions.shape[0]):
+            user_predictions = predictions[i]
+            num_user_labels = labels_lengths[i]
+
+            if num_user_labels == 0:
+                hit_scores.append(0.0)
+                continue
+
+            user_labels = labels_flat[offset : offset + num_user_labels]
+            offset += num_user_labels
+            
+            is_hit = torch.isin(user_predictions, user_labels).any()
+            
+            hit_scores.append(float(is_hit))
+        
+        return hit_scores

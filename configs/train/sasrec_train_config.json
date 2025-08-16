@@ -1,11 +1,11 @@
 {
-  "experiment_name": "sasrec_clothing",
+  "experiment_name": "sasrec_Real_Toys_hit",
   "use_wandb": true,
   "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "sasrec_comparison",
     "path_to_data_dir": "./data",
-    "name": "Clothing",
+    "name": "Real_Toys",
     "max_sequence_length": 20,
     "train_sampler": {
       "type": "next_item_prediction",
@@ -96,6 +96,10 @@
             "type": "mclsr-ndcg",
             "k": 20
           },
+          "ndcg@50": {
+            "type": "mclsr-ndcg",
+            "k": 50
+          },
           "recall@5": {
             "type": "mclsr-recall",
             "k": 5
@@ -107,6 +111,18 @@
           "recall@20": {
             "type": "mclsr-recall",
             "k": 20
+          },
+          "recall@50": {
+            "type": "mclsr-recall",
+            "k": 50
+          },
+          "hit@20": {
+            "type": "mclsr-hit",
+            "k": 20
+          },
+          "hit@50": {
+            "type": "mclsr-hit",
+            "k": 50
           }
         }
       }, 
@@ -128,6 +144,10 @@
             "type": "mclsr-ndcg",
             "k": 20
           },
+          "ndcg@50": {
+            "type": "mclsr-ndcg",
+            "k": 50
+          },
           "recall@5": {
             "type": "mclsr-recall",
             "k": 5
@@ -139,6 +159,18 @@
           "recall@20": {
             "type": "mclsr-recall",
             "k": 20
+          },
+          "recall@50": {
+            "type": "mclsr-recall",
+            "k": 50
+          },
+          "hit@20": {
+            "type": "mclsr-hit",
+            "k": 20
+          },
+          "hit@50": {
+            "type": "mclsr-hit",
+            "k": 50
           }
         }
       }

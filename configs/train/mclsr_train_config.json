@@ -1,5 +1,5 @@
 {
-  "experiment_name": "mclsr_clothing_neighboors",
+  "experiment_name": "mclsr_Real_Toys_hit",
   "use_wandb": true,
   "best_metric": "validation/ndcg@20",
   "dataset": {
@@ -7,11 +7,11 @@
     "use_user_graph": true,
     "use_item_graph": true,
     "neighborhood_size": 50,
-    "graph_dir_path": "./data/Clothing",
+    "graph_dir_path": "./data/Real_Toys",
     "dataset": {
       "type": "mclsr",
       "path_to_data_dir": "./data",
-      "name": "Clothing",
+      "name": "Real_Toys",
       "max_sequence_length": 20,
       "samplers": {
         "num_negatives_val": 1280,
@@ -26,7 +26,7 @@
       "type": "torch",
       "batch_size": 128,
       "batch_processor": {
-        "type": "basic"
+        "type": "basic" 
       },
       "drop_last": true,
       "shuffle": true
@@ -143,6 +143,10 @@
             "type": "mclsr-ndcg",
             "k": 20
           },
+          "ndcg@50": {
+            "type": "mclsr-ndcg",
+            "k": 50
+          },
           "recall@5": {
             "type": "mclsr-recall",
             "k": 5
@@ -154,6 +158,18 @@
           "recall@20": {
             "type": "mclsr-recall",
             "k": 20
+          },
+          "recall@50": {
+            "type": "mclsr-recall",
+            "k": 50
+          },
+          "hit@20": {
+            "type": "mclsr-hit",
+            "k": 20
+          },
+          "hit@50": {
+            "type": "mclsr-hit",
+            "k": 50
           }
         }
       },
@@ -175,6 +191,10 @@
             "type": "mclsr-ndcg",
             "k": 20
           },
+          "ndcg@50": {
+            "type": "mclsr-ndcg",
+            "k": 50
+          },
           "recall@5": {
             "type": "mclsr-recall",
             "k": 5
@@ -186,6 +206,18 @@
           "recall@20": {
             "type": "mclsr-recall",
             "k": 20
+          },
+          "recall@50": {
+            "type": "mclsr-recall",
+            "k": 50
+          },
+          "hit@20": {
+            "type": "mclsr-hit",
+            "k": 20
+          },
+          "hit@50": {
+            "type": "mclsr-hit",
+            "k": 50
           }
         }
       }

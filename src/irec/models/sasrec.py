@@ -116,7 +116,7 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
 
             _, indices = torch.topk(
                 candidate_scores,
-                k=20, dim=-1, largest=True
+                k=50, dim=-1, largest=True
             )  # (batch_size, 20)
 
             return indices
@@ -215,7 +215,7 @@ class SasRecInBatchModel(SasRecModel, config_name='sasrec_in_batch'):
 
             _, indices = torch.topk(
                 candidate_scores,
-                k=20, dim=-1, largest=True
+                k=50, dim=-1, largest=True
             )  # (batch_size, 20)
 
             return indices
