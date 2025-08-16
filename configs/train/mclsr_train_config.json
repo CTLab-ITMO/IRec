@@ -78,21 +78,24 @@
         "fst_embeddings_prefix": "sequential_representation",
         "snd_embeddings_prefix": "graph_representation",
         "output_prefix": "contrastive_interest_loss",
-        "weight": 1.0
+        "weight": 1.0,
+        "temperature": 0.5
       },
       {
         "type": "fps",
         "fst_embeddings_prefix": "user_graph_user_embeddings",
         "snd_embeddings_prefix": "common_graph_user_embeddings",
         "output_prefix": "contrastive_user_feature_loss",
-        "weight": 0.05
+        "weight": 0.05,
+        "temperature": 0.5
       },
       {
         "type": "fps",
         "fst_embeddings_prefix": "item_graph_item_embeddings",
         "snd_embeddings_prefix": "common_graph_item_embeddings",
         "output_prefix": "contrastive_item_feature_loss",
-        "weight": 0.05
+        "weight": 0.05,
+        "temperature": 0.5
       }
     ],
     "output_prefix": "loss"
