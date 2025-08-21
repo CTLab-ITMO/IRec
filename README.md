@@ -12,7 +12,7 @@
       <img src="https://img.shields.io/badge/code_style-ruff-blue?logo=python" alt="Code style">
    </a>
    <a>
-      <img src="https://img.shields.io/badge/license-Apache 2.0-blue" alt="License">
+      <img src="https://img.shields.io/badge/license-Apache 2.0-blue?logo=apache" alt="License">
    </a>
 </p>
 
