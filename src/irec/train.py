@@ -102,12 +102,18 @@ def main():
             sync_tensorboard=True,
         )
 
-    irec.utils.tensorboards.GLOBAL_TENSORBOARD_WRITER = (
-        irec.utils.tensorboards.TensorboardWriter(config['experiment_name'])
-    )
+    tensorboard_writer = irec.utils.tensorboards.TensorboardWriter(config['experiment_name'])
+    irec.utils.tensorboards.GLOBAL_TENSORBOARD_WRITER = tensorboard_writer
 
+    log_dir = tensorboard_writer.log_dir
+    config_save_path = os.path.join(log_dir, 'config.json')
+    with open(config_save_path, 'w') as f:
+        json.dump(config, f, indent=2)
+    
     logger.debug('Training config: \n{}'.format(json.dumps(config, indent=2)))
     logger.debug('Current DEVICE: {}'.format(DEVICE))
+    logger.info(f"Experiment config saved to: {config_save_path}")
+
 
     dataset = BaseDataset.create_from_config(config['dataset'])
 
