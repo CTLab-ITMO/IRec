@@ -1,4 +1,22 @@
-# IRec
+<p align="center">
+   <a>
+      <img src="./assets/irec_logo.png" alt="cool irec logo" width="40%" height="40%">
+   </a>
+</p>
+
+<p align="center">
+   <a>
+      <img src="https://img.shields.io/badge/python-3.12-blue?logo=python" alt="Python version">
+   </a>
+   <a href="https://github.com/astral-sh/ruff">
+      <img src="https://img.shields.io/badge/code_style-ruff-blue?logo=python" alt="Code style">
+   </a>
+   <a>
+      <img src="https://img.shields.io/badge/license-Apache 2.0-blue" alt="License">
+   </a>
+</p>
+
+**IRec** is a config-driven PyTorch framework for reproducible research in sequential and graph-based recommendation.
 
 ## Installation
 
@@ -43,11 +61,13 @@
    ```
 
 ## Preparing datasets
-Datasets used for experiments:
-- Movielens 1M (https://grouplens.org/datasets/movielens):
-- Amazon (https://nijianmo.github.io/amazon/index.html):
-  - All_Beauty, Clothing_Shoes_and_Jewelry, Sports_and_Outdoors
- To initiate datasets preparation process, one needs to run notebooks from the [notebooks](./notebooks) arhchive.
+All pre-processed datasets used in our experiments are available for download from our cloud storage. This is the fastest way to get started.
+
+- **link**
+
+After downloading, extract the archives into the [data](./data) directory.
+
+Alternatively, you can process the raw data from scratch using the Jupyter notebooks provided in the [notebooks](./notebooks) directory. The notebooks will generate the required .txt data splits.
 
 ## Model training
 To train a model, simply run the following from the root directory:
