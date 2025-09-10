@@ -17,3 +17,4 @@ from .sasrec_ce import SasRecCeModel
 from .s3rec import S3RecModel
 from .tiger import TigerModel
 from .tiger_t5 import TigerModelT5
+from .tiger_gpt import GenerativeRetrieval

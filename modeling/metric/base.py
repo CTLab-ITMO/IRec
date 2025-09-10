@@ -142,20 +142,24 @@ class CoverageMetric(StatefullMetric, config_name='coverage'):
 
 class CoverageSemanticMetric(StatefullMetric, config_name='coverage_semantic'):
 
-    def __init__(self, k, num_items):
+    def __init__(self, k, codebook_size, num_codebooks, num_items):
         self._k = k
+        self._codebook_size = codebook_size
+        self._num_codebooks = num_codebooks
         self._num_items = num_items
     
     @classmethod
     def create_from_config(cls, config, **kwargs):
         return cls(
             k=config['k'],
+            codebook_size=config['codebook_size'],
+            num_codebooks=config['num_codebooks'],
             num_items=kwargs['num_items']
         )
 
     def __call__(self, inputs, pred_prefix, labels_prefix):
         predictions = inputs[pred_prefix].long()
-        predictions = predictions[:, :self._k, :].sum(dim=-1).long()
+        predictions = (predictions[:, :self._k, :] + torch.pow(self._codebook_size, torch.arange(self._num_codebooks, device=predictions.device))).sum(dim=-1)
         return predictions.view(-1).long().cpu().detach().tolist()  # (batch_size * k)
     
     def reduce(self, values):

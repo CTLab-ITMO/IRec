@@ -112,7 +112,7 @@ class SasRecModel(SequentialTorchModel, config_name='sasrec'):
                 'bd,nd->bn',
                 last_embeddings,
                 self._item_embeddings.weight
-            )  # (batch_size, num_items + 2)
+            )  # (batch_size, num_items + 1)
 
             _, indices = torch.topk(
                 candidate_scores,

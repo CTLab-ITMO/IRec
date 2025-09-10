@@ -1,33 +1,36 @@
 {
-  "experiment_name": "sasrec_beauty_letter_all_negatives",
+  "experiment_name": "sasrec_beauty_letter",
   "best_metric": "validation/ndcg@20",
   "dataset": {
     "type": "letter",
     "path_to_data_dir": "../data",
-    "name": "Beauty_letter",
-    "max_sequence_length": 50,
+    "name": "Beauty",
+    "max_sequence_length": 20,
     "samplers": {
       "type": "next_item_prediction",
-      "negative_sampler_type": "random",
-      "num_negatives_train": 0
+      "negative_sampler_type": "random"
     },
-    "letter_inter_json": "../data/Beauty_letter/inter.json"
+    "letter_inter_json": "../data/Beauty/inter.json"
   },
   "dataloader": {
     "train": {
       "type": "torch",
       "batch_size": 256,
       "batch_processor": {
-        "type": "basic"
+        "type": "letter",
+        "letter_index_json": "../data/Beauty/index.json",
+        "semantic_length": 4
       },
       "drop_last": true,
       "shuffle": true
     },
     "validation": {
       "type": "torch",
-      "batch_size": 256,
+      "batch_size": 512,
       "batch_processor": {
-        "type": "basic"
+        "type": "letter",
+        "letter_index_json": "../data/Beauty/index.json",
+        "semantic_length": 4
       },
       "drop_last": false,
       "shuffle": false
@@ -43,7 +46,7 @@
     "num_layers": 2,
     "dim_feedforward": 256,
     "dropout": 0.3,
-    "activation": "gelu",
+    "activation": "relu",
     "layer_norm_eps": 1e-9,
     "initializer_range": 0.02
   },
@@ -52,8 +55,7 @@
     "optimizer": {
       "type": "adam",
       "lr": 0.001
-    },
-    "clip_grad_threshold": 1.0
+    }
   },
   "loss": {
     "type": "composite",
