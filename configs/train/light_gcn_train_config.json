@@ -2,10 +2,10 @@
   "experiment_name": "light_gcn_beauty_test",
   "dataset": {
     "type": "graph",
-    "graph_dir_path": "../data/Beauty",
+    "graph_dir_path": "./data/Beauty",
     "dataset": {
       "type": "scientific",
-      "path_to_data_dir": "../data",
+      "path_to_data_dir": "./data",
       "name": "Beauty",
       "max_sequence_length": 50,
       "samplers": {

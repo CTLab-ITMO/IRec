@@ -3,3 +3,10 @@ __pycache__
 data/*
 tensorboard_logs/*
 checkpoints/*
+*.egg-info
+.DS_Store
+.venv
+.ruff_cache
+.mypy_cache
+.vscode
+wandb/*

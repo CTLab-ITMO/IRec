@@ -4,7 +4,7 @@
   "dataset": {
     "type": "sequence",
     "name": "Beauty",
-    "path_to_data_dir": "../data",
+    "path_to_data_dir": "./data",
     "max_sequence_length": 200,
     "samplers": {
       "num_negatives_train": 100,

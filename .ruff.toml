@@ -1,0 +1,15 @@
+line-length = 79
+
+[lint]
+select = [
+    "F401",     # unused-import
+    "F406",     # undefined-local-with-nested-import-star-usage
+    "COM812",   # missing-trailing-comma
+    "DTZ003",   # call-datetime-utcnow
+    "INP001",   # implicit-namespace-package
+    "PIE794",   # duplicate-class-field-definition
+    "T201",     # print
+]
+
+[format]
+quote-style = "single"

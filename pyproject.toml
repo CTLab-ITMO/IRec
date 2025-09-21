@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=64.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "irec"
+description = "Graph Sequentional recomendation system framework"
+version = "1.0"
+requires-python = ">=3.12"
+
+dependencies = [
+    "numpy==1.26.*",
+    "torch==2.4.*",
+    "tqdm==4.66.*",
+    "scipy==1.14.*",
+    "pandas==2.2.*",
+    "polars==1.27.*",
+    "matplotlib==3.9.*",
+    "tensorboard==2.19.*",
+    "wandb==0.19.*",
+    "jupyterlab==4.4.*",
+    "ipykernel==6.29.*",
+    "notebook==7.4.*",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy==1.11.*",
+    "ruff==0.11.*",
+    "types-tqdm==4.67.*",
+    "scipy-stubs==1.15.*",
+]
+
+[project.scripts]
+train="irec.train:main"

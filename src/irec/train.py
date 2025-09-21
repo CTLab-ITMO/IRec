@@ -1,0 +1,200 @@
+import irec.utils
+from irec.utils import (
+    parse_args,
+    create_logger,
+    DEVICE,
+    fix_random_seed,
+    ensure_checkpoints_dir,
+)
+
+from irec.callbacks import BaseCallback
+from irec.dataset import BaseDataset
+from irec.dataloader import BaseDataloader
+from irec.loss import BaseLoss
+from irec.models import BaseModel
+from irec.optimizer import BaseOptimizer
+
+import copy
+import json
+import os
+import torch
+import wandb
+
+logger = create_logger(name=__name__)
+seed_val = 42
+
+
+def train(
+    dataloader,
+    model,
+    optimizer,
+    loss_function,
+    callback,
+    epoch_cnt=None,
+    step_cnt=None,
+    best_metric=None,
+):
+    step_num = 0
+    epoch_num = 0
+    current_metric = 0
+
+    epochs_threshold = 40
+
+    best_epoch = 0
+    best_checkpoint = None
+
+    logger.debug('Start training...')
+
+    while (epoch_cnt is None or epoch_num < epoch_cnt) and (
+        step_cnt is None or step_num < step_cnt
+    ):
+        if best_epoch + epochs_threshold < epoch_num:
+            logger.debug(
+                'There is no progress during {} epochs. Finish training'.format(
+                    epochs_threshold,
+                ),
+            )
+            break
+
+        logger.debug(f'Start epoch {epoch_num}')
+        for step, batch in enumerate(dataloader):
+            batch_ = copy.deepcopy(batch)
+
+            model.train()
+
+            for key, values in batch_.items():
+                batch_[key] = batch_[key].to(DEVICE)
+
+            batch_.update(model(batch_))
+            loss = loss_function(batch_)
+
+            optimizer.step(loss)
+            callback(batch_, step_num)
+            step_num += 1
+
+            if best_metric is None:
+                # Take the last model
+                best_checkpoint = copy.deepcopy(model.state_dict())
+                best_epoch = epoch_num
+            elif (
+                best_checkpoint is None
+                or best_metric in batch_
+                and current_metric <= batch_[best_metric]
+            ):
+                # If it is the first checkpoint, or it is the best checkpoint
+                current_metric = batch_[best_metric]
+                best_checkpoint = copy.deepcopy(model.state_dict())
+                best_epoch = epoch_num
+
+        epoch_num += 1
+    logger.debug('Training procedure has been finished!')
+    return best_checkpoint
+
+
+def main():
+    fix_random_seed(seed_val)
+    config = parse_args()
+
+    if config.get('use_wandb', False):
+        wandb.init(
+            project='irec',
+            name=config['experiment_name'],
+            sync_tensorboard=True,
+        )
+
+    tensorboard_writer = irec.utils.tensorboards.TensorboardWriter(config['experiment_name'])
+    irec.utils.tensorboards.GLOBAL_TENSORBOARD_WRITER = tensorboard_writer
+
+    log_dir = tensorboard_writer.log_dir
+    config_save_path = os.path.join(log_dir, 'config.json')
+    with open(config_save_path, 'w') as f:
+        json.dump(config, f, indent=2)
+    
+    logger.debug('Training config: \n{}'.format(json.dumps(config, indent=2)))
+    logger.debug('Current DEVICE: {}'.format(DEVICE))
+    logger.info(f"Experiment config saved to: {config_save_path}")
+
+
+    dataset = BaseDataset.create_from_config(config['dataset'])
+
+    train_sampler, validation_sampler, test_sampler = dataset.get_samplers()
+
+    train_dataloader = BaseDataloader.create_from_config(
+        config['dataloader']['train'],
+        dataset=train_sampler,
+        **dataset.meta,
+    )
+
+    validation_dataloader = BaseDataloader.create_from_config(
+        config['dataloader']['validation'],
+        dataset=validation_sampler,
+        **dataset.meta,
+    )
+
+    eval_dataloader = BaseDataloader.create_from_config(
+        config['dataloader']['validation'],
+        dataset=test_sampler,
+        **dataset.meta,
+    )
+
+    model = BaseModel.create_from_config(config['model'], **dataset.meta).to(
+        DEVICE,
+    )
+    if 'checkpoint' in config:
+        ensure_checkpoints_dir()
+        checkpoint_path = os.path.join(
+            './checkpoints',
+            f'{config["checkpoint"]}.pth',
+        )
+        logger.debug('Loading checkpoint from {}'.format(checkpoint_path))
+        checkpoint = torch.load(checkpoint_path)
+        logger.debug(checkpoint.keys())
+        model.load_state_dict(checkpoint)
+
+    loss_function = BaseLoss.create_from_config(config['loss'])
+
+    optimizer = BaseOptimizer.create_from_config(
+        config['optimizer'],
+        model=model,
+    )
+
+    callback = BaseCallback.create_from_config(
+        config['callback'],
+        model=model,
+        train_dataloader=train_dataloader,
+        validation_dataloader=validation_dataloader,
+        eval_dataloader=eval_dataloader,
+        optimizer=optimizer,
+        **dataset.meta,
+    )
+
+    # TODO add verbose option for all callbacks, multiple optimizer options (???)
+    # TODO create pre/post callbacks
+    logger.debug('Everything is ready for training process!')
+
+    # Train process
+    _ = train(
+        dataloader=train_dataloader,
+        model=model,
+        optimizer=optimizer,
+        loss_function=loss_function,
+        callback=callback,
+        epoch_cnt=config.get('train_epochs_num'),
+        step_cnt=config.get('train_steps_num'),
+        best_metric=config.get('best_metric'),
+    )
+
+    logger.debug('Saving model...')
+    ensure_checkpoints_dir()
+    checkpoint_path = './checkpoints/{}_final_state.pth'.format(
+        config['experiment_name'],
+    )
+    torch.save(model.state_dict(), checkpoint_path)
+    logger.debug('Saved model as {}'.format(checkpoint_path))
+
+    if config.get('use_wandb', False):
+        wandb.finish()
+
+
+if __name__ == '__main__':
+    main()
