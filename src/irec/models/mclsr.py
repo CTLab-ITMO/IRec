@@ -22,6 +22,7 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
         common_graph,
         user_graph,
         item_graph,
+        item_counts,
         dropout=0.0,
         layer_norm_eps=1e-5,
         graph_dropout=0.0,
@@ -151,9 +152,18 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
         )
 
         self._init_weights(initializer_range)
-
+        self.register_buffer('item_counts', item_counts)
+        freq  = self.item_counts / self.item_counts.sum()
+        self.register_buffer('log_item_freq', torch.log(freq + 1e-9))
     @classmethod
     def create_from_config(cls, config, **kwargs):
+
+        item_counts_dict = kwargs['item_counts']
+        num_items = kwargs['num_items']
+        counts_tensor = torch.zeros(num_items + 2)
+        for i, c in item_counts_dict.items():
+            counts_tensor[i] = c
+
         return cls(
             sequence_prefix=config['sequence_prefix'],
             user_prefix=config['user_prefix'],
@@ -172,6 +182,7 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
             layer_norm_eps=config.get('layer_norm_eps', 1e-5),
             graph_dropout=config.get('graph_dropout', 0.0),
             initializer_range=config.get('initializer_range', 0.02),
+            item_counts=counts_tensor,
         )
 
     def _apply_graph_encoder(self, embeddings, graph, use_mean=False):
@@ -368,6 +379,8 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
 
             # import code; code.interact(local=locals())
 
+            log_q_unique_items = self.log_item_freq[unique_item_ids]
+
             return {
                 # L_P (formula 14)
                 'combined_representation': combined_representation,
@@ -387,6 +400,8 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
                 # for L_IC
                 'item_graph_item_embeddings': unique_item_graph_items_proj,
                 'common_graph_item_embeddings': unique_common_graph_items_proj,
+                
+                'log_q_correction': log_q_unique_items
             }
         else:  # eval mode
             # formula 16: R(u,N) = Top-N((I_s)^T * h_o)

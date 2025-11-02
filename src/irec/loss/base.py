@@ -186,6 +186,7 @@ class FpsLoss(TorchLoss, config_name='fps'):
         normalize_embeddings=False,
         use_mean=True,
         output_prefix=None,
+        use_logq_correction=False
     ):
         super().__init__()
         self._fst_embeddings_prefix = fst_embeddings_prefix
@@ -197,6 +198,7 @@ class FpsLoss(TorchLoss, config_name='fps'):
         self._normalize_embeddings = normalize_embeddings
         self._output_prefix = output_prefix
         print(self._tau)
+        self._use_logq_correction = use_logq_correction
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -206,10 +208,12 @@ class FpsLoss(TorchLoss, config_name='fps'):
             tau=config.get('temperature', 1.0), 
             normalize_embeddings=config.get('normalize_embeddings', False),
             use_mean=config.get('use_mean', True),
-            output_prefix=config.get('output_prefix')
+            output_prefix=config.get('output_prefix'),
+            use_logq_correction=config.get('use_logq_correction', False)
         )
 
     def forward(self, inputs):
+        
         fst_embeddings = inputs[
             self._fst_embeddings_prefix
         ]  # (x, embedding_dim)
@@ -235,6 +239,12 @@ class FpsLoss(TorchLoss, config_name='fps'):
         similarity_scores = (
             torch.mm(combined_embeddings, combined_embeddings.T) / self._tau
         )  # (2 * x, 2 * x)
+
+        if self._use_logq_correction:
+            log_q = inputs['log_q_correction']
+            log_q_combined = torch.cat((log_q, log_q), dim=0)
+            
+            similarity_scores = similarity_scores - log_q_combined.unsqueeze(0)
 
         positive_samples = torch.cat(
             (

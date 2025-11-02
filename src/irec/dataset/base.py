@@ -792,13 +792,14 @@ class ScientificDataset(BaseDataset, config_name='scientific'):
 
 
 class MCLSRDataset(BaseDataset, config_name='mclsr'):
-    def __init__(self, train_sampler, validation_sampler, test_sampler, num_users, num_items, max_sequence_length):
+    def __init__(self, train_sampler, validation_sampler, test_sampler, num_users, num_items, max_sequence_length, item_counts):
         self._train_sampler = train_sampler
         self._validation_sampler = validation_sampler
         self._test_sampler = test_sampler
         self._num_users = num_users
         self._num_items = num_items
         self._max_sequence_length = max_sequence_length
+        self._item_counts = item_counts # <-- СОХРАНЯЕМ СЧЕТЧИКИ
 
     @staticmethod
     def _create_sequences_from_file(filepath, max_len=None):
@@ -840,6 +841,10 @@ class MCLSRDataset(BaseDataset, config_name='mclsr'):
         train_sequences, u1, i1 = cls._create_sequences_from_file(os.path.join(data_dir, 'train_mclsr.txt'), max_seq_len)
         train_dataset = [{'user.ids': [uid], 'user.length': 1, 'item.ids': seq, 'item.length': len(seq)} for uid, seq in train_sequences.items()]
 
+        item_counts = defaultdict(int)
+        for sample in train_dataset:
+            for item_id in sample['item.ids']: item_counts[item_id] += 1
+
         user_to_all_seen_items = defaultdict(set)
         for sample in train_dataset: user_to_all_seen_items[sample['user.ids'][0]].update(sample['item.ids'])
         kwargs['user_to_all_seen_items'] = user_to_all_seen_items
@@ -852,7 +857,7 @@ class MCLSRDataset(BaseDataset, config_name='mclsr'):
         validation_sampler = EvalSampler.create_from_config(config['samplers'], dataset=validation_dataset, num_users=num_users, num_items=num_items, **kwargs)
         test_sampler = EvalSampler.create_from_config(config['samplers'], dataset=test_dataset, num_users=num_users, num_items=num_items, **kwargs)
 
-        return cls(train_sampler, validation_sampler, test_sampler, num_users, num_items, max_seq_len)
+        return cls(train_sampler, validation_sampler, test_sampler, num_users, num_items, max_seq_len, item_counts)
 
     def get_samplers(self):
         return (self._train_sampler, self._validation_sampler, self._test_sampler)
@@ -867,7 +872,8 @@ class MCLSRDataset(BaseDataset, config_name='mclsr'):
 
     @property
     def meta(self):
-        return {'num_users': self.num_users, 'num_items': self.num_items, 'max_sequence_length': self._max_sequence_length}
+        return {'num_users': self.num_users, 'num_items': self.num_items, 'max_sequence_length': self._max_sequence_length,
+        'item_counts': self._item_counts}
     
 class SASRecDataset(BaseDataset, config_name='sasrec_comparison'):
     def __init__(self, train_sampler, validation_sampler, test_sampler, num_users, num_items, max_sequence_length):

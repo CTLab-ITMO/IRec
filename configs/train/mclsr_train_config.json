@@ -1,5 +1,5 @@
 {
-  "experiment_name": "mclsr_Real_Toys_hit",
+  "experiment_name": "mclsr_Clothing_logq_correction",
   "use_wandb": true,
   "best_metric": "validation/ndcg@20",
   "dataset": {
@@ -7,11 +7,11 @@
     "use_user_graph": true,
     "use_item_graph": true,
     "neighborhood_size": 50,
-    "graph_dir_path": "./data/Real_Toys",
+    "graph_dir_path": "./data/Clothing",
     "dataset": {
       "type": "mclsr",
       "path_to_data_dir": "./data",
-      "name": "Real_Toys",
+      "name": "Clothing",
       "max_sequence_length": 20,
       "samplers": {
         "num_negatives_val": 1280,
@@ -35,7 +35,7 @@
       "type": "torch",
       "batch_size": 128,
       "batch_processor": {
-        "type": "basic"
+      "type": "basic"
       },
       "drop_last": false,
       "shuffle": false
@@ -94,6 +94,7 @@
         "fst_embeddings_prefix": "item_graph_item_embeddings",
         "snd_embeddings_prefix": "common_graph_item_embeddings",
         "output_prefix": "contrastive_item_feature_loss",
+        "use_logq_correction": true,
         "weight": 0.05,
         "temperature": 0.5
       }
