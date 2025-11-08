@@ -1,344 +1,221 @@
-from irec.metric import BaseMetric, StatefullMetric
+import functools
+import inspect
+import types
 
-import irec.utils
-from irec.utils import MetaParent, create_logger
-
-import numpy as np
-import os
-import torch
-from pathlib import Path
-
-logger = create_logger(name=__name__)
+from functools import cached_property
+from typing import Any, Callable, Union
 
 
-class BaseCallback(metaclass=MetaParent):
-    def __init__(
-        self,
-        model,
-        train_dataloader,
-        validation_dataloader,
-        eval_dataloader,
-        optimizer,
-    ):
-        self._model = model
-        self._train_dataloader = train_dataloader
-        self._validation_dataloader = validation_dataloader
-        self._eval_dataloader = eval_dataloader
-        self._optimizer = optimizer
+class Callback:
+    """
+        Runners have an ability to trigger different methods during execution.
 
-    def __call__(self, inputs, step_num):
-        raise NotImplementedError
+        Context presumes that there should be some callbacks that work before the current one and produce necessary input.
+        Runner state is necessary for some callbacks and represents literal runner state and step state
 
+        Typical hooks include:
+        * before_run
+        * load_snapshot
+            * runner step with specific callbacks
+            * after_step
+            * save_snapshot
+        * save_snapshot
+        * after_run
+    """
+    def state_dict(self):
+        """ Callback state_dict is used for snapshotting / checkpointing. """
+        return {}
 
-class MetricCallback(BaseCallback, config_name='metric'):
-    def __init__(
-        self,
-        model,
-        train_dataloader,
-        validation_dataloader,
-        eval_dataloader,
-        optimizer,
-        on_step,
-        metrics,
-        loss_prefix,
-    ):
-        super().__init__(
-            model,
-            train_dataloader,
-            validation_dataloader,
-            eval_dataloader,
-            optimizer,
-        )
-        self._on_step = on_step
-        self._loss_prefix = loss_prefix
-        self._metrics = metrics if metrics is not None else {}
+    def load_state_dict(self, state_dict):
+        """ Should be able to load the state_dict it provided with method .state_dict """
+        pass
 
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        return cls(
-            model=kwargs['model'],
-            train_dataloader=kwargs['train_dataloader'],
-            validation_dataloader=kwargs['validation_dataloader'],
-            eval_dataloader=kwargs['eval_dataloader'],
-            optimizer=kwargs['optimizer'],
-            on_step=config['on_step'],
-            metrics=config.get('metrics', None),
-            loss_prefix=config['loss_prefix'],
-        )
+    def save_snapshot(self, runner):
+        pass
 
-    def __call__(self, inputs, step_num):
-        if step_num % self._on_step == 0:
-            for metric_name, metric_function in self._metrics.items():
-                metric_value = metric_function(
-                    ground_truth=inputs[
-                        self._model.schema['ground_truth_prefix']
-                    ],
-                    predictions=inputs[
-                        self._model.schema['predictions_prefix']
-                    ],
-                )
+    def load_snapshot(self, runner):
+        pass
 
-                irec.utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
-                    'train/{}'.format(metric_name),
-                    metric_value,
-                    step_num,
-                )
+    def before_run(self, runner):
+        pass
 
-            irec.utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
-                'train/{}'.format(self._loss_prefix),
-                inputs[self._loss_prefix],
-                step_num,
-            )
-            irec.utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.flush()
+    def after_step(self, runner, context):
+        pass
+
+    def after_run(self, runner, context):
+        pass
+
+    declared_events = frozenset({before_run, load_snapshot, after_step, save_snapshot, after_run})
+
+    @cached_property
+    def implemented_events(self):
+        return frozenset({
+            event
+            for event in self.declared_events
+            if getattr(self, event.__name__) != types.MethodType(event, self)
+        })
+
+    def every_num_steps(self, num_steps):
+        return EveryNumSteps(self, num_steps)
+
+    def ignore_if(self, predicate):
+        return Callback() if predicate else self
 
 
-class CheckpointCallback(BaseCallback, config_name='checkpoint'):
-    def __init__(
-        self,
-        model,
-        train_dataloader,
-        validation_dataloader,
-        eval_dataloader,
-        optimizer,
-        on_step,
-        save_path,
-        model_name,
-    ):
-        super().__init__(
-            model,
-            train_dataloader,
-            validation_dataloader,
-            eval_dataloader,
-            optimizer,
-        )
-        self._on_step = on_step
-        self._save_path = Path(os.path.join(save_path, model_name))
-        if self._save_path.exists():
-            logger.warning(
-                'Checkpoint path `{}` is already exists!'.format(
-                    self._save_path,
-                ),
-            )
-        else:
-            self._save_path.mkdir(parents=True, exist_ok=True)
+class BatchCallback(Callback):
+    def before_load(self, runner, context):
+        pass
 
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        return cls(
-            model=kwargs['model'],
-            train_dataloader=kwargs['train_dataloader'],
-            validation_dataloader=kwargs['validation_dataloader'],
-            eval_dataloader=kwargs['eval_dataloader'],
-            optimizer=kwargs['optimizer'],
-            on_step=config['on_step'],
-            save_path=config['save_path'],
-            model_name=config['model_name'],
-        )
+    def before_process_batch(self, runner, context):
+        pass
 
-    def __call__(self, inputs, step_num):
-        if step_num % self._on_step == 0:
-            logger.debug('Saving model state on step {}...'.format(step_num))
-            torch.save(
-                {
-                    'step_num': step_num,
-                    'model_state_dict': self._model.state_dict(),
-                    'optimizer_state_dict': self._optimizer.state_dict(),
-                },
-                os.path.join(
-                    self._save_path,
-                    'checkpoint_{}.pth'.format(step_num),
-                ),
-            )
-            logger.debug('Saving done!')
+    declared_events = Callback.declared_events | frozenset({before_load, before_process_batch})
 
 
-class InferenceCallback(BaseCallback):
-    def __init__(
-        self,
-        model,
-        train_dataloader,
-        validation_dataloader,
-        eval_dataloader,
-        optimizer,
-        on_step,
-        pred_prefix,
-        labels_prefix,
-        metrics=None,
-        loss_prefix=None,
-    ):
-        super().__init__(
-            model,
-            train_dataloader,
-            validation_dataloader,
-            eval_dataloader,
-            optimizer,
-        )
-        self._on_step = on_step
-        self._metrics = metrics if metrics is not None else {}
-        self._pred_prefix = pred_prefix
-        self._labels_prefix = labels_prefix
-        self._loss_prefix = loss_prefix
-
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        metrics = {
-            metric_name: BaseMetric.create_from_config(metric_cfg, **kwargs)
-            for metric_name, metric_cfg in config['metrics'].items()
-        }
-
-        return cls(
-            model=kwargs['model'],
-            train_dataloader=kwargs['train_dataloader'],
-            validation_dataloader=kwargs['validation_dataloader'],
-            eval_dataloader=kwargs['eval_dataloader'],
-            optimizer=kwargs['optimizer'],
-            on_step=config['on_step'],
-            metrics=metrics,
-            pred_prefix=config['pred_prefix'],
-            labels_prefix=config['labels_prefix'],
-        )
-
-    def __call__(self, inputs, step_num):
-        if step_num % self._on_step == 0:  # TODO Add time monitoring
-            logger.debug(f'Running {self._get_name()} on step {step_num}...')
-            running_params = {}
-            for metric_name, metric_function in self._metrics.items():
-                running_params[metric_name] = []
-            if self._loss_prefix is not None:
-                running_params[self._loss_prefix] = []
-
-            self._model.eval()
-            with torch.no_grad():
-                for batch in self._get_dataloader():
-                    for key, value in batch.items():
-                        batch[key] = value.to(irec.utils.DEVICE)
-
-                    batch[self._pred_prefix] = self._model(batch)
-
-                    for key, values in batch.items():
-                        batch[key] = values.cpu()
-
-                    for metric_name, metric_function in self._metrics.items():
-                        running_params[metric_name].extend(
-                            metric_function(
-                                inputs=batch,
-                                pred_prefix=self._pred_prefix,
-                                labels_prefix=self._labels_prefix,
-                            ),
-                        )
-
-                    if self._loss_prefix is not None:
-                        running_params[self._loss_prefix] += batch[
-                            self._loss_prefix
-                        ].item()
-
-            for metric_name, metric_function in self._metrics.items():
-                if isinstance(metric_function, StatefullMetric):
-                    running_params[metric_name] = metric_function.reduce(
-                        running_params[metric_name],
-                    )
-
-            for label, value in running_params.items():
-                inputs[f'{self._get_name()}/{label}'] = np.mean(value)
-                irec.utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.add_scalar(
-                    f'{self._get_name()}/{label}',
-                    np.mean(value),
-                    step_num,
-                )
-            irec.utils.tensorboards.GLOBAL_TENSORBOARD_WRITER.flush()
-
-            logger.debug(
-                f'Running {self._get_name()} on step {step_num} is done!',
-            )
-
-    def _get_name(self):
-        return self.config_name
-
-    def _get_dataloader(self):
-        raise NotImplementedError
-
-
-class ValidationCallback(InferenceCallback, config_name='validation'):
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        metrics = {
-            metric_name: BaseMetric.create_from_config(metric_cfg, **kwargs)
-            for metric_name, metric_cfg in config['metrics'].items()
-        }
-
-        return cls(
-            model=kwargs['model'],
-            train_dataloader=kwargs['train_dataloader'],
-            validation_dataloader=kwargs['validation_dataloader'],
-            eval_dataloader=kwargs['eval_dataloader'],
-            optimizer=kwargs['optimizer'],
-            on_step=config['on_step'],
-            metrics=metrics,
-            pred_prefix=config['pred_prefix'],
-            labels_prefix=config['labels_prefix'],
-        )
-
-    def _get_dataloader(self):
-        return self._validation_dataloader
-
-
-class EvalCallback(InferenceCallback, config_name='eval'):
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        metrics = {
-            metric_name: BaseMetric.create_from_config(metric_cfg, **kwargs)
-            for metric_name, metric_cfg in config['metrics'].items()
-        }
-
-        return cls(
-            model=kwargs['model'],
-            train_dataloader=kwargs['train_dataloader'],
-            validation_dataloader=kwargs['validation_dataloader'],
-            eval_dataloader=kwargs['eval_dataloader'],
-            optimizer=kwargs['optimizer'],
-            on_step=config['on_step'],
-            metrics=metrics,
-            pred_prefix=config['pred_prefix'],
-            labels_prefix=config['labels_prefix'],
-        )
-
-    def _get_dataloader(self):
-        return self._eval_dataloader
-
-
-class CompositeCallback(BaseCallback, config_name='composite'):
-    def __init__(
-        self,
-        model,
-        train_dataloader,
-        validation_dataloader,
-        eval_dataloader,
-        optimizer,
-        callbacks,
-    ):
-        super().__init__(
-            model,
-            train_dataloader,
-            validation_dataloader,
-            eval_dataloader,
-            optimizer,
-        )
+class Composite(Callback):
+    def __init__(self, *callbacks, declared_events=None):
+        super().__init__()
         self._callbacks = callbacks
+        self._declared_events = frozenset({event for callback in self._callbacks for event in callback.declared_events})
+        if declared_events is not None:
+            self._declared_events = frozenset(declared_events)
+            if not self.implemented_events.issubset(self._declared_events):
+                raise TypeError(f'Not declared events were found in callbacks: {self.implemented_events - self._declared_events}')
+        for event in self._declared_events:
+            if hasattr(self, event.__name__) and event not in Callback.declared_events:
+                raise TypeError(f'Event {event} conflict in CompositeCallback')
+            setattr(self, event.__name__, functools.partial(self._emit, event))
 
-    @classmethod
-    def create_from_config(cls, config, **kwargs):
-        return cls(
-            model=kwargs['model'],
-            train_dataloader=kwargs['train_dataloader'],
-            validation_dataloader=kwargs['validation_dataloader'],
-            eval_dataloader=kwargs['eval_dataloader'],
-            optimizer=kwargs['optimizer'],
-            callbacks=[
-                BaseCallback.create_from_config(cfg, **kwargs)
-                for cfg in config['callbacks']
-            ],
-        )
+    @property
+    def callbacks(self):
+        return self._callbacks
 
-    def __call__(self, inputs, step_num):
+    def __len__(self):
+        return len(self._callbacks)
+
+    def __getitem__(self, index):
+        return self._callbacks[index]
+
+    def state_dict(self):
+        return [callback.state_dict() for callback in self._callbacks]
+
+    def load_state_dict(self, state_dict):
+        for callback, state in zip(self._callbacks, state_dict):
+            callback.load_state_dict(state)
+
+    @property
+    def declared_events(self):
+        return self._declared_events
+
+    @cached_property
+    def implemented_events(self):
+        return frozenset({event for callback in self._callbacks for event in callback.implemented_events})
+
+    def _emit(self, event, runner, *args, **kwargs):
         for callback in self._callbacks:
-            callback(inputs, step_num)
+            if event in callback.declared_events:
+                getattr(callback, event.__name__)(runner, *args, **kwargs)
+
+
+class EveryNumSteps(Callback):
+    def __init__(self, callback, num_steps):
+        super().__init__()
+        self._callback = callback
+        self._num_steps = num_steps
+        for event in self.declared_events:
+            if hasattr(self, event.__name__) and event not in Callback.declared_events:
+                raise TypeError(f'Event {event} conflict in EveryNumSteps')
+            setattr(self, event.__name__, functools.partial(self._emit, event))
+
+    @property
+    def callback(self):
+        return self._callback
+
+    def state_dict(self):
+        return self._callback.state_dict()
+
+    def load_state_dict(self, state_dict):
+        return self._callback.load_state_dict(state_dict)
+
+    @property
+    def declared_events(self):
+        return self._callback.declared_events
+
+    @property
+    def implemented_events(self):
+        return self._callback.implemented_events
+
+    def _emit(self, event, runner, *args, **kwargs):
+        if runner.global_step % self._num_steps == 0 or runner.global_finished:
+            getattr(self._callback, event.__name__)(runner, *args, **kwargs)
+
+
+class LambdaCallback(Callback):
+    def __init__(self, function: Union[Callable[[], Any], Callable[..., Any]]):
+        super().__init__()
+        self._function = function
+        self._has_args = (len(inspect.signature(function).parameters) > 0)
+        self._check_signature(inspect.signature(function if self._has_args else self._emit))  # TODO try remove if else and pass `self._emit`
+
+    def _emit(self, *args, **kwargs):
+        return self._function(*args, **kwargs) if self._has_args else self._function()
+
+    def _check_signature(self, signature):
+        pass
+
+
+class SaveSnapshot(LambdaCallback):
+    def save_snapshot(self, runner):
+        self._emit(runner)
+
+    def _check_signature(self, signature):
+        signature.bind(None)
+
+
+class LoadSnapshot(LambdaCallback):
+    def load_snapshot(self, runner):
+        self._emit(runner)
+
+    def _check_signature(self, signature):
+        signature.bind(None)
+
+
+class BeforeRun(LambdaCallback):
+    def before_run(self, runner):
+        self._emit(runner)
+
+    def _check_signature(self, signature):
+        signature.bind(None)
+
+
+class BeforeLoad(BatchCallback, LambdaCallback):
+    def before_load(self, runner, context):
+        self._emit(runner, context)
+
+    def _check_signature(self, signature):
+        signature.bind(None, None)
+
+
+class BeforeBatch(BatchCallback, LambdaCallback):
+    def before_batch(self, runner, context):
+        self._emit(runner, context)
+
+    def _check_signature(self, signature):
+        signature.bind(None, None)
+
+
+class AfterStep(LambdaCallback):
+    def after_step(self, runner, context):
+        self._emit(runner, context)
+
+    def _check_signature(self, signature):
+        signature.bind(None, None)
+
+
+class AfterRun(LambdaCallback):
+    def after_run(self, runner, context):
+        self._emit(runner, context)
+
+    def _check_signature(self, signature):
+        signature.bind(None, None)
+
