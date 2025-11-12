@@ -62,3 +62,28 @@ class TorchModel(nn.Module):
                 )
             else:
                 raise ValueError(f'Unknown transformer weight: {key}')
+
+
+class AutoCast(nn.Module):
+    def __init__(self, module, dtype=torch.bfloat16, device_type='cuda', cache_enabled=True):
+        super().__init__()
+        self.module = module
+        self._dtype = dtype
+        self._device_type = device_type
+        self._cache_enabled = cache_enabled
+
+    @property
+    def dtype(self):
+        return self._dtype
+
+    @property
+    def cache_enabled(self):
+        return self._cache_enabled
+
+    def forward(self, *args, **kwargs):
+        with torch.autocast(
+            device_type=self._device_type,
+            dtype=self._dtype,
+            cache_enabled=self._cache_enabled
+        ):
+            return self.module(*args, **kwargs)

@@ -3,6 +3,7 @@ from .train import *
 
 
 from irec.callbacks.base import Callback, BatchCallback, Composite
+from irec.callbacks.infer import InferenceSaver
 from irec.callbacks.logging import Logger, LoggingCallback, TensorboardLogger
 from irec.callbacks.metrics import BatchMetrics, LambdaMetrics, MetricAccumulator, Accumulator, MeanAccumulator, Validation
 from irec.callbacks.model import LoadModel
@@ -18,6 +19,8 @@ __all__ = [
     'BatchCallback',
     'TrainingCallback',
     'Composite',
+
+    'InferenceSaver',
 
     'Logger',
     'LoggingCallback',
