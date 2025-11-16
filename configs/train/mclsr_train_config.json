@@ -1,5 +1,5 @@
 {
-  "experiment_name": "mclsr_Clothing_logq_correction",
+  "experiment_name": "mclsr_users_logq_test",
   "use_wandb": true,
   "best_metric": "validation/ndcg@20",
   "dataset": {
@@ -71,7 +71,8 @@
         "positive_prefix": "label_representation",
         "negative_prefix": "negative_representation", 
         "output_prefix": "downstream_loss",
-        "weight": 1.0
+        "weight": 1.0,
+        "use_logq_correction": false
       },
       {
         "type": "fps",
@@ -79,7 +80,9 @@
         "snd_embeddings_prefix": "graph_representation",
         "output_prefix": "contrastive_interest_loss",
         "weight": 1.0,
-        "temperature": 0.5
+        "temperature": 0.5,
+        "use_logq_correction": true,
+        "logq_prefix": "log_q_users"
       },
       {
         "type": "fps",
@@ -87,14 +90,15 @@
         "snd_embeddings_prefix": "common_graph_user_embeddings",
         "output_prefix": "contrastive_user_feature_loss",
         "weight": 0.05,
-        "temperature": 0.5
+        "temperature": 0.5,
+        "use_logq_correction": true,
+        "logq_prefix": "log_q_users"
       },
       {
         "type": "fps",
         "fst_embeddings_prefix": "item_graph_item_embeddings",
         "snd_embeddings_prefix": "common_graph_item_embeddings",
         "output_prefix": "contrastive_item_feature_loss",
-        "use_logq_correction": true,
         "weight": 0.05,
         "temperature": 0.5
       }

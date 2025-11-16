@@ -186,7 +186,8 @@ class FpsLoss(TorchLoss, config_name='fps'):
         normalize_embeddings=False,
         use_mean=True,
         output_prefix=None,
-        use_logq_correction=False
+        use_logq_correction=False,
+        logq_prefix=None,
     ):
         super().__init__()
         self._fst_embeddings_prefix = fst_embeddings_prefix
@@ -197,8 +198,8 @@ class FpsLoss(TorchLoss, config_name='fps'):
         )
         self._normalize_embeddings = normalize_embeddings
         self._output_prefix = output_prefix
-        print(self._tau)
         self._use_logq_correction = use_logq_correction
+        self._logq_prefix = logq_prefix
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -209,7 +210,8 @@ class FpsLoss(TorchLoss, config_name='fps'):
             normalize_embeddings=config.get('normalize_embeddings', False),
             use_mean=config.get('use_mean', True),
             output_prefix=config.get('output_prefix'),
-            use_logq_correction=config.get('use_logq_correction', False)
+            use_logq_correction=config.get('use_logq_correction', False),
+            logq_prefix=config.get('logq_prefix', False),
         )
 
     def forward(self, inputs):
@@ -241,7 +243,7 @@ class FpsLoss(TorchLoss, config_name='fps'):
         )  # (2 * x, 2 * x)
 
         if self._use_logq_correction:
-            log_q = inputs['log_q_correction']
+            log_q = inputs[self._logq_prefix]
             log_q_combined = torch.cat((log_q, log_q), dim=0)
             
             similarity_scores = similarity_scores - log_q_combined.unsqueeze(0)
@@ -326,12 +328,30 @@ class SamplesSoftmaxLoss(TorchLoss, config_name='sampled_softmax'):
         positive_prefix,
         negative_prefix,
         output_prefix=None,
+        use_logq_correction=False,
+        pos_logq_prefix=None,
+        neg_logq_prefix=None,
     ):
         super().__init__()
         self._queries_prefix = queries_prefix
         self._positive_prefix = positive_prefix
         self._negative_prefix = negative_prefix
         self._output_prefix = output_prefix
+        self._use_logq = use_logq_correction
+        self._pos_logq_prefix = pos_logq_prefix
+        self._neg_logq_prefix = neg_logq_prefix
+
+    @classmethod
+    def create_from_config(cls, config, **kwargs):
+        return cls(
+            queries_prefix=config['queries_prefix'],
+            positive_prefix=config['positive_prefix'],
+            negative_prefix=config['negative_prefix'],
+            output_prefix=config.get('output_prefix'),
+            use_logq_correction=config.get('use_logq_correction', False),
+            pos_logq_prefix=config.get('pos_logq_prefix'),
+            neg_logq_prefix=config.get('neg_logq_prefix'),
+        )
 
     def forward(self, inputs):
         queries_embeddings = inputs[
@@ -368,6 +388,17 @@ class SamplesSoftmaxLoss(TorchLoss, config_name='sampled_softmax'):
                 queries_embeddings,
                 negative_embeddings,
             )  # (batch_size, num_negatives)
+        
+            if self._use_logq:
+                assert self._pos_logq_prefix is not None and self._neg_logq_prefix is not None
+                pos_logq = inputs[self._pos_logq_prefix]
+                positive_scores = positive_scores - pos_logq.unsqueeze(-1)
+
+                neg_logq = inputs[self._neg_logq_prefix]
+                if neg_logq.dim() == 1:
+                    negative_scores = negative_scores - neg_logq.unsqueeze(0)
+                else:
+                    negative_scores = negative_scores - neg_logq
         all_scores = torch.cat(
             [positive_scores, negative_scores],
             dim=1,

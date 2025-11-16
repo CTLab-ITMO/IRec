@@ -23,6 +23,7 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
         user_graph,
         item_graph,
         item_counts,
+        user_counts,
         dropout=0.0,
         layer_norm_eps=1e-5,
         graph_dropout=0.0,
@@ -153,16 +154,26 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
 
         self._init_weights(initializer_range)
         self.register_buffer('item_counts', item_counts)
-        freq  = self.item_counts / self.item_counts.sum()
-        self.register_buffer('log_item_freq', torch.log(freq + 1e-9))
+        item_freq  = self.item_counts / self.item_counts.sum()
+        self.register_buffer('log_item_freq', torch.log(item_freq + 1e-9))
+
+        self.register_buffer('user_counts', user_counts)
+        user_freq = self.user_counts / self.user_counts.sum()
+        self.register_buffer('log_user_freq', torch.log(user_freq + 1e-9))
+
     @classmethod
     def create_from_config(cls, config, **kwargs):
 
         item_counts_dict = kwargs['item_counts']
+        user_counts_dict = kwargs['user_counts']
         num_items = kwargs['num_items']
-        counts_tensor = torch.zeros(num_items + 2)
+        num_users = kwargs['num_users']
+        i_counts_tensor = torch.zeros(num_items + 2)
         for i, c in item_counts_dict.items():
-            counts_tensor[i] = c
+            i_counts_tensor[i] = c
+        u_counts_tensor = torch.zeros(num_users + 2)
+        for u, c in user_counts_dict.items():
+            u_counts_tensor[u] = c
 
         return cls(
             sequence_prefix=config['sequence_prefix'],
@@ -182,7 +193,8 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
             layer_norm_eps=config.get('layer_norm_eps', 1e-5),
             graph_dropout=config.get('graph_dropout', 0.0),
             initializer_range=config.get('initializer_range', 0.02),
-            item_counts=counts_tensor,
+            item_counts=i_counts_tensor,
+            user_counts=u_counts_tensor
         )
 
     def _apply_graph_encoder(self, embeddings, graph, use_mean=False):
@@ -379,8 +391,7 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
 
             # import code; code.interact(local=locals())
 
-            log_q_unique_items = self.log_item_freq[unique_item_ids]
-
+            logq_user = self.log_user_freq[user_ids]
             return {
                 # L_P (formula 14)
                 'combined_representation': combined_representation,
@@ -401,7 +412,8 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
                 'item_graph_item_embeddings': unique_item_graph_items_proj,
                 'common_graph_item_embeddings': unique_common_graph_items_proj,
                 
-                'log_q_correction': log_q_unique_items
+                'log_q_users': logq_user,
+
             }
         else:  # eval mode
             # formula 16: R(u,N) = Top-N((I_s)^T * h_o)
