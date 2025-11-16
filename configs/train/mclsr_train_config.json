@@ -1,5 +1,5 @@
 {
-  "experiment_name": "mclsr_users_logq_test",
+  "experiment_name": "mclsr_all_logq",
   "use_wandb": true,
   "best_metric": "validation/ndcg@20",
   "dataset": {
@@ -72,7 +72,9 @@
         "negative_prefix": "negative_representation", 
         "output_prefix": "downstream_loss",
         "weight": 1.0,
-        "use_logq_correction": false
+        "use_logq_correction": true,
+        "logq_prefix": "log_q_items_softmax"
+
       },
       {
         "type": "fps",
@@ -100,7 +102,9 @@
         "snd_embeddings_prefix": "common_graph_item_embeddings",
         "output_prefix": "contrastive_item_feature_loss",
         "weight": 0.05,
-        "temperature": 0.5
+        "temperature": 0.5,
+        "use_logq_correction": true,
+        "logq_prefix": "log_q_items_cl"
       }
     ],
     "output_prefix": "loss"

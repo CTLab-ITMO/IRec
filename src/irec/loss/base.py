@@ -329,8 +329,7 @@ class SamplesSoftmaxLoss(TorchLoss, config_name='sampled_softmax'):
         negative_prefix,
         output_prefix=None,
         use_logq_correction=False,
-        pos_logq_prefix=None,
-        neg_logq_prefix=None,
+        logq_prefix=None,
     ):
         super().__init__()
         self._queries_prefix = queries_prefix
@@ -338,8 +337,7 @@ class SamplesSoftmaxLoss(TorchLoss, config_name='sampled_softmax'):
         self._negative_prefix = negative_prefix
         self._output_prefix = output_prefix
         self._use_logq = use_logq_correction
-        self._pos_logq_prefix = pos_logq_prefix
-        self._neg_logq_prefix = neg_logq_prefix
+        self._logq_prefix = logq_prefix
 
     @classmethod
     def create_from_config(cls, config, **kwargs):
@@ -348,9 +346,7 @@ class SamplesSoftmaxLoss(TorchLoss, config_name='sampled_softmax'):
             positive_prefix=config['positive_prefix'],
             negative_prefix=config['negative_prefix'],
             output_prefix=config.get('output_prefix'),
-            use_logq_correction=config.get('use_logq_correction', False),
-            pos_logq_prefix=config.get('pos_logq_prefix'),
-            neg_logq_prefix=config.get('neg_logq_prefix'),
+            logq_prefix=config.get('logq_prefix')
         )
 
     def forward(self, inputs):
@@ -388,21 +384,16 @@ class SamplesSoftmaxLoss(TorchLoss, config_name='sampled_softmax'):
                 queries_embeddings,
                 negative_embeddings,
             )  # (batch_size, num_negatives)
-        
-            if self._use_logq:
-                assert self._pos_logq_prefix is not None and self._neg_logq_prefix is not None
-                pos_logq = inputs[self._pos_logq_prefix]
-                positive_scores = positive_scores - pos_logq.unsqueeze(-1)
 
-                neg_logq = inputs[self._neg_logq_prefix]
-                if neg_logq.dim() == 1:
-                    negative_scores = negative_scores - neg_logq.unsqueeze(0)
-                else:
-                    negative_scores = negative_scores - neg_logq
         all_scores = torch.cat(
             [positive_scores, negative_scores],
             dim=1,
         )  # (batch_size, 1 + num_negatives)
+
+        if self._use_logq:
+            if self._logq_prefix is not None:
+                log_q = inputs[self._logq_prefix]                # (B, 1+N)
+                all_scores = all_scores - log_q
 
         logits = torch.log_softmax(
             all_scores,

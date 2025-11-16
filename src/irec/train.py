@@ -44,7 +44,7 @@ def train(
     best_checkpoint = None
 
     logger.debug('Start training...')
-
+    print(hasattr(model, "finalize_item_epoch_stats"))
     while (epoch_cnt is None or epoch_num < epoch_cnt) and (
         step_cnt is None or step_num < step_cnt
     ):
@@ -85,6 +85,9 @@ def train(
                 current_metric = batch_[best_metric]
                 best_checkpoint = copy.deepcopy(model.state_dict())
                 best_epoch = epoch_num
+
+        if hasattr(model, "finalize_item_epoch_stats"):
+            model.finalize_item_epoch_stats()
 
         epoch_num += 1
     logger.debug('Training procedure has been finished!')
