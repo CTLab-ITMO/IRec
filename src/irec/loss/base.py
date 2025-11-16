@@ -211,7 +211,7 @@ class FpsLoss(TorchLoss, config_name='fps'):
             use_mean=config.get('use_mean', True),
             output_prefix=config.get('output_prefix'),
             use_logq_correction=config.get('use_logq_correction', False),
-            logq_prefix=config.get('logq_prefix', False),
+            logq_prefix=config.get('logq_prefix', None),
         )
 
     def forward(self, inputs):
