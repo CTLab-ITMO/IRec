@@ -129,7 +129,15 @@ def main():
         cb.Validation(
             dataset=valid_dataloder,
             callbacks=[
-                cb.BatchMetrics(metrics=lambda model_outputs, _: model_outputs, name='validation'),
+                cb.BatchMetrics(metrics=lambda model_outputs, _:{
+                    'loss': model_outputs['loss'].item(),
+                    'recall@5': model_outputs['recall@5'].tolist(),
+                    'recall@10': model_outputs['recall@10'].tolist(),
+                    'recall@20': model_outputs['recall@20'].tolist(),
+                    'ndcg@5': model_outputs['ndcg@5'].tolist(),
+                    'ndcg@10': model_outputs['ndcg@10'].tolist(),
+                    'ndcg@20': model_outputs['ndcg@20'].tolist(),
+                }, name='validation'),
                 cb.MetricAccumulator(
                     accumulators={
                         'validation/loss': cb.MeanAccumulator(),
