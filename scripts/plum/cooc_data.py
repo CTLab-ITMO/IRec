@@ -13,21 +13,15 @@ class CoocMappingDataset:
     def __init__(
             self,
             train_sampler,
-            validation_sampler,
-            test_sampler,
             num_items,
-            max_sequence_length,
             cooccur_counter_mapping=None
     ):
         self._train_sampler = train_sampler
-        self._validation_sampler = validation_sampler
-        self._test_sampler = test_sampler
         self._num_items = num_items
-        self._max_sequence_length = max_sequence_length
         self._cooccur_counter_mapping = cooccur_counter_mapping
 
     @classmethod
-    def create(cls, inter_json_path, max_sequence_length, sampler_type, window_size):
+    def create(cls, inter_json_path, window_size):
         max_item_id = 0
         train_dataset, validation_dataset, test_dataset = [], [], []
 
@@ -43,30 +37,58 @@ class CoocMappingDataset:
                 'user.ids': [user_id],
                 'item.ids': item_ids[:-2],
             })
-            validation_dataset.append({
-                'user.ids': [user_id],
-                'item.ids': item_ids[:-1],
-            })
-            test_dataset.append({
-                'user.ids': [user_id],
-                'item.ids': item_ids,
-            })
 
         cooccur_counter_mapping = cls.build_cooccur_counter_mapping(train_dataset, window_size=window_size)
         logger.debug(f'Computed window-based co-occurrence mapping for {len(cooccur_counter_mapping)} items but max_item_id is {max_item_id}')
 
         train_sampler = train_dataset
-        validation_sampler = validation_dataset
-        test_sampler = test_dataset
 
         return cls(
             train_sampler=train_sampler,
-            validation_sampler=validation_sampler,
-            test_sampler=test_sampler,
             num_items=max_item_id + 1,
-            max_sequence_length=max_sequence_length,
             cooccur_counter_mapping=cooccur_counter_mapping
         )
+
+    @classmethod
+    def create_from_split_part(
+            cls,
+            train_inter_json_path,
+            window_size
+    ):
+
+        max_item_id = 0
+        train_dataset = []
+
+        with open(train_inter_json_path, 'r') as f:
+            train_interactions = json.load(f)
+
+        # Обрабатываем TRAIN
+        for user_id_str, item_ids in train_interactions.items():
+            user_id = int(user_id_str)
+            if item_ids:
+                max_item_id = max(max_item_id, max(item_ids))
+
+            train_dataset.append({
+                'user.ids': [user_id],
+                'item.ids': item_ids,
+            })
+
+        logger.debug(f'Train: {len(train_dataset)} users')
+        logger.debug(f'Max item ID: {max_item_id}')
+
+        cooccur_counter_mapping = cls.build_cooccur_counter_mapping(
+            train_dataset,
+            window_size=window_size
+        )
+
+        logger.debug(f'Computed window-based co-occurrence mapping for {len(cooccur_counter_mapping)} items')
+
+        return cls(
+            train_sampler=train_dataset,
+            num_items=max_item_id + 1,
+            cooccur_counter_mapping=cooccur_counter_mapping
+        )
+
 
     @staticmethod
     def build_cooccur_counter_mapping(train_dataset, window_size): #TODO передавать время и по нему строить окно
@@ -80,16 +102,6 @@ class CoocMappingDataset:
                         cooccur_counts[item_i][items[j]] += 1
         return cooccur_counts
 
-    def get_datasets(self):
-        return self._train_sampler, self._validation_sampler, self._test_sampler
-
-    @property
-    def num_items(self):
-        return self._num_items
-
-    @property
-    def max_sequence_length(self):
-        return self._max_sequence_length
 
     @property
     def cooccur_counter_mapping(self):
