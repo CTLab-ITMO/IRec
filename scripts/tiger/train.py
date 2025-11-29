@@ -17,14 +17,15 @@ from models import TigerModel, CorrectItemsLogitsProcessor
 
 # ПУТИ
 IREC_PATH = '../../'
-SEMANTIC_MAPPING_PATH = os.path.join(IREC_PATH, 'results/test_plum_rqvae_beauty_ws_2_clusters_colisionless.json')
-TRAIN_BATCHES_PATH = os.path.join(IREC_PATH, 'data/Beauty/test_tiger_plum_ws_2_train_batches/')
-VALID_BATCHES_PATH = os.path.join(IREC_PATH, 'data/Beauty/test_tiger_plum_ws_2_valid_batches/')
-EVAL_BATCHES_PATH = os.path.join(IREC_PATH, 'data/Beauty/test_tiger_plum_ws_2_eval_batches/')
+SEMANTIC_MAPPING_PATH = os.path.join(IREC_PATH, 'results_sigir/4-1_plum_rqvae_beauty_ws_2_clusters_colisionless.json')
+TRAIN_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_4-1_train_batches/')
+VALID_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_4-1_valid_batches/')
+EVAL_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_4-1_eval_batches/')
+
 TENSORBOARD_LOGDIR = os.path.join(IREC_PATH, 'tensorboard_logs')
 CHECKPOINTS_DIR = os.path.join(IREC_PATH, 'checkpoints')
 
-EXPERIMENT_NAME = 'tiger_beauty_plum_ws_2'
+EXPERIMENT_NAME = 'tiger_beauty_4-1_plum_ws_2_dp_0.2'
 
 # ОСТАЛЬНОЕ
 SEED_VALUE = 42
@@ -64,7 +65,7 @@ def main():
 
     train_dataloader = DataLoader(
         ArrowBatchDataset(
-            TRAIN_BATCHES_PATH,
+            TRAIN_BATCHES_DIR,
             device='cpu',
             preload=True
         ),
@@ -76,13 +77,13 @@ def main():
     ).map(ToDevice(DEVICE)).repeat(NUM_EPOCHS)
 
     valid_dataloder = ArrowBatchDataset(
-        VALID_BATCHES_PATH,
+        VALID_BATCHES_DIR,
         device=DEVICE,
         preload=True
     )
 
     eval_dataloder = ArrowBatchDataset(
-        EVAL_BATCHES_PATH,
+        EVAL_BATCHES_DIR,
         device=DEVICE,
         preload=True
     )
