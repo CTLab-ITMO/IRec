@@ -12,16 +12,16 @@ from irec.utils import fix_random_seed
 
 from data import EmbeddingDataset, ProcessEmbeddings
 from models import PlumRQVAE
-from transforms import AddWeightedCooccurrenceEmbeddings
-from cooc_data import CoocMappingDataset
 
 # ПУТИ
 IREC_PATH = '/home/jovyan/IRec/'
-INTERACTIONS_PATH = os.path.join(IREC_PATH, 'data/Beauty/inter_new.json')
 EMBEDDINGS_PATH = '/home/jovyan/tiger/data/Beauty/default_content_embeddings.pkl'
-MODEL_PATH = '/home/jovyan/IRec/checkpoints/test_plum_rqvae_beauty_ws_2_best_0.0054.pth'
+MODEL_PATH = '/home/jovyan/IRec/checkpoints/4-1_plum_rqvae_beauty_ws_2_best_0.0051.pth'
 RESULTS_PATH = os.path.join(IREC_PATH, 'results')
 
+WINDOW_SIZE = 2
+
+EXPERIMENT_NAME = f'test_plum_rqvae_beauty_ws_{WINDOW_SIZE}'
 
 # ОСТАЛЬНОЕ
 
@@ -36,21 +36,11 @@ CODEBOOK_SIZE = 256
 NUM_CODEBOOKS = 3
 
 BETA = 0.25
-WINDOW_SIZE = 2
-
-EXPERIMENT_NAME = f'test_plum_rqvae_beauty_ws_{WINDOW_SIZE}'
 
 
 
 def main():
     fix_random_seed(SEED_VALUE)
-
-    data = CoocMappingDataset.create(
-        inter_json_path=INTERACTIONS_PATH,
-        max_sequence_length=20,
-        sampler_type='sasrec',
-        window_size=WINDOW_SIZE
-    )
 
     dataset = EmbeddingDataset(
         data_path=EMBEDDINGS_PATH
@@ -64,15 +54,12 @@ def main():
         item_id_to_embedding[item_id] = torch.tensor(sample['embedding'])
         all_item_ids.append(item_id)
 
-    add_cooc_transform = AddWeightedCooccurrenceEmbeddings(
-        data.cooccur_counter_mapping, item_id_to_embedding, all_item_ids)
-
     dataloader = DataLoader(
         dataset,
         batch_size=BATCH_SIZE,
         shuffle=False,
         drop_last=False,
-    ).map(Collate()).map(ToTorch()).map(ToDevice(DEVICE)).map(ProcessEmbeddings(embedding_dim=INPUT_DIM, keys=['embedding'])).map(add_cooc_transform)
+    ).map(Collate()).map(ToTorch()).map(ToDevice(DEVICE)).map(ProcessEmbeddings(embedding_dim=INPUT_DIM, keys=['embedding']))
 
     model = PlumRQVAE(
         input_dim=INPUT_DIM,
