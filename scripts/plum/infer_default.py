@@ -15,6 +15,16 @@ from models import PlumRQVAE
 from transforms import AddWeightedCooccurrenceEmbeddings
 from cooc_data import CoocMappingDataset
 
+# ПУТИ
+IREC_PATH = '/home/jovyan/IRec/'
+INTERACTIONS_PATH = os.path.join(IREC_PATH, 'data/Beauty/inter_new.json')
+EMBEDDINGS_PATH = '/home/jovyan/tiger/data/Beauty/default_content_embeddings.pkl'
+MODEL_PATH = '/home/jovyan/IRec/checkpoints/test_plum_rqvae_beauty_ws_2_best_0.0054.pth'
+RESULTS_PATH = os.path.join(IREC_PATH, 'results')
+
+
+# ОСТАЛЬНОЕ
+
 SEED_VALUE = 42
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -26,29 +36,26 @@ CODEBOOK_SIZE = 256
 NUM_CODEBOOKS = 3
 
 BETA = 0.25
-MODEL_PATH = '/home/jovyan/IRec/checkpoints/test_plum_rqvae_beauty_ws_2_best_0.0054.pth'
-
 WINDOW_SIZE = 2
 
 EXPERIMENT_NAME = f'test_plum_rqvae_beauty_ws_{WINDOW_SIZE}'
 
-IREC_PATH = '/home/jovyan/IRec/'
 
 
 def main():
     fix_random_seed(SEED_VALUE)
 
     data = CoocMappingDataset.create(
-        inter_json_path=os.path.join(IREC_PATH, 'data/Beauty/inter_new.json'),
+        inter_json_path=INTERACTIONS_PATH,
         max_sequence_length=20,
         sampler_type='sasrec',
         window_size=WINDOW_SIZE
     )
 
     dataset = EmbeddingDataset(
-        data_path='/home/jovyan/tiger/data/Beauty/default_content_embeddings.pkl'
+        data_path=EMBEDDINGS_PATH
     )
-    
+
     item_id_to_embedding = {}
     all_item_ids = []
     for idx in range(len(dataset)):
@@ -59,7 +66,7 @@ def main():
 
     add_cooc_transform = AddWeightedCooccurrenceEmbeddings(
         data.cooccur_counter_mapping, item_id_to_embedding, all_item_ids)
-    
+
     dataloader = DataLoader(
         dataset,
         batch_size=BATCH_SIZE,
@@ -106,8 +113,8 @@ def main():
         cb.Logger().every_num_steps(len(dataloader)),
 
         cb.InferenceSaver(
-            metrics=lambda batch, model_outputs, _: {'item_id': batch['item_id'], 'clusters': model_outputs['clusters']}, 
-            save_path=f'/home/jovyan/IRec/results/{EXPERIMENT_NAME}_clusters.json',
+            metrics=lambda batch, model_outputs, _: {'item_id': batch['item_id'], 'clusters': model_outputs['clusters']},
+            save_path=os.path.join(RESULTS_PATH, f'{EXPERIMENT_NAME}_clusters.json'),
             format='json'
         )
     ]
@@ -125,9 +132,9 @@ def main():
     from collections import defaultdict
     import numpy as np
 
-    with open(f'/home/jovyan/IRec/results/{EXPERIMENT_NAME}_clusters.json', 'r') as f:
+    with open(os.path.join(RESULTS_PATH, f'{EXPERIMENT_NAME}_clusters.json'), 'r') as f:
         mappings = json.load(f)
-    
+
     inter = {}
     sem_2_ids = defaultdict(list)
     for mapping in mappings:
@@ -143,8 +150,8 @@ def main():
             inter[item_id].append(collision_solver)
             for i in range(len(inter[item_id])):
                 inter[item_id][i] += CODEBOOK_SIZE * i
-    
-    with open(os.path.join(IREC_PATH, 'results', f'{EXPERIMENT_NAME}_clusters_colisionless.json'), 'w') as f:
+
+    with open(os.path.join(RESULTS_PATH, f'{EXPERIMENT_NAME}_clusters_colisionless.json'), 'w') as f:
         json.dump(inter, f, indent=2)
 
 
