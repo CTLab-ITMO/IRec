@@ -14,10 +14,22 @@ from irec.utils import fix_random_seed
 from data import ArrowBatchDataset
 from models import TigerModel, CorrectItemsLogitsProcessor
 
+
+# ПУТИ
+IREC_PATH = '../../'
+SEMANTIC_MAPPING_PATH = os.path.join(IREC_PATH, 'results/test_plum_rqvae_beauty_ws_2_clusters_colisionless.json')
+TRAIN_BATCHES_PATH = os.path.join(IREC_PATH, 'data/Beauty/test_tiger_plum_ws_2_train_batches/')
+VALID_BATCHES_PATH = os.path.join(IREC_PATH, 'data/Beauty/test_tiger_plum_ws_2_valid_batches/')
+EVAL_BATCHES_PATH = os.path.join(IREC_PATH, 'data/Beauty/test_tiger_plum_ws_2_eval_batches/')
+TENSORBOARD_LOGDIR = os.path.join(IREC_PATH, 'tensorboard_logs')
+CHECKPOINTS_DIR = os.path.join(IREC_PATH, 'checkpoints')
+
+EXPERIMENT_NAME = 'tiger_beauty_plum_ws_2'
+
+# ОСТАЛЬНОЕ
 SEED_VALUE = 42
 DEVICE = 'cuda'
 
-EXPERIMENT_NAME = 'tiger_beauty'
 NUM_EPOCHS = 300
 MAX_SEQ_LEN = 20
 TRAIN_BATCH_SIZE = 256
@@ -30,13 +42,12 @@ NUM_HEADS = 6
 NUM_LAYERS = 4
 FEEDFORWARD_DIM = 1024
 KV_DIM = 64
-DROPOUT = 0.1
+DROPOUT = 0.2
 NUM_BEAMS = 30
 TOP_K = 20
 NUM_CODEBOOKS = 4
-LR = 3e-4
+LR = 0.0001
 
-IREC_PATH = '../../'
 
 torch.set_float32_matmul_precision('high')
 torch._dynamo.config.capture_scalar_outputs = True
@@ -48,30 +59,30 @@ config.triton.cudagraph_skip_dynamic_graphs = True
 def main():
     fix_random_seed(SEED_VALUE)
 
-    with open(os.path.join(IREC_PATH, 'results/rqvae_beauty_best_clusters_colisionless.json'), 'r') as f:
+    with open(SEMANTIC_MAPPING_PATH, 'r') as f:
         mappings = json.load(f)
-    
+
     train_dataloader = DataLoader(
         ArrowBatchDataset(
-            os.path.join(IREC_PATH, 'data/Beauty/tiger_train_batches/'), 
-            device='cpu', 
+            TRAIN_BATCHES_PATH,
+            device='cpu',
             preload=True
         ),
-        batch_size=1, 
-        shuffle=True, 
+        batch_size=1,
+        shuffle=True,
         num_workers=0,
-        pin_memory=True, 
+        pin_memory=True,
         collate_fn=Collate()
     ).map(ToDevice(DEVICE)).repeat(NUM_EPOCHS)
 
     valid_dataloder = ArrowBatchDataset(
-        os.path.join(IREC_PATH, 'data/Beauty/tiger_valid_batches/'),
+        VALID_BATCHES_PATH,
         device=DEVICE,
         preload=True
     )
 
     eval_dataloder = ArrowBatchDataset(
-        os.path.join(IREC_PATH, 'data/Beauty/tiger_eval_batches/'),
+        EVAL_BATCHES_PATH,
         device=DEVICE,
         preload=True
     )
@@ -177,22 +188,22 @@ def main():
                 ),
             ],
         ).every_num_steps(EPOCH_NUM_STEPS),
-        
+
         cb.Logger().every_num_steps(EPOCH_NUM_STEPS),
-        cb.TensorboardLogger(experiment_name=EXPERIMENT_NAME, logdir=os.path.join(IREC_PATH, 'tensorboard_logs')),
+        cb.TensorboardLogger(experiment_name=EXPERIMENT_NAME, logdir=TENSORBOARD_LOGDIR),
 
         cb.EarlyStopping(
-            metric='eval/ndcg@20', 
+            metric='eval/ndcg@20',
             patience=40,
             minimize=False,
-            model_path=os.path.join(IREC_PATH, 'checkpoints', EXPERIMENT_NAME)
+            model_path=os.path.join(CHECKPOINTS_DIR, EXPERIMENT_NAME)
         ).every_num_steps(EPOCH_NUM_STEPS)
 
         # cb.Profiler(
         #     wait=10,
         #     warmup=10,
         #     active=10,
-        #     logdir=os.path.join(IREC_PATH, 'tensorboard_logs')
+        #     logdir=TENSORBOARD_LOGDIR
         # ),
         # cb.StopAfterNumSteps(40)
 
