@@ -242,12 +242,6 @@ class FpsLoss(TorchLoss, config_name='fps'):
             torch.mm(combined_embeddings, combined_embeddings.T) / self._tau
         )  # (2 * x, 2 * x)
 
-        if self._use_logq_correction:
-            log_q = inputs[self._logq_prefix]
-            log_q_combined = torch.cat((log_q, log_q), dim=0)
-            
-            similarity_scores = similarity_scores - log_q_combined.unsqueeze(0)
-
         positive_samples = torch.cat(
             (
                 torch.diag(similarity_scores, batch_size),
@@ -274,6 +268,15 @@ class FpsLoss(TorchLoss, config_name='fps'):
             2 * batch_size,
             -1,
         )  # (2 * x, 2 * x - 2)
+
+        if self._use_logq_correction and self._logq_prefix is not None:
+            log_q = inputs[self._logq_prefix]
+            log_q_combined = torch.cat((log_q, log_q), dim=0)
+            
+            log_q_matrix = log_q_combined.unsqueeze(0).expand(2 * batch_size, -1)  # (2B, 2B)
+            negative_log_q = log_q_matrix[mask].reshape(2 * batch_size, -1)  # (2B, 2B-2)
+
+            negative_samples = negative_samples - negative_log_q
 
         labels = (
             torch.zeros(2 * batch_size).to(positive_samples.device).long()
@@ -346,6 +349,7 @@ class SamplesSoftmaxLoss(TorchLoss, config_name='sampled_softmax'):
             positive_prefix=config['positive_prefix'],
             negative_prefix=config['negative_prefix'],
             output_prefix=config.get('output_prefix'),
+            use_logq_correction=config.get('use_logq_correction', False),
             logq_prefix=config.get('logq_prefix')
         )
 
@@ -385,15 +389,18 @@ class SamplesSoftmaxLoss(TorchLoss, config_name='sampled_softmax'):
                 negative_embeddings,
             )  # (batch_size, num_negatives)
 
+        if self._use_logq:
+            if self._logq_prefix is not None:
+                log_q = inputs[self._logq_prefix]        # (B, 1+N)
+                log_q_pos = log_q[:, :1]                 # (B, 1)
+                log_q_neg = log_q[:, 1:]                 # (B, N)
+
+                negative_scores = negative_scores - log_q_neg
+
         all_scores = torch.cat(
             [positive_scores, negative_scores],
             dim=1,
         )  # (batch_size, 1 + num_negatives)
-
-        if self._use_logq:
-            if self._logq_prefix is not None:
-                log_q = inputs[self._logq_prefix]                # (B, 1+N)
-                all_scores = all_scores - log_q
 
         logits = torch.log_softmax(
             all_scores,

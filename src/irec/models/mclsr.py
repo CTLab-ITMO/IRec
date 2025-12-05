@@ -23,6 +23,7 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
         user_graph,
         item_graph,
         user_counts,
+        item_counts,
         dropout=0.0,
         layer_norm_eps=1e-5,
         graph_dropout=0.0,
@@ -152,13 +153,20 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
         )
 
         self._init_weights(initializer_range)
-        init_freq = torch.full((num_items + 2,), 1.0 / (num_items + 1))
-        self.register_buffer('item_freq', init_freq)
+        self.register_buffer('item_counts', item_counts)  # (num_items+2,)
+        item_freq = self.item_counts / self.item_counts.sum().clamp_min(1.0)
+        self.register_buffer('item_freq', item_freq)
         self.register_buffer('log_item_freq', torch.log(self.item_freq + 1e-9))
 
-        self.register_buffer('epoch_item_counts', torch.zeros(num_items + 2))
-        self.register_buffer('epoch_item_total', torch.tensor(0.0))
-        self.register_buffer('item_freq_epoch_count', torch.tensor(0.0))
+
+
+        # init_freq = torch.full((num_items + 2,), 1.0 / (num_items + 1))
+        # self.register_buffer('item_freq', init_freq)
+        # self.register_buffer('log_item_freq', torch.log(self.item_freq + 1e-9))
+
+        # self.register_buffer('epoch_item_counts', torch.zeros(num_items + 2))
+        # self.register_buffer('epoch_item_total', torch.tensor(0.0))
+        # self.register_buffer('item_freq_epoch_count', torch.tensor(0.0))
 
         self.register_buffer('user_counts', user_counts)
         user_freq = self.user_counts / self.user_counts.sum()
@@ -173,6 +181,13 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
         u_counts_tensor = torch.zeros(num_users + 2)
         for u, c in user_counts_dict.items():
             u_counts_tensor[u] = c
+
+        item_counts_dict = kwargs['item_counts']
+        num_items = kwargs['num_items']
+
+        i_counts_tensor = torch.zeros(num_items + 2)
+        for i, c in item_counts_dict.items():
+            i_counts_tensor[i] = c
 
         return cls(
             sequence_prefix=config['sequence_prefix'],
@@ -192,7 +207,8 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
             layer_norm_eps=config.get('layer_norm_eps', 1e-5),
             graph_dropout=config.get('graph_dropout', 0.0),
             initializer_range=config.get('initializer_range', 0.02),
-            user_counts=u_counts_tensor
+            user_counts=u_counts_tensor,
+            item_counts=i_counts_tensor,
         )
 
     def _apply_graph_encoder(self, embeddings, graph, use_mean=False):
@@ -219,25 +235,25 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
         else:
             return all_embeddings[-1]
         
-    def finalize_item_epoch_stats(self):
-        if self.epoch_item_total.item() <= 0:
-            return
+    # def finalize_item_epoch_stats(self):
+    #     if self.epoch_item_total.item() <= 0:
+    #         return
 
-        epoch_freq = self.epoch_item_counts / self.epoch_item_total.clamp_min(1.0)
+    #     epoch_freq = self.epoch_item_counts / self.epoch_item_total.clamp_min(1.0)
 
-        k = self.item_freq_epoch_count.item()
-        if k == 0.0:
-            self.item_freq.copy_(epoch_freq)
-        else:
-            w_old = k / (k + 1.0)
-            w_new = 1.0 / (k + 1.0)
-            self.item_freq.mul_(w_old).add_(epoch_freq * w_new)
+    #     k = self.item_freq_epoch_count.item()
+    #     if k == 0.0:
+    #         self.item_freq.copy_(epoch_freq)
+    #     else:
+    #         w_old = k / (k + 1.0)
+    #         w_new = 1.0 / (k + 1.0)
+    #         self.item_freq.mul_(w_old).add_(epoch_freq * w_new)
 
-        self.item_freq_epoch_count += 1.0
-        self.log_item_freq.copy_(torch.log(self.item_freq + 1e-9))
+    #     self.item_freq_epoch_count += 1.0
+    #     self.log_item_freq.copy_(torch.log(self.item_freq + 1e-9))
 
-        self.epoch_item_counts.zero_()
-        self.epoch_item_total.zero_()
+    #     self.epoch_item_counts.zero_()
+    #     self.epoch_item_total.zero_()
 
 
     def forward(self, inputs):
@@ -354,17 +370,17 @@ class MCLSRModel(TorchModel, config_name='mclsr'):
                                        (1 - self._alpha) * original_graph_representation)
             labels = inputs['{}.ids'.format(self._labels_prefix)]
 
-            with torch.no_grad():
-                pos_items = labels.view(-1)
-                valid = pos_items > 0
-                pos_items = pos_items[valid]
-                if pos_items.numel() > 0:
-                    self.epoch_item_counts.index_add_(
-                        0,
-                        pos_items,
-                        torch.ones_like(pos_items, dtype=self.epoch_item_counts.dtype),
-                    )
-                    self.epoch_item_total += pos_items.numel()
+            # with torch.no_grad():
+            #     pos_items = labels.view(-1)
+            #     valid = pos_items > 0
+            #     pos_items = pos_items[valid]
+            #     if pos_items.numel() > 0:
+            #         self.epoch_item_counts.index_add_(
+            #             0,
+            #             pos_items,
+            #             torch.ones_like(pos_items, dtype=self.epoch_item_counts.dtype),
+            #         )
+            #         self.epoch_item_total += pos_items.numel()
 
             labels_embeddings = self._item_embeddings(labels)
             
