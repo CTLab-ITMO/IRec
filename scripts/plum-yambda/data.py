@@ -6,6 +6,7 @@ from irec.data.transforms import Transform
 
 
 import polars as pl
+import numpy as np
 import torch
 
 class EmbeddingDatasetParquet(BaseDataset):
