@@ -211,12 +211,13 @@ class TigerModel(TorchModel):
             labels_full = torch.cat(all_labels, dim=0)  # (batch_size, sem_id_len)
             all_hits = (torch.eq(predictions, labels_full[:, None]).sum(dim=-1))  # (batch_size, top_k)
 
-        for k in [5, 10, 20]:
-            hits = (all_hits[:, :k] == self._sem_id_len).float() # (batch_size, k)
-            recall = hits.sum(dim=-1)  # (batch_size)
-            discount_factor = 1 / torch.log2(torch.arange(1, k + 1, 1).float() + 1.).to(hits.device)  # (k)
+        if not self.training:
+            for k in [5, 10, 20]:
+                hits = (all_hits[:, :k] == self._sem_id_len).float() # (batch_size, k)
+                recall = hits.sum(dim=-1)  # (batch_size)
+                discount_factor = 1 / torch.log2(torch.arange(1, k + 1, 1).float() + 1.).to(hits.device)  # (k)
 
-            metrics[f'recall@{k}'] = recall.cpu().float()
-            metrics[f'ndcg@{k}'] = torch.einsum('bk,k->b', hits, discount_factor).cpu().float()
-            
+                metrics[f'recall@{k}'] = recall.cpu().float()
+                metrics[f'ndcg@{k}'] = torch.einsum('bk,k->b', hits, discount_factor).cpu().float()
+
         return loss, metrics
