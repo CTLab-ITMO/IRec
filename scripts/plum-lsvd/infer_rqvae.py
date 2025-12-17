@@ -10,18 +10,19 @@ from irec.runners import InferenceRunner
 
 from irec.utils import fix_random_seed
 
-from data import EmbeddingDataset, ProcessEmbeddings
+from data import EmbeddingDatasetParquet, ProcessEmbeddings
+from collections import Counter
 from models import PlumRQVAE
 
 # ПУТИ
 IREC_PATH = '/home/jovyan/IRec/'
-EMBEDDINGS_PATH = '/home/jovyan/tiger/data/Beauty/default_content_embeddings.pkl'
-MODEL_PATH = '/home/jovyan/IRec/checkpoints/4-1_plum_rqvae_beauty_ws_2_best_0.0051.pth'
+EMBEDDINGS_PATH = '/home/jovyan/IRec/sigir/lsvd_data/8-weeks-base-ows/items_metadata_remapped.parquet'
+MODEL_PATH = '/home/jovyan/IRec/checkpoints/rqvae_vk_lsvd_cz_512_8-weeks_best_0.009.pth'
 RESULTS_PATH = os.path.join(IREC_PATH, 'results')
 
 WINDOW_SIZE = 2
 
-EXPERIMENT_NAME = f'test_plum_rqvae_beauty_ws_{WINDOW_SIZE}'
+EXPERIMENT_NAME = f'rqvae_vk_lsvd_cz_512_8-weeks'
 
 # ОСТАЛЬНОЕ
 
@@ -30,9 +31,9 @@ DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 
 BATCH_SIZE = 1024
 
-INPUT_DIM = 4096
+INPUT_DIM = 64
 HIDDEN_DIM = 32
-CODEBOOK_SIZE = 256
+CODEBOOK_SIZE = 512
 NUM_CODEBOOKS = 3
 
 BETA = 0.25
@@ -42,7 +43,7 @@ BETA = 0.25
 def main():
     fix_random_seed(SEED_VALUE)
 
-    dataset = EmbeddingDataset(
+    dataset = EmbeddingDatasetParquet(
         data_path=EMBEDDINGS_PATH
     )
 
@@ -124,6 +125,7 @@ def main():
 
     inter = {}
     sem_2_ids = defaultdict(list)
+    collision_stats = []
     for mapping in mappings:
         item_id = mapping['item_id']
         clusters = mapping['clusters']
@@ -135,8 +137,21 @@ def main():
         collision_solvers = np.random.permutation(CODEBOOK_SIZE)[:len(items)].tolist()
         for item_id, collision_solver in zip(items, collision_solvers):
             inter[item_id].append(collision_solver)
+            collision_stats.append(collision_solver)
             for i in range(len(inter[item_id])):
                 inter[item_id][i] += CODEBOOK_SIZE * i
+
+    if collision_stats:
+        max_col_tok = max(collision_stats)
+        avg_col_tok = np.mean(collision_stats)
+        collision_distribution = Counter(collision_stats)
+        
+        print(f"Max collision token: {max_col_tok}")
+        print(f"Avg collision token: {avg_col_tok:.2f}")
+        print(f"Total items with collisions: {len(collision_stats)}")
+        print(f"Collision solver distribution: {dict(collision_distribution)}")
+    else:
+        print("No collisions detected")
 
     with open(os.path.join(RESULTS_PATH, f'{EXPERIMENT_NAME}_clusters_colisionless.json'), 'w') as f:
         json.dump(inter, f, indent=2)

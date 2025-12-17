@@ -10,31 +10,31 @@ from irec.runners import InferenceRunner
 
 from irec.utils import fix_random_seed
 
-from data import EmbeddingDataset, ProcessEmbeddings
+from data import EmbeddingDatasetParquet, ProcessEmbeddings
 from models import PlumRQVAE
 
-# ПУТИ
-IREC_PATH = '/home/jovyan/IRec/'
-EMBEDDINGS_PATH = '/home/jovyan/tiger/data/Beauty/default_content_embeddings.pkl'
-MODEL_PATH = '/home/jovyan/IRec/checkpoints/4-1_plum_rqvae_beauty_ws_2_best_0.0051.pth'
+# ЭКСПЕРИМЕНТ С ОБРЕЗАННОЙ ИСТОРИЕЙ
+IREC_PATH = '../../'
+MODEL_PATH = '/home/jovyan/IRec/checkpoints/4-2_vk_lsvd_ods_base_with_gap_cb_512_ws_2_k_2000_8w_e35_best_0.0096.pth'
+EMBEDDINGS_PATH = "/home/jovyan/IRec/sigir/lsvd_data/8-days-base-ows/items_metadata_remapped.parquet"
+
 RESULTS_PATH = os.path.join(IREC_PATH, 'results')
 
 WINDOW_SIZE = 2
-
-EXPERIMENT_NAME = f'test_plum_rqvae_beauty_ws_{WINDOW_SIZE}'
-
+CODEBOOK_SIZE = 512
+K = 2000
+EXPERIMENT_NAME = f'4-2_vk_lsvd_ods_base_with_gap_cb_{CODEBOOK_SIZE}_ws_{WINDOW_SIZE}_k_{K}_8w_e_35'
 # ОСТАЛЬНОЕ
 
 SEED_VALUE = 42
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
+
 BATCH_SIZE = 1024
 
-INPUT_DIM = 4096
+INPUT_DIM = 64
 HIDDEN_DIM = 32
-CODEBOOK_SIZE = 256
 NUM_CODEBOOKS = 3
-
 BETA = 0.25
 
 
@@ -42,7 +42,7 @@ BETA = 0.25
 def main():
     fix_random_seed(SEED_VALUE)
 
-    dataset = EmbeddingDataset(
+    dataset = EmbeddingDatasetParquet(
         data_path=EMBEDDINGS_PATH
     )
 

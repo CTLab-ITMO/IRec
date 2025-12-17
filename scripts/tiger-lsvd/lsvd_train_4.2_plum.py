@@ -17,15 +17,16 @@ from models import TigerModel, CorrectItemsLogitsProcessor
 
 # ПУТИ
 IREC_PATH = '../../'
-SEMANTIC_MAPPING_PATH = os.path.join(IREC_PATH, 'results_sigir/4-1_plum_rqvae_beauty_ws_2_clusters_colisionless.json')
-TRAIN_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_4-1_train_batches/')
-VALID_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_4-1_valid_batches/')
-EVAL_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_4-1_eval_batches/')
+SEMANTIC_MAPPING_PATH = os.path.join(IREC_PATH, 'results/4-2_vk_lsvd_ods_base_with_gap_cb_512_ws_2_k_2000_8w_e_35_clusters_colisionless.json')
+TRAIN_BATCHES_DIR = os.path.join(IREC_PATH, 'data/lsvd/8-weeks-base-one-week-split-4.2/train_batches/')
+VALID_BATCHES_DIR = os.path.join(IREC_PATH, 'data/lsvd/8-weeks-base-one-week-split-4.2/valid_batches/')
+EVAL_BATCHES_DIR = os.path.join(IREC_PATH, 'data/lsvd/8-weeks-base-one-week-split-4.2/eval_batches/')
+
 
 TENSORBOARD_LOGDIR = os.path.join(IREC_PATH, 'tensorboard_logs')
 CHECKPOINTS_DIR = os.path.join(IREC_PATH, 'checkpoints')
 
-EXPERIMENT_NAME = 'tiger_beauty_4-1_plum_ws_2_dp_0.2'
+EXPERIMENT_NAME = 'tiger_4-2_vk_lsvd_ods_base_cb_512_ws_2_k_2000_8w_e_35'
 
 # ОСТАЛЬНОЕ
 SEED_VALUE = 42
@@ -36,8 +37,8 @@ MAX_SEQ_LEN = 20
 TRAIN_BATCH_SIZE = 256
 VALID_BATCH_SIZE = 1024
 EMBEDDING_DIM = 128
-CODEBOOK_SIZE = 256
-NUM_POSITIONS = 20
+CODEBOOK_SIZE = 512
+NUM_POSITIONS = 80
 NUM_USER_HASH = 2000
 NUM_HEADS = 6
 NUM_LAYERS = 4
@@ -49,6 +50,8 @@ TOP_K = 20
 NUM_CODEBOOKS = 4
 LR = 0.0001
 
+USE_MICROBATCHING = True
+MICROBATCH_SIZE = 256
 
 torch.set_float32_matmul_precision('high')
 torch._dynamo.config.capture_scalar_outputs = True
@@ -111,7 +114,9 @@ def main():
             CODEBOOK_SIZE,
             mappings,
             NUM_BEAMS
-        )
+        ),
+        use_microbatching=USE_MICROBATCHING,
+        microbatch_size=MICROBATCH_SIZE
     ).to(DEVICE)
 
     total_params = sum(p.numel() for p in model.parameters())
@@ -188,14 +193,14 @@ def main():
                     },
                 ),
             ],
-        ).every_num_steps(EPOCH_NUM_STEPS),
+        ).every_num_steps(EPOCH_NUM_STEPS * 4),
 
         cb.Logger().every_num_steps(EPOCH_NUM_STEPS),
         cb.TensorboardLogger(experiment_name=EXPERIMENT_NAME, logdir=TENSORBOARD_LOGDIR),
 
         cb.EarlyStopping(
-            metric='eval/ndcg@20',
-            patience=40,
+            metric='validation/ndcg@20',
+            patience=40 * 4,
             minimize=False,
             model_path=os.path.join(CHECKPOINTS_DIR, EXPERIMENT_NAME)
         ).every_num_steps(EPOCH_NUM_STEPS)

@@ -3,6 +3,8 @@ import os
 
 import torch
 
+import pickle
+
 import irec.callbacks as cb
 from irec.data.dataloader import DataLoader
 from irec.data.transforms import Collate, ToTorch, ToDevice
@@ -30,22 +32,22 @@ BETA = 0.25
 LR = 1e-4
 WINDOW_SIZE = 2
 
-EXPERIMENT_NAME = f'test_plum_rqvae_beauty_ws_{WINDOW_SIZE}'
-IREC_PATH = '../../../../../'
+EXPERIMENT_NAME = f'4-2_updated_quantile_plum_rqvae_beauty_ws_{WINDOW_SIZE}'
+INTER_TRAIN_PATH = "/home/jovyan/IRec/sigir/Beauty_new/updated_quantile_splits/merged_for_exps/exp_4-2_0.8_inter_semantics_train.json"
+EMBEDDINGS_PATH = "/home/jovyan/tiger/data/Beauty/default_content_embeddings.pkl"
+IREC_PATH = '../../'
 
-
+print(INTER_TRAIN_PATH)
 def main():
     fix_random_seed(SEED_VALUE)
 
-    import pickle
-
-    data = CoocMappingDataset.create(
-        inter_json_path=os.path.join(IREC_PATH, 'data/Beauty/inter_new.json'),
+    data = CoocMappingDataset.create_from_split_part(
+        train_inter_json_path=INTER_TRAIN_PATH,
         window_size=WINDOW_SIZE
     )
 
     dataset = EmbeddingDataset(
-        data_path='/home/jovyan/tiger/data/Beauty/default_content_embeddings.pkl'
+        data_path=EMBEDDINGS_PATH
     )
 
     item_id_to_embedding = {}
@@ -87,7 +89,7 @@ def main():
         contrastive_loss_weight=1.0,
         temperature=1.0
     ).to(DEVICE)
-    
+
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -105,7 +107,7 @@ def main():
             'rqvae_loss': model_outputs['rqvae_loss'],
             'con_loss': model_outputs['con_loss']
         }, name='train'),
-        
+
         FixDeadCentroids(valid_dataloader),
 
         cb.MetricAccumulator(

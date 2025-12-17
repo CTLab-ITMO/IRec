@@ -20,11 +20,14 @@ from data import Dataset
 # ПУТИ
 
 IREC_PATH = '../../'
-INTERACTIONS_PATH = os.path.join(IREC_PATH, 'data/Beauty/inter.json')
-SEMANTIC_MAPPING_PATH = os.path.join(IREC_PATH, 'results/rqvae_beauty_best_clusters_colisionless.json')
-TRAIN_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_train_batches/')
-VALID_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_valid_batches/')
-EVAL_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_eval_batches/')
+INTERACTIONS_TRAIN_PATH = os.path.join(IREC_PATH, 'sigir/Beauty_new/splits/exp_data/exp_4_inter_tiger_train.json')
+INTERACTIONS_VALID_PATH = os.path.join(IREC_PATH, 'sigir/Beauty_new/splits/exp_data/valid_skip_set.json')
+INTERACTIONS_TEST_PATH = os.path.join(IREC_PATH, 'sigir/Beauty_new/splits/exp_data/test_set.json')
+
+SEMANTIC_MAPPING_PATH = os.path.join(IREC_PATH, 'results_sigir/4-1_plum_rqvae_beauty_ws_2_clusters_colisionless.json')
+TRAIN_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_4-1_train_batches/')
+VALID_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_4-1_valid_batches/')
+EVAL_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_4-1_eval_batches/')
 
 
 # ОСТАЛЬНОЕ
@@ -207,10 +210,13 @@ def save_batches_to_arrow(batches, output_dir):
 
 
 def main():
-    data = Dataset.create(
-        inter_json_path=INTERACTIONS_PATH,
+    data = Dataset.create_timestamp_based(
+        train_json_path=INTERACTIONS_TRAIN_PATH,
+        validation_json_path=INTERACTIONS_VALID_PATH,
+        test_json_path=INTERACTIONS_TEST_PATH,
         max_sequence_length=MAX_SEQ_LEN,
         sampler_type='tiger',
+        min_sample_len=2,
         is_extended=True
     )
 

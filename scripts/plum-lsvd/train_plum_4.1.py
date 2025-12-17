@@ -3,6 +3,8 @@ import os
 
 import torch
 
+import pickle
+
 import irec.callbacks as cb
 from irec.data.dataloader import DataLoader
 from irec.data.transforms import Collate, ToTorch, ToDevice
@@ -11,69 +13,80 @@ from irec.runners import TrainingRunner
 from irec.utils import fix_random_seed
 
 from callbacks import InitCodebooks, FixDeadCentroids
-from data import EmbeddingDataset, ProcessEmbeddings
+from data import EmbeddingDatasetParquet, ProcessEmbeddings
 from models import PlumRQVAE
-from transforms import AddWeightedCooccurrenceEmbeddings
+from transforms import AddWeightedCooccurrenceEmbeddingsVectorized
 from cooc_data import CoocMappingDataset
 
+# ЭКСПЕРИМЕНТ С ПОЛНОЙ ИСТОРИЕЙ
 SEED_VALUE = 42
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-NUM_EPOCHS = 500
+NUM_EPOCHS = 35
 BATCH_SIZE = 1024
 
-INPUT_DIM = 4096
+INPUT_DIM = 64
 HIDDEN_DIM = 32
-CODEBOOK_SIZE = 256
+CODEBOOK_SIZE = 512
 NUM_CODEBOOKS = 3
 BETA = 0.25
 LR = 1e-4
 WINDOW_SIZE = 2
+K=2000
 
-EXPERIMENT_NAME = f'test_plum_rqvae_beauty_ws_{WINDOW_SIZE}'
-IREC_PATH = '../../../../../'
+EXPERIMENT_NAME = f'4-1_vk_lsvd_ods_base_with_gap_cb_{CODEBOOK_SIZE}_ws_{WINDOW_SIZE}_k_{K}_8w_e{NUM_EPOCHS}'
+INTER_TRAIN_PATH = "/home/jovyan/IRec/sigir/lsvd_data/8-weeks-base-ows/base_with_gap_interactions_grouped.parquet"
+EMBEDDINGS_PATH = "/home/jovyan/IRec/sigir/lsvd_data/8-weeks-base-ows/items_metadata_remapped.parquet"
+IREC_PATH = '../../'
 
-
+print(INTER_TRAIN_PATH)
 def main():
     fix_random_seed(SEED_VALUE)
 
-    import pickle
+    dataset = EmbeddingDatasetParquet(
+        data_path=EMBEDDINGS_PATH,
+    )
 
-    data = CoocMappingDataset.create(
-        inter_json_path=os.path.join(IREC_PATH, 'data/Beauty/inter_new.json'),
+    data = CoocMappingDataset.create_from_split_part(
+        train_inter_parquet_path=INTER_TRAIN_PATH,
         window_size=WINDOW_SIZE
     )
-
-    dataset = EmbeddingDataset(
-        data_path='/home/jovyan/tiger/data/Beauty/default_content_embeddings.pkl'
-    )
-
+    
     item_id_to_embedding = {}
     all_item_ids = []
     for idx in range(len(dataset)):
         sample = dataset[idx]
         item_id = int(sample['item_id'])
-        item_id_to_embedding[item_id] = torch.tensor(sample['embedding'])
+        item_id_to_embedding[item_id] = torch.tensor(sample['embedding'], device=DEVICE)
         all_item_ids.append(item_id)
 
-    add_cooc_transform = AddWeightedCooccurrenceEmbeddings(
-        data.cooccur_counter_mapping, item_id_to_embedding, all_item_ids)
+    # add_cooc_transform = AddWeightedCooccurrenceEmbeddings(data.cooccur_counter_mapping, item_id_to_embedding, all_item_ids, K)
+    add_cooc_transform = AddWeightedCooccurrenceEmbeddingsVectorized(
+        cooccur_counts=data.cooccur_counter_mapping,
+        item_id_to_embedding=item_id_to_embedding,
+        all_item_ids=all_item_ids,
+        device=DEVICE,
+        max_neighbors=K,
+        seed=42
+    )
 
-    train_dataloader = DataLoader(
+    train_dataloader = DataLoader( #call в основном потоке делается нужно исправить
         dataset,
         batch_size=BATCH_SIZE,
         shuffle=True,
         drop_last=True,
     ).map(Collate()).map(ToTorch()).map(ToDevice(DEVICE)).map(
         ProcessEmbeddings(embedding_dim=INPUT_DIM, keys=['embedding'])
-    ).map(add_cooc_transform).repeat(NUM_EPOCHS)
+    ).map(add_cooc_transform
+    ).repeat(NUM_EPOCHS)
 
     valid_dataloader = DataLoader(
         dataset,
         batch_size=BATCH_SIZE,
         shuffle=False,
         drop_last=False,
-    ).map(Collate()).map(ToTorch()).map(ToDevice(DEVICE)).map(ProcessEmbeddings(embedding_dim=INPUT_DIM, keys=['embedding'])).map(add_cooc_transform)
+    ).map(Collate()).map(ToTorch()).map(ToDevice(DEVICE)).map(ProcessEmbeddings(embedding_dim=INPUT_DIM, keys=['embedding'])
+    ).map(add_cooc_transform)
 
     LOG_EVERY_NUM_STEPS = int(len(train_dataloader) // NUM_EPOCHS)
 
@@ -87,7 +100,7 @@ def main():
         contrastive_loss_weight=1.0,
         temperature=1.0
     ).to(DEVICE)
-    
+
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -105,7 +118,7 @@ def main():
             'rqvae_loss': model_outputs['rqvae_loss'],
             'con_loss': model_outputs['con_loss']
         }, name='train'),
-        
+
         FixDeadCentroids(valid_dataloader),
 
         cb.MetricAccumulator(

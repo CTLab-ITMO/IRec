@@ -37,11 +37,12 @@ class Dataset:
             max_sequence_length,
             sampler_type,
             min_sample_len=2,
-            is_extended=False
+            is_extended=False,
+            max_train_events=50
     ):
         max_item_id = 0
         train_dataset, validation_dataset, test_dataset = [], [], []
-
+        print("started to load datasets")
         with open(train_json_path, 'r') as f:
             train_data = json.load(f)
         with open(validation_json_path, 'r') as f:
@@ -51,7 +52,10 @@ class Dataset:
 
         all_users = set(train_data.keys()) | set(validation_data.keys()) | set(test_data.keys())
         print(f"all users count: {len(all_users)}")
+        us_count = 0
         for user_id_str in all_users:
+            if us_count % 100 == 0:
+                print(f"user id {us_count}/{len(all_users)}: {user_id_str}")
             user_id = int(user_id_str)
 
             train_items = train_data.get(user_id_str, [])
@@ -62,7 +66,13 @@ class Dataset:
             if full_sequence:
                 max_item_id = max(max_item_id, max(full_sequence))
 
-            assert len(full_sequence) >= 5, f'Core-5 dataset is used, user {user_id} has only {len(full_sequence)} items'
+            if us_count % 100 == 0:
+                print(f"full sequence len: {len(full_sequence)}")
+            us_count += 1
+            assert len(full_sequence) >= 2, f'Core-5 dataset is used, user {user_id} has only {len(full_sequence)} items'
+
+            # Обрезаем train на последние max_train_events событий
+            train_items = train_items[-max_train_events:] if len(train_items) > max_train_events else train_items
 
             if is_extended:
                 # sample = [1, 2]
@@ -83,6 +93,8 @@ class Dataset:
                     'user.ids': [user_id],
                     'item.ids': train_items,
                 })
+                
+            # валидация
 
             # разворачиваем каждый айтем из валидации в отдельный сэмпл
             # Пример: Train=[1,2], Valid=[3,4]
@@ -90,7 +102,136 @@ class Dataset:
             # sample = [1, 2, 3, 4]
 
             current_history = train_items.copy()
+            valid_small_history = 0
             for item in validation_items:
+                # эвал датасет сам отрезает таргет потом
+                sample_sequence = current_history + [item]
+
+                if len(sample_sequence) >= min_sample_len:
+                    validation_dataset.append({
+                        'user.ids': [user_id],
+                        'item.ids': sample_sequence,
+                    })
+                else:
+                    valid_small_history += 1
+                current_history.append(item)
+
+            # разворачиваем каждый айтем из теста в отдельный сэмпл
+            # Пример: Train=[1,2], Valid=[3,4], Test=[5, 6]
+            # sample = [1, 2, 3, 4, 5]
+            # sample = [1, 2, 3, 4, 5, 6]
+            current_history = train_items + validation_items
+            test_small_history = 0
+            for item in test_items:
+                sample_sequence = current_history + [item]
+                if len(sample_sequence) >= min_sample_len:
+                    test_dataset.append({
+                        'user.ids': [user_id],
+                        'item.ids': sample_sequence,
+                    })
+                else:
+                    test_small_history += 1
+                current_history.append(item)
+
+        print(f"Train dataset size: {len(train_dataset)}")
+        print(f"Validation dataset size: {len(validation_dataset)} with skipped {valid_small_history}")
+        print(f"Test dataset size: {len(test_dataset)} with skipped {test_small_history}")
+
+        logger.debug(f'Train dataset size: {len(train_dataset)}')
+        logger.debug(f'Validation dataset size: {len(validation_dataset)}')
+        logger.debug(f'Test dataset size: {len(test_dataset)}')
+
+        train_sampler = TrainDataset(train_dataset, sampler_type, max_sequence_length=max_sequence_length)
+        validation_sampler = EvalDataset(validation_dataset, max_sequence_length=max_sequence_length)
+        test_sampler = EvalDataset(test_dataset, max_sequence_length=max_sequence_length)
+
+        return cls(
+            train_sampler=train_sampler,
+            validation_sampler=validation_sampler,
+            test_sampler=test_sampler,
+            num_items=max_item_id + 1,  # +1 added because our ids are 0-indexed
+            max_sequence_length=max_sequence_length
+        )
+
+    @classmethod
+    def create_timestamp_based_with_one_valid(
+            cls,
+            train_json_path,
+            validation_json_path,
+            test_json_path,
+            max_sequence_length,
+            sampler_type,
+            min_sample_len=2,
+            is_extended=False,
+            max_train_events=50,
+            max_valid_events=50
+    ):
+        max_item_id = 0
+        train_dataset, validation_dataset, test_dataset = [], [], []
+        print("started to load datasets")
+        with open(train_json_path, 'r') as f:
+            train_data = json.load(f)
+        with open(validation_json_path, 'r') as f:
+            validation_data = json.load(f)
+        with open(test_json_path, 'r') as f:
+            test_data = json.load(f)
+
+        all_users = set(train_data.keys()) | set(validation_data.keys()) | set(test_data.keys())
+        print(f"all users count: {len(all_users)}")
+        us_count = 0
+        for user_id_str in all_users:
+            if us_count % 100 == 0:
+                print(f"user id {us_count}/{len(all_users)}: {user_id_str}")
+            user_id = int(user_id_str)
+
+            train_items = train_data.get(user_id_str, [])
+            validation_items = validation_data.get(user_id_str, [])
+            test_items = test_data.get(user_id_str, [])
+
+            full_sequence = train_items + validation_items + test_items
+            if full_sequence:
+                max_item_id = max(max_item_id, max(full_sequence))
+
+            if us_count % 100 == 0:
+                print(f"full sequence len: {len(full_sequence)}")
+            
+            assert len(full_sequence) >= 2, f'Core-5 dataset is used, user {user_id} has only {len(full_sequence)} items'
+
+            # Обрезаем train на последние max_train_events событий
+            train_items = train_items[-max_train_events:] if len(train_items) > max_train_events else train_items
+
+            if is_extended:
+                # sample = [1, 2]
+                # sample = [1, 2, 3]
+                # sample = [1, 2, 3, 4]
+                # sample = [1, 2, 3, 4, 5]
+                # sample = [1, 2, 3, 4, 5, 6]
+                # sample = [1, 2, 3, 4, 5, 6, 7]
+                # sample = [1, 2, 3, 4, 5, 6, 7, 8]
+                for prefix_length in range(min_sample_len, len(train_items) + 1):
+                    train_dataset.append({
+                        'user.ids': [user_id],
+                        'item.ids': train_items[:prefix_length],
+                    })
+            else:
+                # sample = [1, 2, 3, 4, 5, 6, 7, 8]
+                train_dataset.append({
+                    'user.ids': [user_id],
+                    'item.ids': train_items,
+                })
+                
+            # валидация
+
+            # разворачиваем каждый айтем из валидации в отдельный сэмпл
+            # Пример: Train=[1,2], Valid=[3,4]
+            # sample = [1, 2, 3]
+            # sample = [1, 2, 3, 4]
+
+            current_history = train_items.copy()
+            if us_count % 100 == 0:
+                print(f"validation data length {len(validation_items[:max_valid_events])}")
+            us_count += 1
+            for item in validation_items[:max_valid_events]:
                 # эвал датасет сам отрезает таргет потом
                 sample_sequence = current_history + [item]
 
@@ -106,25 +247,22 @@ class Dataset:
             # sample = [1, 2, 3, 4, 5]
             # sample = [1, 2, 3, 4, 5, 6]
             current_history = train_items + validation_items
-
             for item in test_items:
-                # эвал датасет сам отрезает таргет потом
                 sample_sequence = current_history + [item]
-
                 if len(sample_sequence) >= min_sample_len:
                     test_dataset.append({
                         'user.ids': [user_id],
                         'item.ids': sample_sequence,
                     })
-
                 current_history.append(item)
+
+        print(f"Train dataset size: {len(train_dataset)}")
+        print(f"Validation dataset size: {len(validation_dataset)}")
+        print(f"Test dataset size: {len(test_dataset)}")
 
         logger.debug(f'Train dataset size: {len(train_dataset)}')
         logger.debug(f'Validation dataset size: {len(validation_dataset)}')
         logger.debug(f'Test dataset size: {len(test_dataset)}')
-        print(f'Train dataset size: {len(train_dataset)}')
-        print(f'Validation dataset size: {len(validation_dataset)}')
-        print(f'Test dataset size: {len(test_dataset)}')
 
         train_sampler = TrainDataset(train_dataset, sampler_type, max_sequence_length=max_sequence_length)
         validation_sampler = EvalDataset(validation_dataset, max_sequence_length=max_sequence_length)

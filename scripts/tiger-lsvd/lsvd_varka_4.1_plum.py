@@ -15,16 +15,19 @@ from irec.data.dataloader import DataLoader
 
 from data import Dataset
 
-
+print("tiger no arrow varka 4.1")
 
 # ПУТИ
 
 IREC_PATH = '../../'
-INTERACTIONS_PATH = os.path.join(IREC_PATH, 'data/Beauty/inter.json')
-SEMANTIC_MAPPING_PATH = os.path.join(IREC_PATH, 'results/rqvae_beauty_best_clusters_colisionless.json')
-TRAIN_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_train_batches/')
-VALID_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_valid_batches/')
-EVAL_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_eval_batches/')
+INTERACTIONS_TRAIN_PATH = "/home/jovyan/IRec/sigir/lsvd_data/8-days-base-ows/base_with_gap_interactions_grouped.parquet"
+INTERACTIONS_VALID_PATH = "/home/jovyan/IRec/sigir/lsvd_data/8-days-base-ows/val_interactions_grouped.parquet"
+INTERACTIONS_TEST_PATH = "/home/jovyan/IRec/sigir/lsvd_data/8-days-base-ows/test_interactions_grouped.parquet"
+
+SEMANTIC_MAPPING_PATH = os.path.join(IREC_PATH, 'results/4-1_vk_lsvd_ods_base_with_gap_cb_512_ws_2_k_2000_8w_e_35_clusters_colisionless.json')
+TRAIN_BATCHES_DIR = os.path.join(IREC_PATH, 'data/lsvd/8-weeks-base-one-week-split-4.1/train_batches/')
+VALID_BATCHES_DIR = os.path.join(IREC_PATH, 'data/lsvd/8-weeks-base-one-week-split-4.1/valid_batches/')
+EVAL_BATCHES_DIR = os.path.join(IREC_PATH, 'data/lsvd/8-weeks-base-one-week-split-4.1/eval_batches/')
 
 
 # ОСТАЛЬНОЕ
@@ -33,18 +36,18 @@ SEED_VALUE = 42
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
+MAX_TRAIN_EVENTS = 500
 MAX_SEQ_LEN = 20
 TRAIN_BATCH_SIZE = 256
 VALID_BATCH_SIZE = 1024
 NUM_USER_HASH = 2000
-CODEBOOK_SIZE = 256
+CODEBOOK_SIZE = 512
 NUM_CODEBOOKS = 4
 
 UNIFIED_VOCAB_SIZE = CODEBOOK_SIZE * NUM_CODEBOOKS + NUM_USER_HASH + 10  # 10 for utilities
 PAD_TOKEN_ID = UNIFIED_VOCAB_SIZE - 1,
 EOS_TOKEN_ID = UNIFIED_VOCAB_SIZE - 2,
 DECODER_START_TOKEN_ID = UNIFIED_VOCAB_SIZE - 3,
-
 
 
 class TigerProcessing(Transform):
@@ -124,11 +127,22 @@ class SemanticIdsMapper(Transform):
         self._mapping = mapping
         self._names = names
 
+        max_item_id = max(int(k) for k in mapping.keys())
+        print(len(list(mapping.keys())), min(int(k) for k in mapping.keys()) , max(int(k) for k in mapping.keys()))
+        # print(mapping["280052"]) #304781
+        # assert False
         data = []
-        for i in range(len(mapping)):
-            data.append(mapping[str(i)])
+        for i in range(max_item_id + 1):
+            if str(i) in mapping:
+                data.append(mapping[str(i)])
+            else:
+                data.append([-1] * NUM_CODEBOOKS)
+        
         self._mapping_tensor = torch.tensor(data, dtype=torch.long)
         self._semantic_length = self._mapping_tensor.shape[-1]
+        
+        missing_count = (max_item_id + 1) - len(mapping)
+        print(f"Mapping: {len(mapping)} items, {missing_count} missing (-1 filled)")
 
     def __call__(self, batch):
         for name in self._names:
@@ -137,7 +151,12 @@ class SemanticIdsMapper(Transform):
                 lengths = batch[f'{name}.length']
                 assert ids.min() >= 0
                 assert ids.max() < self._mapping_tensor.shape[0]
-                batch[f'{name}.semantic.ids'] = self._mapping_tensor[ids].flatten().numpy()
+                semantic_ids = self._mapping_tensor[ids].flatten()
+                
+                assert (semantic_ids != -1).all(), \
+                    f"Missing mappings detected in {name}! Invalid positions: {(semantic_ids == -1).sum()} out of {len(semantic_ids)}"
+                
+                batch[f'{name}.semantic.ids'] = semantic_ids.numpy()
                 batch[f'{name}.semantic.length'] = lengths * self._semantic_length
 
         return batch
@@ -207,18 +226,22 @@ def save_batches_to_arrow(batches, output_dir):
 
 
 def main():
-    data = Dataset.create(
-        inter_json_path=INTERACTIONS_PATH,
-        max_sequence_length=MAX_SEQ_LEN,
-        sampler_type='tiger',
-        is_extended=True
-    )
-
     with open(SEMANTIC_MAPPING_PATH, 'r') as f:
         mappings = json.load(f)
+    print("варка может начать умирать")
+    data = Dataset.create_timestamp_based_parquet(
+        train_parquet_path=INTERACTIONS_TRAIN_PATH,
+        validation_parquet_path=INTERACTIONS_VALID_PATH,
+        test_parquet_path=INTERACTIONS_TEST_PATH,
+        max_sequence_length=MAX_SEQ_LEN,
+        sampler_type='tiger',
+        min_sample_len=2,
+        is_extended=True,
+        max_train_events=MAX_TRAIN_EVENTS
+    )
 
     train_dataset, valid_dataset, eval_dataset = data.get_datasets()
-
+    print("варка не умерла")
     train_dataloader = DataLoader(
         dataset=train_dataset,
         batch_size=TRAIN_BATCH_SIZE,

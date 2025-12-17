@@ -16,12 +16,11 @@ from models import PlumRQVAE
 # ПУТИ
 IREC_PATH = '/home/jovyan/IRec/'
 EMBEDDINGS_PATH = '/home/jovyan/tiger/data/Beauty/default_content_embeddings.pkl'
-MODEL_PATH = '/home/jovyan/IRec/checkpoints/4-1_plum_rqvae_beauty_ws_2_best_0.0051.pth'
-RESULTS_PATH = os.path.join(IREC_PATH, 'results')
+MODEL_PATH = '/home/jovyan/IRec/checkpoints/4-3_updated_quantile_plum_rqvae_beauty_ws_2_best_0.005.pth'
+RESULTS_PATH = os.path.join(IREC_PATH, 'results_sigir')
 
 WINDOW_SIZE = 2
-
-EXPERIMENT_NAME = f'test_plum_rqvae_beauty_ws_{WINDOW_SIZE}'
+EXPERIMENT_NAME =  f'4-3_updated_quantile_plum_rqvae_beauty_ws_{WINDOW_SIZE}'
 
 # ОСТАЛЬНОЕ
 

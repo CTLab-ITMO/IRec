@@ -10,66 +10,50 @@ from irec.runners import InferenceRunner
 
 from irec.utils import fix_random_seed
 
-from data import EmbeddingDataset, ProcessEmbeddings
-from models import PlumRQVAE
+from data import EmbeddingDatasetParquet, ProcessEmbeddings
+from models import RQVAE
 
-# ПУТИ
+
 IREC_PATH = '/home/jovyan/IRec/'
-EMBEDDINGS_PATH = '/home/jovyan/tiger/data/Beauty/default_content_embeddings.pkl'
-MODEL_PATH = '/home/jovyan/IRec/checkpoints/4-1_plum_rqvae_beauty_ws_2_best_0.0051.pth'
-RESULTS_PATH = os.path.join(IREC_PATH, 'results')
-
-WINDOW_SIZE = 2
-
-EXPERIMENT_NAME = f'test_plum_rqvae_beauty_ws_{WINDOW_SIZE}'
-
-# ОСТАЛЬНОЕ
+EMBEDDINGS_PATH = "/home/jovyan/IRec/sigir/yambda_data/yambda_embeddings_reindexed.parquet"
+MODEL_PATH = '/home/jovyan/IRec/checkpoints/rqvae_yambda_hd_128_cz_512_best_0.0014.pth'
+RESULTS_PATH = '/home/jovyan/IRec/rqvae-yambda-sem-ids'
+EXPERIMENT_NAME = 'rqvae_yambda_hd_128_cz_512'
 
 SEED_VALUE = 42
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 BATCH_SIZE = 1024
 
-INPUT_DIM = 4096
-HIDDEN_DIM = 32
-CODEBOOK_SIZE = 256
+INPUT_DIM = 128
+HIDDEN_DIM = 128
+CODEBOOK_SIZE = 512
 NUM_CODEBOOKS = 3
 
 BETA = 0.25
 
 
-
 def main():
     fix_random_seed(SEED_VALUE)
 
-    dataset = EmbeddingDataset(
+    dataset = EmbeddingDatasetParquet(
         data_path=EMBEDDINGS_PATH
     )
-
-    item_id_to_embedding = {}
-    all_item_ids = []
-    for idx in range(len(dataset)):
-        sample = dataset[idx]
-        item_id = int(sample['item_id'])
-        item_id_to_embedding[item_id] = torch.tensor(sample['embedding'])
-        all_item_ids.append(item_id)
 
     dataloader = DataLoader(
         dataset,
         batch_size=BATCH_SIZE,
-        shuffle=False,
+        shuffle=True,
         drop_last=False,
     ).map(Collate()).map(ToTorch()).map(ToDevice(DEVICE)).map(ProcessEmbeddings(embedding_dim=INPUT_DIM, keys=['embedding']))
 
-    model = PlumRQVAE(
+    model = RQVAE(
         input_dim=INPUT_DIM,
         num_codebooks=NUM_CODEBOOKS,
         codebook_size=CODEBOOK_SIZE,
         embedding_dim=HIDDEN_DIM,
         beta=BETA,
-        quant_loss_weight=1.0,
-        contrastive_loss_weight=1.0,
-        temperature=1.0
+        quant_loss_weight=1.0
     ).to(DEVICE)
 
     total_params = sum(p.numel() for p in model.parameters())
@@ -85,7 +69,6 @@ def main():
             'loss': model_outputs['loss'],
             'recon_loss': model_outputs['recon_loss'],
             'rqvae_loss': model_outputs['rqvae_loss'],
-            'con_loss': model_outputs['con_loss']
         }, name='valid'),
 
         cb.MetricAccumulator(
@@ -93,7 +76,6 @@ def main():
                 'valid/loss': cb.MeanAccumulator(),
                 'valid/recon_loss': cb.MeanAccumulator(),
                 'valid/rqvae_loss': cb.MeanAccumulator(),
-                'valid/con_loss': cb.MeanAccumulator(),
             },
         ),
 

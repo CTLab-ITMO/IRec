@@ -17,15 +17,15 @@ from models import TigerModel, CorrectItemsLogitsProcessor
 
 # ПУТИ
 IREC_PATH = '../../'
-SEMANTIC_MAPPING_PATH = os.path.join(IREC_PATH, 'results_sigir/4-1_plum_rqvae_beauty_ws_2_clusters_colisionless.json')
-TRAIN_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_4-1_train_batches/')
-VALID_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_4-1_valid_batches/')
-EVAL_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_4-1_eval_batches/')
+SEMANTIC_MAPPING_PATH = os.path.join(IREC_PATH, 'results_sigir/4-2_updated_quantile_plum_rqvae_beauty_ws_2_clusters_colisionless.json')
+TRAIN_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/updated_quantile_tiger_4-2_train_batches/')
+VALID_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/updated_quantile_tiger_4-2_valid_batches/')
+EVAL_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/updated_quantile_tiger_4-2_eval_batches/')
 
 TENSORBOARD_LOGDIR = os.path.join(IREC_PATH, 'tensorboard_logs')
 CHECKPOINTS_DIR = os.path.join(IREC_PATH, 'checkpoints')
 
-EXPERIMENT_NAME = 'tiger_beauty_4-1_plum_ws_2_dp_0.2'
+EXPERIMENT_NAME = 'tiger_beauty_updated_quantile_4-2_plum_ws_2_dp_0.2'
 
 # ОСТАЛЬНОЕ
 SEED_VALUE = 42

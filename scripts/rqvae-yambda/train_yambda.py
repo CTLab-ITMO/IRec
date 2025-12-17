@@ -11,83 +11,64 @@ from irec.runners import TrainingRunner
 from irec.utils import fix_random_seed
 
 from callbacks import InitCodebooks, FixDeadCentroids
-from data import EmbeddingDataset, ProcessEmbeddings
-from models import PlumRQVAE
-from transforms import AddWeightedCooccurrenceEmbeddings
-from cooc_data import CoocMappingDataset
+from data import EmbeddingDatasetParquet, ProcessEmbeddings
+from models import RQVAE
 
 SEED_VALUE = 42
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-NUM_EPOCHS = 500
+NUM_EPOCHS = 100
 BATCH_SIZE = 1024
 
-INPUT_DIM = 4096
-HIDDEN_DIM = 32
-CODEBOOK_SIZE = 256
+INPUT_DIM = 128
+HIDDEN_DIM = 128
+CODEBOOK_SIZE = 512
 NUM_CODEBOOKS = 3
 BETA = 0.25
 LR = 1e-4
-WINDOW_SIZE = 2
 
-EXPERIMENT_NAME = f'test_plum_rqvae_beauty_ws_{WINDOW_SIZE}'
-IREC_PATH = '../../../../../'
+EXPERIMENT_NAME = 'rqvae_yambda_hd_128_cz_512'
+EMBEDDINGS_PATH = "/home/jovyan/IRec/sigir/yambda_data/yambda_embeddings_reindexed.parquet"
+IREC_PATH = '../../'
 
-
+print(EXPERIMENT_NAME, EMBEDDINGS_PATH)
 def main():
     fix_random_seed(SEED_VALUE)
 
-    import pickle
-
-    data = CoocMappingDataset.create(
-        inter_json_path=os.path.join(IREC_PATH, 'data/Beauty/inter_new.json'),
-        window_size=WINDOW_SIZE
+    dataset = EmbeddingDatasetParquet(
+        data_path=EMBEDDINGS_PATH
     )
-
-    dataset = EmbeddingDataset(
-        data_path='/home/jovyan/tiger/data/Beauty/default_content_embeddings.pkl'
-    )
-
-    item_id_to_embedding = {}
-    all_item_ids = []
-    for idx in range(len(dataset)):
-        sample = dataset[idx]
-        item_id = int(sample['item_id'])
-        item_id_to_embedding[item_id] = torch.tensor(sample['embedding'])
-        all_item_ids.append(item_id)
-
-    add_cooc_transform = AddWeightedCooccurrenceEmbeddings(
-        data.cooccur_counter_mapping, item_id_to_embedding, all_item_ids)
-
+    
     train_dataloader = DataLoader(
         dataset,
         batch_size=BATCH_SIZE,
+        num_workers=8,
         shuffle=True,
         drop_last=True,
+        persistent_workers=True,
+        pin_memory=True
     ).map(Collate()).map(ToTorch()).map(ToDevice(DEVICE)).map(
         ProcessEmbeddings(embedding_dim=INPUT_DIM, keys=['embedding'])
-    ).map(add_cooc_transform).repeat(NUM_EPOCHS)
+    ).repeat(NUM_EPOCHS)
 
     valid_dataloader = DataLoader(
         dataset,
         batch_size=BATCH_SIZE,
         shuffle=False,
         drop_last=False,
-    ).map(Collate()).map(ToTorch()).map(ToDevice(DEVICE)).map(ProcessEmbeddings(embedding_dim=INPUT_DIM, keys=['embedding'])).map(add_cooc_transform)
+    ).map(Collate()).map(ToTorch()).map(ToDevice(DEVICE)).map(ProcessEmbeddings(embedding_dim=INPUT_DIM, keys=['embedding']))
 
     LOG_EVERY_NUM_STEPS = int(len(train_dataloader) // NUM_EPOCHS)
 
-    model = PlumRQVAE(
+    model = RQVAE(
         input_dim=INPUT_DIM,
         num_codebooks=NUM_CODEBOOKS,
         codebook_size=CODEBOOK_SIZE,
         embedding_dim=HIDDEN_DIM,
         beta=BETA,
-        quant_loss_weight=1.0,
-        contrastive_loss_weight=1.0,
-        temperature=1.0
+        quant_loss_weight=1.0
     ).to(DEVICE)
-    
+
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -102,10 +83,9 @@ def main():
         cb.BatchMetrics(metrics=lambda model_outputs, batch: {
             'loss': model_outputs['loss'],
             'recon_loss': model_outputs['recon_loss'],
-            'rqvae_loss': model_outputs['rqvae_loss'],
-            'con_loss': model_outputs['con_loss']
+            'rqvae_loss': model_outputs['rqvae_loss']
         }, name='train'),
-        
+
         FixDeadCentroids(valid_dataloader),
 
         cb.MetricAccumulator(
@@ -113,7 +93,6 @@ def main():
                 'train/loss': cb.MeanAccumulator(),
                 'train/recon_loss': cb.MeanAccumulator(),
                 'train/rqvae_loss': cb.MeanAccumulator(),
-                'train/con_loss': cb.MeanAccumulator(),
                 'num_dead/0': cb.MeanAccumulator(),
                 'num_dead/1': cb.MeanAccumulator(),
                 'num_dead/2': cb.MeanAccumulator(),
@@ -128,14 +107,12 @@ def main():
                     'loss': model_outputs['loss'],
                     'recon_loss': model_outputs['recon_loss'],
                     'rqvae_loss': model_outputs['rqvae_loss'],
-                    'con_loss': model_outputs['con_loss']
                 }, name='valid'),
                 cb.MetricAccumulator(
                     accumulators={
                         'valid/loss': cb.MeanAccumulator(),
                         'valid/recon_loss': cb.MeanAccumulator(),
                         'valid/rqvae_loss': cb.MeanAccumulator(),
-                        'valid/con_loss': cb.MeanAccumulator()
                     }
                 ),
             ],
@@ -143,6 +120,13 @@ def main():
 
         cb.Logger().every_num_steps(LOG_EVERY_NUM_STEPS),
         cb.TensorboardLogger(experiment_name=EXPERIMENT_NAME, logdir=os.path.join(IREC_PATH, 'tensorboard_logs')),
+
+        cb.Profiler(
+            wait=10,
+            warmup=10,
+            active=10,
+            logdir=os.path.join(IREC_PATH, 'tensorboard_logs')
+        ),
 
         cb.EarlyStopping(
             metric='valid/recon_loss',

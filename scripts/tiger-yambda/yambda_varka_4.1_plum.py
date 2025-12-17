@@ -15,16 +15,19 @@ from irec.data.dataloader import DataLoader
 
 from data import Dataset
 
-
+print("tiger no arrow varka 4.1")
 
 # ПУТИ
 
 IREC_PATH = '../../'
-INTERACTIONS_PATH = os.path.join(IREC_PATH, 'data/Beauty/inter.json')
-SEMANTIC_MAPPING_PATH = os.path.join(IREC_PATH, 'results/rqvae_beauty_best_clusters_colisionless.json')
-TRAIN_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_train_batches/')
-VALID_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_valid_batches/')
-EVAL_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Beauty/tiger_eval_batches/')
+INTERACTIONS_TRAIN_PATH = os.path.join(IREC_PATH, 'data/Yambda/day-splits/merged_for_exps_filtered/exp_4_0.9_inter_tiger_train.json')
+INTERACTIONS_VALID_PATH = os.path.join(IREC_PATH, 'data/Yambda/day-splits/merged_for_exps_filtered/valid_set.json')
+INTERACTIONS_TEST_PATH = os.path.join(IREC_PATH, 'data/Yambda/day-splits/merged_for_exps_filtered/test_set.json')
+
+SEMANTIC_MAPPING_PATH = os.path.join(IREC_PATH, 'results_sigir_yambda/4-1_filtered_yambda_gpu_quantile_ws_2_clusters_colisionless.json')
+TRAIN_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Yambda/day-splits/test/yambda_quantile_tiger_T_train_batches/')
+VALID_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Yambda/day-splits/test/yambda_quantile_tiger_T_valid_batches/')
+EVAL_BATCHES_DIR = os.path.join(IREC_PATH, 'data/Yambda/day-splits/test/yambda_quantile_tiger_T_eval_batches/')
 
 
 # ОСТАЛЬНОЕ
@@ -33,6 +36,7 @@ SEED_VALUE = 42
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
+MAX_TRAIN_EVENTS = 300
 MAX_SEQ_LEN = 20
 TRAIN_BATCH_SIZE = 256
 VALID_BATCH_SIZE = 1024
@@ -44,7 +48,6 @@ UNIFIED_VOCAB_SIZE = CODEBOOK_SIZE * NUM_CODEBOOKS + NUM_USER_HASH + 10  # 10 fo
 PAD_TOKEN_ID = UNIFIED_VOCAB_SIZE - 1,
 EOS_TOKEN_ID = UNIFIED_VOCAB_SIZE - 2,
 DECODER_START_TOKEN_ID = UNIFIED_VOCAB_SIZE - 3,
-
 
 
 class TigerProcessing(Transform):
@@ -124,11 +127,22 @@ class SemanticIdsMapper(Transform):
         self._mapping = mapping
         self._names = names
 
+        max_item_id = max(int(k) for k in mapping.keys())
+        print(len(list(mapping.keys())), min(int(k) for k in mapping.keys()) , max(int(k) for k in mapping.keys()))
+        print(mapping["280052"]) #304781
+        # assert False
         data = []
-        for i in range(len(mapping)):
-            data.append(mapping[str(i)])
+        for i in range(max_item_id + 1):
+            if str(i) in mapping:
+                data.append(mapping[str(i)])
+            else:
+                data.append([-1] * NUM_CODEBOOKS)
+        
         self._mapping_tensor = torch.tensor(data, dtype=torch.long)
         self._semantic_length = self._mapping_tensor.shape[-1]
+        
+        missing_count = (max_item_id + 1) - len(mapping)
+        print(f"Mapping: {len(mapping)} items, {missing_count} missing (-1 filled)")
 
     def __call__(self, batch):
         for name in self._names:
@@ -137,7 +151,12 @@ class SemanticIdsMapper(Transform):
                 lengths = batch[f'{name}.length']
                 assert ids.min() >= 0
                 assert ids.max() < self._mapping_tensor.shape[0]
-                batch[f'{name}.semantic.ids'] = self._mapping_tensor[ids].flatten().numpy()
+                semantic_ids = self._mapping_tensor[ids].flatten()
+                
+                assert (semantic_ids != -1).all(), \
+                    f"Missing mappings detected in {name}! Invalid positions: {(semantic_ids == -1).sum()} out of {len(semantic_ids)}"
+                
+                batch[f'{name}.semantic.ids'] = semantic_ids.numpy()
                 batch[f'{name}.semantic.length'] = lengths * self._semantic_length
 
         return batch
@@ -207,15 +226,19 @@ def save_batches_to_arrow(batches, output_dir):
 
 
 def main():
-    data = Dataset.create(
-        inter_json_path=INTERACTIONS_PATH,
-        max_sequence_length=MAX_SEQ_LEN,
-        sampler_type='tiger',
-        is_extended=True
-    )
-
     with open(SEMANTIC_MAPPING_PATH, 'r') as f:
         mappings = json.load(f)
+    
+    data = Dataset.create_timestamp_based(
+        train_json_path=INTERACTIONS_TRAIN_PATH,
+        validation_json_path=INTERACTIONS_VALID_PATH,
+        test_json_path=INTERACTIONS_TEST_PATH,
+        max_sequence_length=MAX_SEQ_LEN,
+        sampler_type='tiger',
+        min_sample_len=2,
+        is_extended=True,
+        max_train_events=MAX_TRAIN_EVENTS
+    )
 
     train_dataset, valid_dataset, eval_dataset = data.get_datasets()
 

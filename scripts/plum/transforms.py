@@ -2,12 +2,6 @@ import numpy as np
 import pickle
 import torch
 
-from irec.data.base import BaseDataset
-from irec.data.transforms import Transform
-
-from cooc_data import CoocMappingDataset
-
-
 class AddWeightedCooccurrenceEmbeddings:
     def __init__(self, cooccur_counts, item_id_to_embedding, all_item_ids):
         self.cooccur_counts = cooccur_counts
@@ -32,7 +26,7 @@ class AddWeightedCooccurrenceEmbeddings:
                 
             else:
                 cooc_id = np.random.choice(self.all_item_ids)
-                if self.call_count % 10 == 0 and idx < 5:
+                if self.call_count % 500 == 0 and idx < 5:
                     print(f"  idx={idx}: item_id={item_id_val} fallback random")
             
             cooc_emb = self.item_id_to_embedding.get(cooc_id, batch['embedding'][0])

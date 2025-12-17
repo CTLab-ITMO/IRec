@@ -6,7 +6,33 @@ from irec.data.transforms import Transform
 
 
 import polars as pl
-import torch
+
+class InteractionsDatasetParquet(BaseDataset):
+    def __init__(self, data_path, max_items=None):
+        self.df = pl.read_parquet(data_path)
+        assert 'uid' in self.df.columns, "Missing 'uid' column"
+        assert 'item_ids' in self.df.columns, "Missing 'item_ids' column"
+        print(f"Dataset loaded: {len(self.df)} users")
+
+        if max_items is not None:
+            self.df = self.df.with_columns(
+                pl.col("item_ids").list.slice(-max_items).alias("item_ids")
+            )
+
+    def __getitem__(self, idx):
+        row = self.df.row(idx, named=True)
+        return {
+            'user_id': row['uid'],
+            'item_ids': np.array(row['item_ids'], dtype=np.uint32),
+        }
+
+    def __len__(self):
+        return len(self.df)
+
+    def __iter__(self):
+        for idx in range(len(self)):
+            yield self[idx]
+
 
 class EmbeddingDatasetParquet(BaseDataset):
     def __init__(self, data_path):
