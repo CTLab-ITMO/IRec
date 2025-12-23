@@ -1,0 +1,226 @@
+import json
+from loguru import logger
+import os
+
+import torch
+
+import irec.callbacks as cb
+from irec.data.transforms import Collate, ToDevice
+from irec.data.dataloader import DataLoader
+from irec.runners import TrainingRunner
+from irec.utils import fix_random_seed
+
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from data import ArrowBatchDataset
+from models import TigerModel, CorrectItemsLogitsProcessor
+
+
+# ПУТИ
+IREC_PATH = '../../../'
+TRAIN_PART_SEMANTIC_MAPPING_PATH = "/home/jovyan/IRec/results-lsvd-2/base_gap/only_base_with_gap_rqvae_vk-lsvd-15ts_base_with_gap_e35_rqvae_1.0_clusters_colisionless_from_all.json"
+TRAIN_BATCHES_DIR = os.path.join(IREC_PATH, 'data/lsvd-2/rqvae_base_gap/all_items_rqvae_vk-lsvd-15ts_base_with_gap_e35_rqvae_1.0/train_batches/')
+VALID_BATCHES_DIR = os.path.join(IREC_PATH, 'data/lsvd-2/rqvae_base_gap/all_items_rqvae_vk-lsvd-15ts_base_with_gap_e35_rqvae_1.0/valid_batches/')
+EVAL_BATCHES_DIR = os.path.join(IREC_PATH, 'data/lsvd-2/rqvae_base_gap/all_items_rqvae_vk-lsvd-15ts_base_with_gap_e35_rqvae_1.0/eval_batches/')
+
+TENSORBOARD_LOGDIR = os.path.join(IREC_PATH, 'tensorboard_logs')
+CHECKPOINTS_DIR = os.path.join(IREC_PATH, 'checkpoints-lsvd-transformer')
+
+EXPERIMENT_NAME = 'tiger_rqvae_vk-lsvd-15ts_base_with_gap_e35_rqvae_1.0'
+
+# ОСТАЛЬНОЕ
+SEED_VALUE = 42
+DEVICE = 'cuda'
+
+NUM_EPOCHS = 100
+MAX_SEQ_LEN = 20
+TRAIN_BATCH_SIZE = 256
+VALID_BATCH_SIZE = 1024
+EMBEDDING_DIM = 128
+CODEBOOK_SIZE = 512
+NUM_POSITIONS = 80
+NUM_USER_HASH = 8000
+NUM_HEADS = 6
+NUM_LAYERS = 4
+FEEDFORWARD_DIM = 1024
+KV_DIM = 64
+DROPOUT = 0.2
+NUM_BEAMS = 30
+TOP_K = 20
+NUM_CODEBOOKS = 4
+LR = 0.0001
+
+USE_MICROBATCHING = True
+MICROBATCH_SIZE = 256
+
+torch.set_float32_matmul_precision('high')
+torch._dynamo.config.capture_scalar_outputs = True
+
+import torch._inductor.config as config
+config.triton.cudagraph_skip_dynamic_graphs = True
+
+
+def main():
+    fix_random_seed(SEED_VALUE)
+
+    with open(TRAIN_PART_SEMANTIC_MAPPING_PATH, 'r') as f:
+        train_part_mapping = json.load(f)
+
+    train_dataloader = DataLoader(
+        ArrowBatchDataset(
+            TRAIN_BATCHES_DIR,
+            device='cpu',
+            preload=True
+        ),
+        batch_size=1,
+        shuffle=True,
+        num_workers=0,
+        pin_memory=True,
+        collate_fn=Collate()
+    ).map(ToDevice(DEVICE)).repeat(NUM_EPOCHS)
+
+    valid_dataloder = ArrowBatchDataset(
+        VALID_BATCHES_DIR,
+        device=DEVICE,
+        preload=True
+    )
+
+    eval_dataloder = ArrowBatchDataset(
+        EVAL_BATCHES_DIR,
+        device=DEVICE,
+        preload=True
+    )
+
+    model = TigerModel(
+        embedding_dim=EMBEDDING_DIM,
+        codebook_size=CODEBOOK_SIZE,
+        sem_id_len=NUM_CODEBOOKS,
+        user_ids_count=NUM_USER_HASH,
+        num_positions=NUM_POSITIONS,
+        num_heads=NUM_HEADS,
+        num_encoder_layers=NUM_LAYERS,
+        num_decoder_layers=NUM_LAYERS,
+        dim_feedforward=FEEDFORWARD_DIM,
+        num_beams=NUM_BEAMS,
+        num_return_sequences=TOP_K,
+        activation='relu',
+        d_kv=KV_DIM,
+        dropout=DROPOUT,
+        layer_norm_eps=1e-6,
+        initializer_range=0.02,
+        logits_processor=CorrectItemsLogitsProcessor(NUM_CODEBOOKS, CODEBOOK_SIZE, train_part_mapping, NUM_BEAMS),
+        use_microbatching=USE_MICROBATCHING,
+        microbatch_size=MICROBATCH_SIZE
+    ).to(DEVICE)
+
+
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    logger.debug(f'Overall parameters: {total_params:,}')
+    logger.debug(f'Trainable parameters: {trainable_params:,}')
+
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=LR,
+    )
+
+    EPOCH_NUM_STEPS = 1024 # int(len(train_dataloader) // NUM_EPOCHS)
+
+    callbacks = [
+        cb.BatchMetrics(metrics=lambda model_outputs, _: {
+            'loss': model_outputs['loss'].item(),
+        }, name='train'),
+        cb.MetricAccumulator(
+            accumulators={
+                'train/loss': cb.MeanAccumulator(),
+            },
+            reset_every_num_steps=EPOCH_NUM_STEPS
+        ),
+
+        cb.Validation(
+            dataset=valid_dataloder,
+            callbacks=[
+                cb.BatchMetrics(metrics=lambda model_outputs, _:{
+                    'loss': model_outputs['loss'].item(),
+                    'recall@5': model_outputs['recall@5'].tolist(),
+                    'recall@10': model_outputs['recall@10'].tolist(),
+                    'recall@20': model_outputs['recall@20'].tolist(),
+                    'ndcg@5': model_outputs['ndcg@5'].tolist(),
+                    'ndcg@10': model_outputs['ndcg@10'].tolist(),
+                    'ndcg@20': model_outputs['ndcg@20'].tolist(),
+                }, name='validation'),
+                cb.MetricAccumulator(
+                    accumulators={
+                        'validation/loss': cb.MeanAccumulator(),
+                        'validation/recall@5': cb.MeanAccumulator(),
+                        'validation/recall@10': cb.MeanAccumulator(),
+                        'validation/recall@20': cb.MeanAccumulator(),
+                        'validation/ndcg@5': cb.MeanAccumulator(),
+                        'validation/ndcg@10': cb.MeanAccumulator(),
+                        'validation/ndcg@20': cb.MeanAccumulator(),
+                    },
+                ),
+            ],
+        ).every_num_steps(EPOCH_NUM_STEPS),
+
+        cb.Validation(
+            dataset=eval_dataloder,
+            callbacks=[
+                cb.BatchMetrics(metrics=lambda model_outputs, _: {
+                    'loss': model_outputs['loss'].item(),
+                    'recall@5': model_outputs['recall@5'].tolist(),
+                    'recall@10': model_outputs['recall@10'].tolist(),
+                    'recall@20': model_outputs['recall@20'].tolist(),
+                    'ndcg@5': model_outputs['ndcg@5'].tolist(),
+                    'ndcg@10': model_outputs['ndcg@10'].tolist(),
+                    'ndcg@20': model_outputs['ndcg@20'].tolist(),
+                }, name='eval'),
+                cb.MetricAccumulator(
+                    accumulators={
+                        'eval/loss': cb.MeanAccumulator(),
+                        'eval/recall@5': cb.MeanAccumulator(),
+                        'eval/recall@10': cb.MeanAccumulator(),
+                        'eval/recall@20': cb.MeanAccumulator(),
+                        'eval/ndcg@5': cb.MeanAccumulator(),
+                        'eval/ndcg@10': cb.MeanAccumulator(),
+                        'eval/ndcg@20': cb.MeanAccumulator(),
+                    },
+                ),
+            ],
+        ).every_num_steps(EPOCH_NUM_STEPS * 4),
+
+        cb.Logger().every_num_steps(EPOCH_NUM_STEPS),
+        cb.TensorboardLogger(experiment_name=EXPERIMENT_NAME, logdir=TENSORBOARD_LOGDIR),
+
+        cb.EarlyStopping(
+            metric='validation/ndcg@20',
+            patience=40 * 4,
+            minimize=False,
+            model_path=os.path.join(CHECKPOINTS_DIR, EXPERIMENT_NAME)
+        ).every_num_steps(EPOCH_NUM_STEPS)
+
+        # cb.Profiler(
+        #     wait=10,
+        #     warmup=10,
+        #     active=10,
+        #     logdir=TENSORBOARD_LOGDIR
+        # ),
+        # cb.StopAfterNumSteps(40)
+
+    ]
+
+    logger.debug('Everything is ready for training process!')
+
+    runner = TrainingRunner(
+        model=model,
+        optimizer=optimizer,
+        dataset=train_dataloader,
+        callbacks=callbacks,
+    )
+    runner.run()
+
+
+if __name__ == '__main__':
+    main()
