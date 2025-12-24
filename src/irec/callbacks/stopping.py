@@ -44,14 +44,18 @@ class EarlyStopping(Callback):
         metric = context.metrics[self._metric]
         if self._best_metric is None:
             self._best_metric = metric
-            torch.save(runner.model.state_dict(), f'{self._model_path}_best_{round(self._best_metric, 4)}.pth')
+            save_path = f'{self._model_path}_best_{round(self._best_metric, 4)}.pth'
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            torch.save(runner.model.state_dict(), save_path)
         else:
             if (self._minimize and metric < self._best_metric) or (not self._minimize and metric > self._best_metric):
                 self._wait = 0
                 old_metric = self._best_metric
                 self._best_metric = metric
                 # Saving new model
-                torch.save(runner.model.state_dict(), f'{self._model_path}_best_{round(self._best_metric, 4)}.pth')
+                save_path = f'{self._model_path}_best_{round(self._best_metric, 4)}.pth'
+                os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                torch.save(runner.model.state_dict(), save_path)
                 # Deleting old model
                 if str(round(self._best_metric, 4)) != str(round(old_metric, 4)):
                     os.remove(f'{self._model_path}_best_{round(old_metric, 4)}.pth')
