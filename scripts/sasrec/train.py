@@ -6,7 +6,6 @@ import torch
 import irec.callbacks as cb
 from irec.data.transforms import Collate, ToDevice, ToTorch
 from irec.data.dataloader import DataLoader
-from irec.models import AutoCast
 from irec.runners import TrainingRunner
 from irec.utils import fix_random_seed
 
@@ -16,17 +15,24 @@ from models import SasRecModel
 SEED_VALUE = 42
 DEVICE = 'cuda'
 
-EXPERIMENT_NAME = 'sasrec_beauty'
 NUM_EPOCHS = 300
 MAX_SEQ_LEN = 20
 TRAIN_BATCH_SIZE = 256
-VALID_BATCH_SiZE = 256
+VALID_BATCH_SIZE = 256
 EMBEDDING_DIM = 64
 NUM_HEADS = 2
 NUM_LAYERS = 2
 FEEDFORWARD_DIM = 256
 DROPOUT = 0.3
 LR = 1e-4
+
+EXPERIMENT_NAME = (
+    f'sasrec_beauty_seed{SEED_VALUE}_bs{TRAIN_BATCH_SIZE}'
+    f'_seq{MAX_SEQ_LEN}'
+    f'_dim{EMBEDDING_DIM}_heads{NUM_HEADS}_layers{NUM_LAYERS}'
+    f'_ff{FEEDFORWARD_DIM}_drop{DROPOUT}_lr{LR}_epochs{NUM_EPOCHS}'
+    f'_fp32'
+)
 
 
 IREC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -37,6 +43,7 @@ torch._dynamo.config.capture_scalar_outputs = True
 
 def main():
     fix_random_seed(SEED_VALUE)
+    logger.info(f'Experiment {EXPERIMENT_NAME}')
 
     data = Dataset.create(
         inter_json_path=os.path.join(IREC_PATH, 'data/Beauty/inter.json'),
@@ -48,10 +55,10 @@ def main():
         collate_fn=Collate(),
     ).repeat(NUM_EPOCHS).map(ToTorch()).map(ToDevice(DEVICE))
     valid_dataloder = DataLoader(
-        valid_data, batch_size=VALID_BATCH_SiZE, collate_fn=Collate(),
+        valid_data, batch_size=VALID_BATCH_SIZE, collate_fn=Collate(),
     ).map(ToTorch()).map(ToDevice(DEVICE))
     eval_dataloder = DataLoader(
-        eval_data, batch_size=VALID_BATCH_SiZE, collate_fn=Collate(),
+        eval_data, batch_size=VALID_BATCH_SIZE, collate_fn=Collate(),
     ).map(ToTorch()).map(ToDevice(DEVICE))
 
     model = SasRecModel(
@@ -67,7 +74,6 @@ def main():
         layer_norm_eps=1e-8,
         initializer_range=0.02
     )
-    model = torch.compile(model, mode="default", fullgraph=False)
     model = model.to(DEVICE)
 
     total_params = sum(p.numel() for p in model.parameters())
@@ -182,7 +188,7 @@ def main():
     logger.debug('Everything is ready for training process!')
 
     runner = TrainingRunner(
-        model=AutoCast(model, dtype=torch.bfloat16, device_type=DEVICE),
+        model=model,
         optimizer=optimizer,
         dataset=train_dataloader,
         callbacks=callbacks,

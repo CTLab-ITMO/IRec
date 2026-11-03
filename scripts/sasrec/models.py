@@ -3,7 +3,6 @@ import torch.nn as nn
 
 from irec.models import TorchModel, create_masked_tensor
 
-from irec.models.flashattn import TransformerEncoder
 
 
 class SasRecModel(TorchModel):
@@ -37,43 +36,21 @@ class SasRecModel(TorchModel):
 
         self._topk_k = topk_k
 
-        self._encoder = TransformerEncoder(
-            embedding_dim=embedding_dim,
-            dim_feedforward=dim_feedforward,
-            layers=num_layers,
-            num_heads=num_heads,
-            dropout=dropout,
-            activation=activation,
-            causal=True,
+        layer = nn.TransformerEncoderLayer(
+            d_model=embedding_dim, nhead=num_heads,
+            dim_feedforward=dim_feedforward, dropout=dropout,
+            activation=activation, layer_norm_eps=layer_norm_eps,
+            batch_first=True,
         )
+        self._encoder = nn.TransformerEncoder(layer, num_layers, enable_nested_tensor=False)
 
         self._init_weights(initializer_range)
 
     def forward(self, inputs):
         all_sample_events = inputs['item.ids']  # (total_batch_items)
         all_sample_lengths = inputs['item.length']  # (batch_size)
-        max_seqlen = int(all_sample_lengths.max().item())
-
-        embeddings = self._item_embeddings(all_sample_events)
-
-        end_indices = all_sample_lengths.cumsum(dim=0)  # (batch_size)
-        start_indices = end_indices - all_sample_lengths  # (batch_size)
-
-        sample_indices = torch.arange(
-            all_sample_lengths.shape[0],
-            device=all_sample_lengths.device
-        ).repeat_interleave(all_sample_lengths)  # (total_batch_items)
-
-        positions = torch.arange(
-            all_sample_events.shape[0],
-            device=all_sample_events.device
-        ) - start_indices[sample_indices]  # (total_batch_items)
-        
-        position_embeddings = self._position_embeddings(positions)   # (total_batch_items, embedding_dim)
-
-        embeddings = embeddings + position_embeddings  # (total_batch_items, embedding_dim)
-
-        all_sample_embeddings = self._encoder(embeddings=embeddings, lengths=all_sample_lengths, max_seqlen=max_seqlen)  # (total_batch_items, embedding_dim)
+        embeddings, mask = self._apply_sequential_encoder(all_sample_events, all_sample_lengths)
+        all_sample_embeddings = embeddings[mask]
 
         all_positive_sample_events = inputs['labels.ids']  # (total_batch_items)
         
@@ -156,6 +133,35 @@ class SasRecModel(TorchModel):
             ).float()
 
         return loss, metrics
+
+    def _apply_sequential_encoder(self, events, lengths):
+        embeddings = self._item_embeddings(events)  # (all_batch_events, embedding_dim)
+
+        embeddings, mask = create_masked_tensor(
+            data=embeddings,
+            lengths=lengths
+        )  # (batch_size, seq_len, embedding_dim), (batch_size, seq_len)
+
+        batch_size = mask.shape[0]
+        seq_len = mask.shape[1]
+
+        positions = torch.arange(
+            start=0, end=seq_len, device=mask.device
+        )[None].expand(batch_size, -1)  # (batch_size, seq_len)
+
+        position_embeddings = self._position_embeddings(positions)   # (batch_size, seq_len, embedding_dim)
+        position_embeddings[~mask] = 0
+
+        embeddings = embeddings + position_embeddings  # (batch_size, seq_len, embedding_dim)
+        embeddings[~mask] = 0
+        causal_mask = nn.Transformer.generate_square_subsequent_mask(seq_len).bool().to(embeddings.device)  # (seq_len, seq_len)
+        embeddings = self._encoder(
+            src=embeddings,
+            mask=causal_mask,
+            src_key_padding_mask=~mask
+        )  # (batch_size, seq_len, embedding_dim)
+
+        return embeddings, mask
 
     def _compute_loss(self, positive_scores, negative_scores):
         assert positive_scores.shape[0] == negative_scores.shape[0]
