@@ -4,13 +4,13 @@ import os
 import torch
 
 import irec.callbacks as cb
-from irec.data.transforms import Collate, ToDevice
+from irec.data.transforms import Collate, ToDevice, ToTorch
 from irec.data.dataloader import DataLoader
 from irec.models import AutoCast
 from irec.runners import TrainingRunner
 from irec.utils import fix_random_seed
 
-from data import ArrowBatchDataset
+from data import Dataset
 from models import SasRecModel
 
 SEED_VALUE = 42
@@ -28,9 +28,8 @@ FEEDFORWARD_DIM = 256
 DROPOUT = 0.3
 LR = 1e-4
 
-NUM_ITEMS = 12101
 
-IREC_PATH = '../../'
+IREC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 
 torch.set_float32_matmul_precision('high')
 torch._dynamo.config.capture_scalar_outputs = True
@@ -39,35 +38,24 @@ torch._dynamo.config.capture_scalar_outputs = True
 def main():
     fix_random_seed(SEED_VALUE)
 
+    data = Dataset.create(
+        inter_json_path=os.path.join(IREC_PATH, 'data/Beauty/inter.json'),
+        max_sequence_length=MAX_SEQ_LEN, sampler_type='sasrec', is_extended=False,
+    )
+    train_data, valid_data, eval_data = data.get_datasets()
     train_dataloader = DataLoader(
-        ArrowBatchDataset(
-            os.path.join(IREC_PATH, 'data/Beauty/sasrec_train/'), 
-            device='cpu', 
-            preload=None
-        ),
-        batch_size=1, 
-        shuffle=True, 
-        num_workers=16,
-        prefetch_factor=16,
-        pin_memory=True, 
-        persistent_workers=True,
-        collate_fn=Collate()
-    ).map(ToDevice(DEVICE))
-
-    valid_dataloder = ArrowBatchDataset(
-        os.path.join(IREC_PATH, 'data/Beauty/sasrec_valid/'),
-        device=DEVICE,
-        preload=True
-    )
-
-    eval_dataloder = ArrowBatchDataset(
-        os.path.join(IREC_PATH, 'data/Beauty/sasrec_eval/'),
-        device=DEVICE,
-        preload=True
-    )
+        train_data, batch_size=TRAIN_BATCH_SIZE, shuffle=True, drop_last=True,
+        collate_fn=Collate(),
+    ).repeat(NUM_EPOCHS).map(ToTorch()).map(ToDevice(DEVICE))
+    valid_dataloder = DataLoader(
+        valid_data, batch_size=VALID_BATCH_SiZE, collate_fn=Collate(),
+    ).map(ToTorch()).map(ToDevice(DEVICE))
+    eval_dataloder = DataLoader(
+        eval_data, batch_size=VALID_BATCH_SiZE, collate_fn=Collate(),
+    ).map(ToTorch()).map(ToDevice(DEVICE))
 
     model = SasRecModel(
-        num_items=NUM_ITEMS,
+        num_items=data.num_items,
         max_sequence_length=MAX_SEQ_LEN,
         embedding_dim=EMBEDDING_DIM,
         num_heads=NUM_HEADS,
@@ -80,7 +68,7 @@ def main():
         initializer_range=0.02
     )
     model = torch.compile(model, mode="default", fullgraph=False)
-    model = model.to('cuda')
+    model = model.to(DEVICE)
 
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -94,6 +82,8 @@ def main():
     )
 
     EPOCH_NUM_STEPS = int(len(train_dataloader) // NUM_EPOCHS)
+    assert EPOCH_NUM_STEPS > 0, 'Training data must contain at least one full batch'
+    os.makedirs(os.path.join(IREC_PATH, 'checkpoints'), exist_ok=True)
 
     callbacks = [
         cb.BatchMetrics(metrics=lambda model_outputs, _: {

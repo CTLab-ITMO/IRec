@@ -1,11 +1,8 @@
 import json
 from loguru import logger
 import numpy as np
-from pathlib import Path
 
-import pyarrow.feather as feather
 
-import torch
 
 from irec.data.base import BaseDataset
 
@@ -173,62 +170,3 @@ class EvalDataset(BaseDataset):
             'visited.ids': np.array(sample['item.ids'][:-1], dtype=np.int64),
             'visited.length': np.array([len(sample['item.ids'][:-1])], dtype=np.int64),
         }
-
-
-class ArrowBatchDataset(BaseDataset):
-    def __init__(self, batch_dir, device='cuda', preload=False):
-        self.batch_dir = Path(batch_dir)
-        self.device = device
-        all_files = list(self.batch_dir.glob('batch_*_len_*.arrow'))
-
-        from collections import defaultdict
-        batch_files_map = defaultdict(list)
-
-        for f in all_files:
-            batch_id = int(f.stem.split('_')[1])
-            batch_files_map[batch_id].append(f)
-        
-        for batch_id in batch_files_map:
-            batch_files_map[batch_id].sort()
-        
-        self.batch_indices = sorted(batch_files_map.keys())
-        if preload:
-            print(f"Preloading {len(self.batch_indices)} batches...")
-            self.cached_batches = []
-            
-            for idx in range(len(self.batch_indices)):
-                batch_id = self.batch_indices[idx]
-                arrow_files = batch_files_map[batch_id]
-                
-                batch = {}
-                for arrow_file in arrow_files:
-                    table = feather.read_table(arrow_file)
-                    
-                    for column_name in table.column_names:
-                        arr = table[column_name].to_numpy()
-                        batch[column_name] = torch.from_numpy(arr.copy()).to(device)
-                
-                self.cached_batches.append(batch)
-        else:
-            self.cached_batches = None
-            self.batch_files_map = batch_files_map
-    
-    def __len__(self):
-        return len(self.batch_indices)
-    
-    def __getitem__(self, idx):
-        if self.cached_batches is not None:
-            return self.cached_batches[idx]
-        else:
-            batch_id = self.batch_indices[idx]
-            arrow_files = self.batch_files_map[batch_id]
-
-            batch = {}
-            for arrow_file in arrow_files:
-                table = feather.read_table(arrow_file)
-
-                for column_name in table.column_names:
-                    arr = table[column_name].to_numpy()
-                    batch[column_name] = torch.from_numpy(arr.copy()).to(self.device)
-
-            return batch
