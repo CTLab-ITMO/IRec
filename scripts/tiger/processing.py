@@ -71,7 +71,7 @@ class ToMasked(Transform):
         mask = np.arange(max_sequence_length)[None] < lengths[:, None]
 
         if self._is_right_aligned:
-            mask = np.flip(mask, axis=-1)
+            mask = np.flip(mask, axis=-1).copy()
 
         padded_tensor[mask] = data
 

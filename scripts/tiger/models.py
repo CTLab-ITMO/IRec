@@ -21,13 +21,9 @@ class CorrectItemsLogitsProcessor(LogitsProcessor):
 
         self.index_semantic_ids = torch.tile(self.index_semantic_ids[None], dims=[batch_size, 1, 1])  # (batch_size, num_items, semantic_ids)
 
-        index = visited_items[..., None].tile(dims=[1, 1, num_codebooks])  # (batch_size, num_rated, semantic_ids)
-        self.index_semantic_ids = torch.scatter(
-            input=self.index_semantic_ids,
-            dim=1,
-            index=index,
-            src=torch.zeros_like(index)
-        )  # (batch_size, num_items, semantic_ids)
+        valid = visited_items >= 0
+        batch_indices = torch.arange(batch_size, device=visited_items.device)[:, None].expand_as(visited_items)
+        self.index_semantic_ids[batch_indices[valid], visited_items[valid]] = -1
     
     def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
         next_sid_codebook_num = (torch.minimum((input_ids[:, -1].max() // self.codebook_size), torch.as_tensor(self.num_codebooks - 1)).item() + 1) % self.num_codebooks
@@ -35,7 +31,7 @@ class CorrectItemsLogitsProcessor(LogitsProcessor):
         a = a.reshape(a.shape[0] * a.shape[1], a.shape[2])  # (batch_size * num_beams, num_items)
 
         if next_sid_codebook_num != 0:
-            b = torch.tile(self.index_semantic_ids[:, None :, :next_sid_codebook_num], dims=[1, self.num_beams, 1, 1])  # (batch_size, num_beams, num_items, sid_len)
+            b = torch.tile(self.index_semantic_ids[:, None, :, :next_sid_codebook_num], dims=[1, self.num_beams, 1, 1])  # (batch_size, num_beams, num_items, sid_len)
             b = b.reshape(b.shape[0] * b.shape[1], b.shape[2], b.shape[3])  # (batch_size * num_beams, num_items, sid_len)
 
             current_prefixes = input_ids[:, -next_sid_codebook_num:]  # (batch_size * num_beams, sid_len)
@@ -48,8 +44,8 @@ class CorrectItemsLogitsProcessor(LogitsProcessor):
         scores_mask = torch.scatter_add(
             input=scores_mask,
             dim=-1,
-            index=a,
-            src=torch.ones_like(a).bool()
+            index=a.clamp_min(0),
+            src=a >= 0
         )
         
         scores[:, :next_sid_codebook_num * self.codebook_size] = -torch.inf
@@ -139,7 +135,7 @@ class TigerModel(TorchModel):
         metrics = {'loss': loss.detach()}
         
         if not self.training:
-            visited_batch = inputs['visited.padded']
+            visited_batch = inputs['visited.padded'].masked_fill(~inputs['visited.mask'], -1)
 
             output = self.model.generate(
                 input_ids=input_semantic_ids,
