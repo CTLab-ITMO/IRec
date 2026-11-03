@@ -120,13 +120,6 @@ class TigerModel(TorchModel):
         self.model = T5ForConditionalGeneration(config=self.config)
         self._init_weights(initializer_range)
 
-        self.model = torch.compile(
-            self.model, 
-            mode='reduce-overhead',
-            fullgraph=False,
-            dynamic=True
-        )
-
     def forward(self, inputs):
         input_semantic_ids = inputs['input.data']
         attention_mask = inputs['input.mask']
