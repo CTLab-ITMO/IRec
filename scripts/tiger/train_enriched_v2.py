@@ -1,4 +1,6 @@
 from functools import partial
+from pathlib import Path
+import hashlib
 import json
 from loguru import logger
 import os
@@ -8,7 +10,7 @@ import torch
 import irec.callbacks as cb
 from irec.data.transforms import Collate, ToDevice, ToTorch
 from irec.data.dataloader import DataLoader
-from irec.runners import TrainingRunner
+from irec.runners import TrainingRunner, InferenceRunner
 from irec.utils import fix_random_seed
 
 from data import Dataset
@@ -207,6 +209,55 @@ def main():
         callbacks=callbacks,
     )
     runner.run()
+
+    test_callbacks = [
+        cb.BatchMetrics(metrics=lambda model_outputs, _: {
+            'loss': model_outputs['loss'].item(),
+            'recall@5': model_outputs['recall@5'].tolist(),
+            'recall@10': model_outputs['recall@10'].tolist(),
+            'recall@20': model_outputs['recall@20'].tolist(),
+            'ndcg@5': model_outputs['ndcg@5'].tolist(),
+            'ndcg@10': model_outputs['ndcg@10'].tolist(),
+            'ndcg@20': model_outputs['ndcg@20'].tolist(),
+        }, name='eval'),
+        cb.MetricAccumulator(
+            accumulators={
+                'eval/loss': cb.MeanAccumulator(),
+                'eval/recall@5': cb.MeanAccumulator(),
+                'eval/recall@10': cb.MeanAccumulator(),
+                'eval/recall@20': cb.MeanAccumulator(),
+                'eval/ndcg@5': cb.MeanAccumulator(),
+                'eval/ndcg@10': cb.MeanAccumulator(),
+                'eval/ndcg@20': cb.MeanAccumulator(),
+            },
+        ),
+    ]
+
+    best_checkpoints = list((Path(IREC_PATH) / 'checkpoints').glob(EXPERIMENT_NAME + '_best_*.pth'))
+    assert len(best_checkpoints) == 1, best_checkpoints
+    best_checkpoint = best_checkpoints[0]
+    model.load_state_dict(torch.load(best_checkpoint, map_location=DEVICE, weights_only=True))
+    final_test = InferenceRunner(
+        model=model,
+        dataset=eval_dataloder,
+        callbacks=test_callbacks + [
+            cb.Logger().every_num_steps(len(eval_dataloder)),
+            cb.TensorboardLogger(experiment_name=EXPERIMENT_NAME + '_best',
+                                 logdir=os.path.join(IREC_PATH, 'tensorboard_logs')).every_num_steps(len(eval_dataloder)),
+        ],
+    ).run()
+    results_dir = Path(IREC_PATH) / 'results'
+    results_dir.mkdir(exist_ok=True)
+    report = {
+        'experiment': EXPERIMENT_NAME,
+        'checkpoint': best_checkpoint.name,
+        'checkpoint_sha256': hashlib.sha256(best_checkpoint.read_bytes()).hexdigest(),
+        'selection_metric': 'validation/ndcg@20',
+        'test_metrics': {key: float(value) for key, value in final_test.metrics.items()},
+    }
+    (results_dir / (EXPERIMENT_NAME + '_test.json')).write_text(json.dumps(report, indent=2))
+    logger.info(f'Best-validation checkpoint test: {report}')
+
 
 
 if __name__ == '__main__':

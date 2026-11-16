@@ -224,7 +224,7 @@ def main():
         callbacks=test_callbacks + [
             cb.Logger().every_num_steps(len(eval_dataloder)),
             cb.TensorboardLogger(experiment_name=EXPERIMENT_NAME + '_best',
-                                 logdir=os.path.join(IREC_PATH, 'tensorboard_logs')),
+                                 logdir=os.path.join(IREC_PATH, 'tensorboard_logs')).every_num_steps(len(eval_dataloder)),
         ],
     ).run()
     results_dir = Path(IREC_PATH) / 'results'

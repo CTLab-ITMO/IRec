@@ -1,0 +1,51 @@
+Обычный запуск ноутбуков
+
+Работать в отдельной копии репозитория: выходные data/, checkpoints/, results/
+не должны содержать артефакты другого запуска. Исходные результаты не перезаписывать.
+Python 3.12. Установка в своё окружение из корня репозитория:
+  python -m pip install -r requirements-experiments.txt
+  python -m pip install --no-deps -e .
+  python -m pip install jupyterlab
+  python -m jupyter lab
+Выбрать ядро этого же Python. Ноутбуки подготовки запускать из notebooks/.
+Для повторения CUDA-окружения установить torch2.6.0 из индекса cu124 PyTorch.
+
+Для каждого датасета подготовить исходные Amazon Reviews2014 5-core и metadata:
+  Beauty: data/Beauty/Beauty_5.json, data/Beauty/metadata.json
+  Toys: data/Toys/Toys_and_Games_5.json, data/Toys/metadata.json
+  Sports: data/Sports/Sports_and_Outdoors_5.json, data/Sports/metadata.json
+Файлы должны быть распакованы из .gz; URL указаны в DatasetProcessing.
+
+Порядок ячеек/ноутбуков сверху вниз, Restart Kernel and Run All:
+  1. DatasetProcessing.ipynb для Beauty, DatasetProcessingToys/Sports.ipynb для остальных.
+     Выходы: inter.json, item_texts.parquet, items.parquet.
+  2. EnrichmentV2Beauty/Toys/SportsLocal.ipynb.
+     Выход: data/<dataset>/enrichment/enriched_v2/summaries.parquet.
+     Qwen2.5-7B-Instruct, фиксированный revision, BF16, batch128.
+     Исходная генерация Toys/Sports использовала A100; обычная 1080Ti этот режим не поддерживает.
+  3. ContentEmbeddingsBeauty/Toys/SportsLocal.ipynb.
+     Читает исходные тексты и summaries.parquet из шага2.
+     Выходы: content_embeddings_original.pkl, content_embeddings_enriched_v2.pkl.
+     Llama7B, фиксированный revision, FP32, eager attention, masked mean, max_length1024, batch1.
+     Веса FP32 требуют около28GB памяти; device_map=auto может распределять их междуGPU/CPU.
+  4. RQVAEBeauty/Toys/Sports.ipynb: обучение original, inference semantic IDs,
+     обучение enriched_v2, inference semantic IDs.
+  5. TIGERBeauty/Toys/Sports.ipynb: обучение original и enriched_v2, seed42.
+     Они вызывают те же Python-скрипты, что и проведённые эксперименты, в отдельных процессах.
+     Для других seed использовать существующие train_*_seedNN.py; настройки находятся в коде.
+     Все три датасета автоматически сохраняют results/*_test.json на лучшем validation-чекпоинте.
+
+
+Slurm, SSH, S3, переменные окружения с параметрами модели для этих ноутбуков не нужны.
+На ИТМО Slurm выделяет ресурсы для проверки; он не подставляет параметры в ячейки.
+
+Проверка на ИТМО начата2026-11-16:
+  reproduction/IRec — рабочая копия; reproduction/executed — выполненные ноутбуки;
+  reproduction/checks — сравнения с зафиксированными входами;
+  snapshots/20261116-before-reproduction — отдельные исходные результаты.
+Эти каталоги находятся в /mnt/tank/scratch/ibagautdinov/enrichment-exp/.
+Полная воспроизводимость пока НЕ подтверждена.
+Сначала проверяется повторная подготовка данных и обучение на исходных эмбеддингах.
+Это проверка отдельных этапов, НЕ подтверждение повторной генерации всей цепочки.
+Численные различия между GPU, CUDA и порядком батчей следует измерять отдельно;
+не заменять молча точность модели, batch128 или исходные описания ради совпадения метрик.

@@ -1,0 +1,20 @@
+# Python 3.12. CUDA runs used torch 2.6.0+cu124.
+torch==2.6.0
+torchdata==0.11.0
+transformers==4.51.3
+tokenizers==0.21.4
+accelerate==1.6.0
+sentencepiece==0.2.2
+numpy==2.5.4
+pandas==3.1.0
+polars==1.41.2
+pyarrow==26.0.1
+loguru==0.7.3
+murmurhash==1.0.16
+einops==0.8.2
+tensorboard==2.21.0
+huggingface-hub==0.36.2
+safetensors==0.8.0
+nbformat==5.11.1
+nbclient==0.11.0
+ipykernel==7.4.0
